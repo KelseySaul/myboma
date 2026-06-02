@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MyBoma</string>
+    <string name="title_activity_main">MyBoma</string>
+    <string name="package_name">com.myboma.app</string>
+    <string name="custom_url_scheme">com.myboma.app</string>
+</resources>
