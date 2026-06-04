@@ -63,13 +63,6 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
           />
         </div>
       </div>
-
-      <LandlordPricingSection
-        onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
-          setForm((prev) => ({ ...prev, tier, billing }));
-          document.getElementById('landlord-plans')?.scrollIntoView({ behavior: 'smooth' });
-        }}
-      />
     </div>
   );
 }

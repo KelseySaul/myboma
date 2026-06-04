@@ -793,7 +793,9 @@ body {
 
 /* ---------- Mobile Bottom Nav Safe Area ---------- */
 .mobile-bottom-nav {
-  padding-bottom: max(0px, var(--sab));
+  bottom: 0 !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
 .pwa-install-banner {

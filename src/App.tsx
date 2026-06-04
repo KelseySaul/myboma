@@ -451,15 +451,22 @@ export default function App() {
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts++;
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('users')
-            .select('subscriptionStatus')
+            .select('subscriptionStatus, subscriptionExpiresAt')
             .eq('uid', currentUserId)
             .maybeSingle();
           
-          if (data?.subscriptionStatus === 'active' || attempts > 20) {
+          const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
+          
+          if (isActive || attempts > 25) {
             clearInterval(poll);
             await refreshProfile();
+            
+            if (isActive) {
+              toast.success('Subscription active! Welcome back.');
+            }
+            
             // Clear URL only after we have confirmed activation or timed out
             window.history.replaceState({}, '', window.location.pathname);
           }
