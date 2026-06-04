@@ -3,7 +3,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{app.ts,server/**,config/**,src/legalDocuments.ts}"
+      "includeFiles": "{app.ts,server/**,config/**,src/lib/**,src/legalDocuments.ts}"
     }
   },
   "rewrites": [

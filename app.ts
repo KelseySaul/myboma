@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/node';
 import {createClient, type User} from '@supabase/supabase-js';
 import cors from 'cors';
-import {randomUUID} from 'crypto';
+import {randomUUID} from 'node:crypto';
 import dotenv from 'dotenv';
 import express, {type ErrorRequestHandler, type NextFunction, type Request, type Response} from 'express';
 import rateLimit from 'express-rate-limit';
