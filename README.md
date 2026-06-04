@@ -75,6 +75,8 @@ npm run server
 - Waitlist signup: `POST /api/waitlist`
 - Waitlist unsubscribe: `POST /api/waitlist/unsubscribe`
 - Stripe webhook: `/api/webhooks/stripe`
+- Pesapal callback: `/api/payments/pesapal/callback`
+- Pesapal IPN listener: `/api/webhooks/pesapal/ipn`
 - M-Pesa STK callback: `/api/webhooks/mpesa/stk`
 
 All public API routes and webhooks are rate limited. BFF routes require a Supabase bearer token, validate request bodies with Zod, sanitize string input, and keep provider secrets on the server.
@@ -82,13 +84,18 @@ All public API routes and webhooks are rate limited. BFF routes require a Supaba
 Before enabling payments in production:
 
 1. Copy `.env.example` to `.env` and fill the server-only keys.
-2. Run `supabase-setup.sql` in Supabase to add legal acceptance, payment metadata, and the public waitlist storage table. For an existing deployment, apply `docs/migrations/waitlist-signups.sql`.
+2. Run `supabase-setup.sql` in Supabase to add legal acceptance, payment metadata, and the public waitlist storage table. For an existing deployment, apply the needed files in `docs/migrations/`, including `pesapal-payments.sql`.
 3. Configure Stripe webhook events for `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
-4. Configure M-Pesa Daraja STK callback URL to `/api/webhooks/mpesa/stk?secret=YOUR_MPESA_CALLBACK_SECRET` (or send header `X-Mpesa-Callback-Secret`). Set `MPESA_CALLBACK_SECRET` in production.
-5. Set `SUPER_ADMIN_EMAILS` and `VITE_SUPER_ADMIN_EMAILS` (comma-separated) for bootstrap super admins — then remove reliance on hardcoded emails in the database.
-6. Keep `ENABLE_SUPABASE_PROXY=false` in production unless you intentionally proxy PostgREST through the gateway.
-7. Configure SMTP if landlord/tenant notifications and waitlist confirmation emails should be sent.
-8. Add each landlord payout configuration:
+4. Configure Pesapal API 3.0:
+   - Website URL: `https://myboma.vercel.app`
+   - Callback URL: `https://myboma.vercel.app/api/payments/pesapal/callback`
+   - IPN listener URL: `https://myboma.vercel.app/api/webhooks/pesapal/ipn`
+   - Register the IPN listener in Pesapal and set the returned IPN ID as `PESAPAL_NOTIFICATION_ID`.
+5. Configure M-Pesa Daraja STK callback URL to `/api/webhooks/mpesa/stk?secret=YOUR_MPESA_CALLBACK_SECRET` (or send header `X-Mpesa-Callback-Secret`). Set `MPESA_CALLBACK_SECRET` in production.
+6. Set `SUPER_ADMIN_EMAILS` and `VITE_SUPER_ADMIN_EMAILS` (comma-separated) for bootstrap super admins — then remove reliance on hardcoded emails in the database.
+7. Keep `ENABLE_SUPABASE_PROXY=false` in production unless you intentionally proxy PostgREST through the gateway.
+8. Configure SMTP if landlord/tenant notifications and waitlist confirmation emails should be sent.
+9. Add each landlord payout configuration:
    - Stripe: `users.stripeAccountId` must be a Stripe Connect account ID.
    - M-Pesa: `users.mpesaSettlementPhone` is used for optional B2C settlement after successful STK confirmation.
 

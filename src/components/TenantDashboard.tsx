@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { UserProfile } from '../App';
-import { createStripeRentCheckout, initiateMpesaRentPayment } from '../lib/api';
+import { createPesapalRentCheckout, createStripeRentCheckout, initiateMpesaRentPayment } from '../lib/api';
 import {
   matchesTenant,
   normalizeRentPayment,
@@ -319,9 +319,21 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     }
   };
 
-  const handlePayRent = async (paymentId: string, method: 'mpesa' | 'stripe') => {
+  const handlePayRent = async (paymentId: string, method: 'mpesa' | 'stripe' | 'pesapal') => {
     setPayingAction(`${method}:${paymentId}`);
     try {
+      if (method === 'pesapal') {
+        const { checkoutUrl } = await createPesapalRentCheckout({
+          rentPaymentId: paymentId,
+          successUrl: `${window.location.origin}/?rent_payment=success&provider=pesapal`,
+          cancelUrl: `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
+        });
+
+        if (!checkoutUrl) throw new Error('Pesapal did not return a checkout URL.');
+        window.location.assign(checkoutUrl);
+        return;
+      }
+
       if (method === 'stripe') {
         const { checkoutUrl } = await createStripeRentCheckout({
           rentPaymentId: paymentId,
@@ -512,6 +524,14 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
   const payButtons = (payment: RentPayment) => (
     <div className="grid grid-cols-2 gap-2">
+      <Button
+        className="col-span-2 h-10 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+        onClick={() => handlePayRent(payment.id, 'pesapal')}
+        disabled={Boolean(payingAction)}
+      >
+        <FontAwesomeIcon icon={payingAction === `pesapal:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `pesapal:${payment.id}` ? 'animate-spin' : ''} />
+        Pesapal
+      </Button>
       <Button
         className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
         onClick={() => handlePayRent(payment.id, 'mpesa')}

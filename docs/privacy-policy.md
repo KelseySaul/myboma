@@ -13,7 +13,7 @@ We use information to provide the app, authenticate users, manage properties and
 
 ## Payments and Providers
 
-Payment details are processed by third-party payment providers such as Stripe and M-Pesa. MyBoma stores payment status, references, metadata needed for reconciliation, and settlement status. We do not store full card numbers or payment provider secret keys in the client app.
+Payment details are processed by third-party payment providers such as Pesapal, Stripe, and M-Pesa. MyBoma stores payment status, references, metadata needed for reconciliation, and settlement status. We do not store full card numbers or payment provider secret keys in the client app.
 
 ## Error Tracking and Diagnostics
 

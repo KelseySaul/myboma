@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS public."landlordSubscriptionPayments" (
   "providerCheckoutRequestId" text,
   "paymentProvider" text,
   amount numeric(14, 2) NOT NULL,
-  "paymentChannel" text NOT NULL CHECK ("paymentChannel" IN ('mpesa', 'bank')),
+  "paymentChannel" text NOT NULL CHECK ("paymentChannel" IN ('mpesa', 'bank', 'stripe', 'pesapal')),
   "paymentReference" text NOT NULL,
   status text NOT NULL DEFAULT 'confirmed' CHECK (status IN ('pending', 'confirmed', 'rejected')),
   "receiptNumber" text NOT NULL UNIQUE,

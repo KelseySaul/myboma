@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCreditCard, faMobileAlt, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { faCreditCard, faMobileAlt, faSpinner, faWallet } from '@fortawesome/free-solid-svg-icons';
 import { startLandlordSubscriptionCheckout } from '../lib/api';
 import type { PendingLandlordSubscription } from '../lib/landlordSubscription';
 
@@ -16,9 +16,9 @@ interface LandlordSubscriptionPayProps {
 
 export default function LandlordSubscriptionPay({ payload, phone = '', onSuccess }: LandlordSubscriptionPayProps) {
   const [payPhone, setPayPhone] = useState(phone);
-  const [paying, setPaying] = useState<'stripe' | 'mpesa' | null>(null);
+  const [paying, setPaying] = useState<'stripe' | 'mpesa' | 'pesapal' | null>(null);
 
-  const checkout = async (paymentMethod: 'stripe' | 'mpesa') => {
+  const checkout = async (paymentMethod: 'stripe' | 'mpesa' | 'pesapal') => {
     setPaying(paymentMethod);
     try {
       const result = await startLandlordSubscriptionCheckout({
@@ -63,7 +63,20 @@ export default function LandlordSubscriptionPay({ payload, phone = '', onSuccess
           className="h-10 rounded-xl text-sm"
         />
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <Button
+          type="button"
+          className="h-11 rounded-xl bg-orange-600 font-black text-[10px] uppercase tracking-wide hover:bg-orange-500"
+          disabled={Boolean(paying)}
+          onClick={() => checkout('pesapal')}
+        >
+          {paying === 'pesapal' ? (
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+          ) : (
+            <FontAwesomeIcon icon={faWallet} className="mr-1.5" />
+          )}
+          Pesapal
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -93,8 +106,8 @@ export default function LandlordSubscriptionPay({ payload, phone = '', onSuccess
         </Button>
       </div>
       <p className="text-[10px] font-medium leading-relaxed text-zinc-500">
-        Card checkout opens Stripe. M-Pesa sends an STK push to your phone. You will receive a receipt in-app and by
-        email when payment succeeds.
+        Pesapal opens a secure checkout. Card checkout opens Stripe. M-Pesa sends an STK push to your phone. You will
+        receive a receipt in-app and by email when payment succeeds.
       </p>
     </div>
   );

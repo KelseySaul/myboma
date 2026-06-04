@@ -17,7 +17,7 @@ You are responsible for the accuracy and legality of property listings, tenant r
 
 ## Payments
 
-MyBoma may support payments through third-party providers such as Stripe and M-Pesa. Payment availability depends on provider approval, account configuration, and local rules. Rent is only marked paid when the payment provider confirms a successful transaction through a trusted server-side callback or webhook.
+MyBoma may support payments through third-party providers such as Pesapal, Stripe, and M-Pesa. Payment availability depends on provider approval, account configuration, and local rules. Rent is only marked paid when the payment provider confirms a successful transaction through a trusted server-side callback or webhook.
 
 ## Subscription Billing and Auto-Renewal
 
@@ -33,7 +33,7 @@ If you join the MyBoma waitlist, you agree to receive launch and important produ
 
 ## Landlord Settlement
 
-Landlords are responsible for providing valid payment settlement details. M-Pesa and Stripe transfers may be delayed, rejected, reversed, or require additional verification by the payment provider. MyBoma records provider references for reconciliation but does not guarantee provider uptime.
+Landlords are responsible for providing valid payment settlement details. Pesapal, M-Pesa, and Stripe transfers may be delayed, rejected, reversed, or require additional verification by the payment provider. MyBoma records provider references for reconciliation but does not guarantee provider uptime.
 
 ## Acceptable Use
 

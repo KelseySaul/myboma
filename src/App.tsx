@@ -437,9 +437,34 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('subscription_payment') === 'success') {
+    let handledPaymentReturn = false;
+    const subscriptionPayment = params.get('subscription_payment');
+    const rentPayment = params.get('rent_payment');
+
+    if (subscriptionPayment === 'success') {
       toast.success('Payment received. Activating your subscription…');
       void refreshProfile();
+      handledPaymentReturn = true;
+    } else if (subscriptionPayment === 'processing') {
+      toast('Subscription payment is processing. Your plan will activate after confirmation.');
+      handledPaymentReturn = true;
+    } else if (subscriptionPayment === 'cancelled') {
+      toast.error('Subscription payment was cancelled or not completed.');
+      handledPaymentReturn = true;
+    }
+
+    if (rentPayment === 'success') {
+      toast.success('Rent payment received. Your receipt will appear shortly.');
+      handledPaymentReturn = true;
+    } else if (rentPayment === 'processing') {
+      toast('Rent payment is processing. Your receipt will appear after confirmation.');
+      handledPaymentReturn = true;
+    } else if (rentPayment === 'cancelled') {
+      toast.error('Rent payment was cancelled or not completed.');
+      handledPaymentReturn = true;
+    }
+
+    if (handledPaymentReturn) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [user?.id, refreshProfile]);

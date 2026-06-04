@@ -16,7 +16,7 @@ import {
 
 const tierSchema = z.enum(['starter', 'growth', 'pro']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
-const paymentMethodSchema = z.enum(['stripe', 'mpesa']);
+const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
 
 export const landlordSubscriptionCheckoutSchema = z
@@ -233,7 +233,7 @@ export const createPendingSubscriptionPayment = async (
     tier: SubscriptionTier;
     billing: BillingPeriod;
     amount: number;
-    paymentChannel: 'stripe' | 'mpesa';
+    paymentChannel: 'stripe' | 'mpesa' | 'pesapal';
   },
 ) => {
   const planKey = encodeSubscriptionPlan(input.tier, input.billing);

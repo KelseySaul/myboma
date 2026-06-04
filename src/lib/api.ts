@@ -49,6 +49,12 @@ export const createStripeRentCheckout = (body: {rentPaymentId: string; successUr
     body,
   });
 
+export const createPesapalRentCheckout = (body: {rentPaymentId: string; successUrl?: string; cancelUrl?: string}) =>
+  bffRequest<{status: string; checkoutUrl: string | null; orderTrackingId?: string}>('/payments/pesapal/rent', {
+    method: 'POST',
+    body,
+  });
+
 export const initiateMpesaRentPayment = (body: {rentPaymentId: string; phone?: string}) =>
   bffRequest<{status: string; checkoutRequestId?: string; customerMessage?: string}>('/payments/mpesa/rent', {
     method: 'POST',
@@ -90,7 +96,7 @@ export const markRentPaymentManual = (paymentId: string, note?: string) =>
 export const startLandlordSubscriptionCheckout = (body: {
   tier: 'starter' | 'growth' | 'pro';
   billing: 'monthly' | 'quarterly' | 'yearly';
-  paymentMethod: 'stripe' | 'mpesa';
+  paymentMethod: 'stripe' | 'mpesa' | 'pesapal';
   phone?: string;
   successUrl?: string;
   cancelUrl?: string;

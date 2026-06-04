@@ -122,6 +122,7 @@ const supabaseAuth =
     : null;
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+let pesapalTokenCache: {token: string; expiresAt: number} | null = null;
 
 const emailTransporter =
   process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
@@ -143,6 +144,11 @@ const nonSecretConfigStatus = () => ({
   supabaseAnonKey: Boolean(requiredEnv.supabaseAnonKey),
   supabaseServiceRoleKey: Boolean(requiredEnv.supabaseServiceRoleKey),
   stripe: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET),
+  pesapal: Boolean(
+    process.env.PESAPAL_CONSUMER_KEY &&
+      process.env.PESAPAL_CONSUMER_SECRET &&
+      (process.env.PESAPAL_NOTIFICATION_ID || process.env.PESAPAL_IPN_URL),
+  ),
   mpesa: Boolean(
     process.env.MPESA_CONSUMER_KEY &&
       process.env.MPESA_CONSUMER_SECRET &&
@@ -216,6 +222,8 @@ const stripeCheckoutSchema = z
     cancelUrl: absoluteUrlSchema.optional(),
   })
   .strict();
+
+const pesapalCheckoutSchema = stripeCheckoutSchema;
 
 const waitlistSignupSchema = z
   .object({
@@ -522,7 +530,7 @@ const markRentPaid = async ({
   landlord: UserProfileRecord;
   tenant?: UserProfileRecord | null;
   property?: {title?: string; unitNumber?: string; location?: string} | null;
-  provider: 'stripe' | 'mpesa' | 'manual';
+  provider: 'stripe' | 'mpesa' | 'manual' | 'pesapal';
   providerReference?: string | null;
   metadata?: Record<string, unknown>;
 }) => {
@@ -708,6 +716,462 @@ const fulfillStripeCheckout = async (sessionId: string) => {
     },
   });
 };
+
+type PesapalSubmitOrderResponse = {
+  order_tracking_id?: string;
+  merchant_reference?: string;
+  redirect_url?: string;
+  error?: {message?: string} | number | null;
+  message?: string;
+  status?: string;
+};
+
+type PesapalTransactionStatus = {
+  payment_method?: string;
+  amount?: number;
+  created_date?: string;
+  confirmation_code?: string;
+  payment_status_description?: string;
+  description?: string;
+  message?: string;
+  payment_account?: string;
+  status_code?: number | string;
+  merchant_reference?: string;
+  currency?: string;
+  error?: {message?: string; code?: string | null} | null;
+  status?: string;
+};
+
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
+
+const pesapalBaseUrl = () =>
+  process.env.PESAPAL_ENV === 'production'
+    ? 'https://pay.pesapal.com/v3'
+    : 'https://cybqa.pesapal.com/pesapalv3';
+
+const getPesapalCallbackUrl = () =>
+  process.env.PESAPAL_CALLBACK_URL || `${trimTrailingSlash(appBaseUrl)}/api/payments/pesapal/callback`;
+
+const getPesapalIpnUrl = () =>
+  process.env.PESAPAL_IPN_URL || `${trimTrailingSlash(appBaseUrl)}/api/webhooks/pesapal/ipn`;
+
+const getPesapalAccessToken = async () => {
+  const key = process.env.PESAPAL_CONSUMER_KEY;
+  const secret = process.env.PESAPAL_CONSUMER_SECRET;
+  if (!key || !secret) throw new Error('Pesapal consumer credentials are not configured.');
+
+  if (pesapalTokenCache && pesapalTokenCache.expiresAt > Date.now() + 30_000) {
+    return pesapalTokenCache.token;
+  }
+
+  const response = await fetch(`${pesapalBaseUrl()}/api/Auth/RequestToken`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      consumer_key: key,
+      consumer_secret: secret,
+    }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {token?: string; message?: string; error?: {message?: string}};
+  if (!response.ok || !body.token) {
+    throw new Error(body.error?.message || body.message || `Pesapal authentication failed with status ${response.status}`);
+  }
+
+  pesapalTokenCache = {
+    token: body.token,
+    expiresAt: Date.now() + 4 * 60 * 1000,
+  };
+
+  return body.token;
+};
+
+const pesapalApiFetch = async <T>(path: string, init: RequestInit = {}) => {
+  const token = await getPesapalAccessToken();
+  const response = await fetch(`${pesapalBaseUrl()}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(init.headers || {}),
+    },
+  });
+
+  const body = (await response.json().catch(() => ({}))) as T & {
+    error?: {message?: string} | number | null;
+    message?: string;
+  };
+  const errorMessage =
+    typeof body.error === 'object' && body.error ? body.error.message : undefined;
+
+  if (!response.ok || errorMessage) {
+    throw new Error(errorMessage || body.message || `Pesapal request failed with status ${response.status}`);
+  }
+
+  return body as T;
+};
+
+const getPesapalNotificationId = async () => {
+  if (process.env.PESAPAL_NOTIFICATION_ID) return process.env.PESAPAL_NOTIFICATION_ID;
+
+  const ipnUrl = getPesapalIpnUrl();
+  const registered = await pesapalApiFetch<Array<{url?: string; ipn_id?: string}>>('/api/URLSetup/GetIpnList');
+  const existing = registered.find((item) => item.url === ipnUrl && item.ipn_id);
+  if (existing?.ipn_id) return existing.ipn_id;
+
+  if (process.env.PESAPAL_AUTO_REGISTER_IPN !== 'true') {
+    throw new Error('Pesapal notification ID is not configured. Register the IPN URL and set PESAPAL_NOTIFICATION_ID.');
+  }
+
+  const notificationType = (process.env.PESAPAL_IPN_METHOD || 'GET').toUpperCase() === 'POST' ? 'POST' : 'GET';
+  const created = await pesapalApiFetch<{ipn_id?: string; message?: string}>('/api/URLSetup/RegisterIPN', {
+    method: 'POST',
+    body: JSON.stringify({
+      url: ipnUrl,
+      ipn_notification_type: notificationType,
+    }),
+  });
+
+  if (!created.ipn_id) {
+    throw new Error(created.message || 'Pesapal IPN registration did not return an IPN ID.');
+  }
+
+  return created.ipn_id;
+};
+
+const buildPesapalReference = (prefix: 'RENT' | 'SUB', id: string) => {
+  const compactId = id.replace(/[^A-Za-z0-9]/g, '').slice(0, 24).toUpperCase();
+  const stamp = Date.now().toString(36).toUpperCase();
+  return `${prefix}-${compactId}-${stamp}`.slice(0, 50);
+};
+
+const splitCustomerName = (name?: string | null, email?: string | null) => {
+  const fallback = email?.split('@')[0] || 'MyBoma';
+  const parts = sanitizeString(name || '').split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {firstName: fallback, lastName: 'Customer'};
+  if (parts.length === 1) return {firstName: parts[0], lastName: fallback};
+  return {firstName: parts[0], lastName: parts.slice(1).join(' ')};
+};
+
+const buildPesapalBillingAddress = (customer: UserProfileRecord | null | undefined) => {
+  const email = customer?.email || 'payments@myboma.app';
+  const {firstName, lastName} = splitCustomerName(customer?.displayName, email);
+  return {
+    email_address: email,
+    phone_number: String(customer?.phone || '').replace(/[^\d+]/g, ''),
+    country_code: process.env.PESAPAL_COUNTRY_CODE || 'KE',
+    first_name: firstName,
+    middle_name: '',
+    last_name: lastName,
+    line_1: 'MyBoma',
+    line_2: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    zip_code: '',
+  };
+};
+
+const submitPesapalOrder = async (input: {
+  merchantReference: string;
+  amount: number | string;
+  description: string;
+  customer?: UserProfileRecord | null;
+  cancellationUrl?: string;
+}) => {
+  const notificationId = await getPesapalNotificationId();
+  const body = await pesapalApiFetch<PesapalSubmitOrderResponse>('/api/Transactions/SubmitOrderRequest', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: input.merchantReference,
+      currency: (process.env.PESAPAL_CURRENCY || 'KES').toUpperCase(),
+      amount: Number(input.amount),
+      description: sanitizeString(input.description).slice(0, 100),
+      redirect_mode: 'TOP_WINDOW',
+      callback_url: getPesapalCallbackUrl(),
+      cancellation_url: input.cancellationUrl,
+      notification_id: notificationId,
+      branch: process.env.PESAPAL_BRANCH || 'MyBoma',
+      billing_address: buildPesapalBillingAddress(input.customer),
+    }),
+  });
+
+  if (!body.order_tracking_id || !body.redirect_url) {
+    throw new Error(body.message || 'Pesapal did not return a payment redirect URL.');
+  }
+
+  return body;
+};
+
+const getPesapalTransactionStatus = async (orderTrackingId: string) =>
+  pesapalApiFetch<PesapalTransactionStatus>(
+    `/api/Transactions/GetTransactionStatus?orderTrackingId=${encodeURIComponent(orderTrackingId)}`,
+  );
+
+const findSubscriptionPaymentByPesapalReference = async (
+  sb: NonNullable<typeof supabase>,
+  orderTrackingId: string,
+  merchantReference?: string,
+) => {
+  const select = 'id,landlordId,plan,amount,status,paymentReference';
+  const {data, error} = await sb
+    .from('landlordSubscriptionPayments')
+    .select(select)
+    .eq('providerCheckoutRequestId', orderTrackingId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data || !merchantReference) return data;
+
+  const fallback = await sb
+    .from('landlordSubscriptionPayments')
+    .select(select)
+    .eq('paymentReference', merchantReference)
+    .maybeSingle();
+  if (fallback.error) throw fallback.error;
+  return fallback.data;
+};
+
+const findRentPaymentByPesapalReference = async (
+  sb: NonNullable<typeof supabase>,
+  orderTrackingId: string,
+  merchantReference?: string,
+) => {
+  const {data, error} = await sb
+    .from('rentPayments')
+    .select('*')
+    .eq('providerCheckoutRequestId', orderTrackingId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data || !merchantReference) return data;
+
+  const fallback = await sb
+    .from('rentPayments')
+    .select('*')
+    .eq('providerMerchantRequestId', merchantReference)
+    .maybeSingle();
+  if (fallback.error) throw fallback.error;
+  return fallback.data;
+};
+
+const pesapalStatusFlags = (status: PesapalTransactionStatus) => {
+  const statusCode = Number(status.status_code);
+  const statusDescription = String(status.payment_status_description || '').toUpperCase();
+  return {
+    completed: statusCode === 1 || statusDescription === 'COMPLETED',
+    rejected: [0, 2, 3].includes(statusCode) || ['INVALID', 'FAILED', 'REVERSED'].includes(statusDescription),
+    statusDescription,
+  };
+};
+
+const processPesapalTransaction = async (orderTrackingId: string, merchantReference?: string) => {
+  const {supabase} = requireSupabase();
+  const status = await getPesapalTransactionStatus(orderTrackingId);
+  const resolvedMerchantReference = merchantReference || status.merchant_reference;
+  const {completed, rejected, statusDescription} = pesapalStatusFlags(status);
+  const providerReference = status.confirmation_code || orderTrackingId;
+
+  const subPayment = await findSubscriptionPaymentByPesapalReference(
+    supabase,
+    orderTrackingId,
+    resolvedMerchantReference,
+  );
+
+  if (subPayment) {
+    if (completed && subPayment.status !== 'confirmed') {
+      const parsed = parseSubscriptionPlan(subPayment.plan);
+      if (!parsed) throw new Error(`Invalid subscription plan key: ${subPayment.plan}`);
+
+      const {data: landlord, error: landlordError} = await supabase
+        .from('users')
+        .select('uid,email,displayName')
+        .eq('uid', subPayment.landlordId)
+        .maybeSingle();
+      if (landlordError) throw landlordError;
+      if (!landlord) throw new Error('Landlord profile not found for subscription payment');
+
+      await activateLandlordSubscription(
+        supabase,
+        {sendEmail, insertNotification},
+        {
+          subscriptionPaymentId: subPayment.id,
+          landlordId: subPayment.landlordId,
+          landlordEmail: landlord.email,
+          landlordName: landlord.displayName || landlord.email,
+          tier: parsed.tier,
+          billing: parsed.billing,
+          amount: Number(subPayment.amount),
+          paymentChannel: 'Pesapal',
+          paymentReference: providerReference,
+        },
+      );
+    } else if (rejected && subPayment.status !== 'confirmed') {
+      await supabase
+        .from('landlordSubscriptionPayments')
+        .update({
+          status: 'rejected',
+          paymentProvider: 'pesapal',
+          paymentReference: status.description || statusDescription || 'failed',
+        })
+        .eq('id', subPayment.id);
+    }
+
+    return {kind: 'subscription' as const, completed, rejected, status};
+  }
+
+  const payment = await findRentPaymentByPesapalReference(supabase, orderTrackingId, resolvedMerchantReference);
+  if (!payment) return {kind: 'unknown' as const, completed, rejected, status};
+
+  const rentPayment = payment as RentPaymentRecord;
+  if (completed && rentPayment.status !== 'paid') {
+    const {landlord, property} = await fetchPaymentContext(rentPayment.id);
+    const tenant = await getTenantProfileForPayment(rentPayment);
+    await markRentPaid({
+      payment: rentPayment,
+      tenant,
+      landlord,
+      property,
+      provider: 'pesapal',
+      providerReference,
+      metadata: {
+        orderTrackingId,
+        merchantReference: resolvedMerchantReference,
+        paymentMethod: status.payment_method,
+        paymentAccount: status.payment_account,
+        statusCode: status.status_code,
+        statusDescription: status.payment_status_description,
+      },
+    });
+  } else if (rejected) {
+    await updateRentPayment(
+      rentPayment.id,
+      {
+        paymentProvider: 'pesapal',
+        providerReference,
+        paymentMetadata: {
+          orderTrackingId,
+          merchantReference: resolvedMerchantReference,
+          statusCode: status.status_code,
+          statusDescription: status.payment_status_description,
+          description: status.description,
+        },
+      },
+      {},
+    ).catch((updateError) => {
+      Sentry.captureException(updateError);
+    });
+  }
+
+  return {kind: 'rent' as const, completed, rejected, status};
+};
+
+const notificationParam = (source: Record<string, unknown>, name: string) => {
+  const value = source[name] ?? source[name.charAt(0).toLowerCase() + name.slice(1)];
+  if (Array.isArray(value)) return notificationParam({value: value[0]}, 'value');
+  return value == null ? '' : String(value);
+};
+
+const pesapalNotificationFromRequest = (req: Request) => {
+  const body = req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const query = req.query as Record<string, unknown>;
+  const source = {...query, ...body};
+  return {
+    orderTrackingId: notificationParam(source, 'OrderTrackingId'),
+    orderMerchantReference: notificationParam(source, 'OrderMerchantReference'),
+    orderNotificationType: notificationParam(source, 'OrderNotificationType') || 'IPNCHANGE',
+  };
+};
+
+const handlePesapalIpn = asyncHandler(async (req, res) => {
+  const notification = pesapalNotificationFromRequest(req);
+  if (!notification.orderTrackingId) {
+    res.status(400).json({
+      orderNotificationType: notification.orderNotificationType,
+      orderTrackingId: notification.orderTrackingId,
+      orderMerchantReference: notification.orderMerchantReference,
+      status: 500,
+    });
+    return;
+  }
+
+  try {
+    await processPesapalTransaction(notification.orderTrackingId, notification.orderMerchantReference);
+    res.json({
+      orderNotificationType: notification.orderNotificationType,
+      orderTrackingId: notification.orderTrackingId,
+      orderMerchantReference: notification.orderMerchantReference,
+      status: 200,
+    });
+  } catch (error) {
+    Sentry.captureException(error);
+    res.status(500).json({
+      orderNotificationType: notification.orderNotificationType,
+      orderTrackingId: notification.orderTrackingId,
+      orderMerchantReference: notification.orderMerchantReference,
+      status: 500,
+    });
+  }
+});
+
+const handlePesapalCallback = asyncHandler(async (req, res) => {
+  const notification = pesapalNotificationFromRequest(req);
+  const params = new URLSearchParams();
+  params.set('provider', 'pesapal');
+
+  try {
+    if (!notification.orderTrackingId) throw new Error('Missing Pesapal order tracking ID');
+
+    const result = await processPesapalTransaction(notification.orderTrackingId, notification.orderMerchantReference);
+    const queryKey = result.kind === 'subscription' ? 'subscription_payment' : 'rent_payment';
+    params.set(queryKey, result.completed ? 'success' : result.rejected ? 'cancelled' : 'processing');
+    params.set('orderTrackingId', notification.orderTrackingId);
+  } catch (error) {
+    Sentry.captureException(error);
+    params.set('pesapal_payment', 'processing');
+  }
+
+  res.redirect(303, `${trimTrailingSlash(appBaseUrl)}/?${params.toString()}`);
+});
+
+const createPesapalRentCheckout = asyncHandler(async (req, res) => {
+  const {rentPaymentId, cancelUrl} = getValidatedBody<z.infer<typeof pesapalCheckoutSchema>>(req);
+  assertAllowedRedirectUrl(cancelUrl, allowedRedirectOrigins);
+  const {payment, property} = await fetchPaymentContext(rentPaymentId, req.profile);
+  const merchantReference = buildPesapalReference('RENT', payment.id);
+
+  const order = await submitPesapalOrder({
+    merchantReference,
+    amount: payment.amount,
+    description: `Rent payment${property?.title ? ` for ${property.title}` : ''}`,
+    customer: req.profile,
+    cancellationUrl: cancelUrl || `${trimTrailingSlash(appBaseUrl)}/?rent_payment=cancelled&provider=pesapal`,
+  });
+
+  await updateRentPayment(
+    payment.id,
+    {
+      paymentProvider: 'pesapal',
+      providerCheckoutRequestId: order.order_tracking_id,
+      providerMerchantRequestId: order.merchant_reference || merchantReference,
+      paymentMetadata: {
+        clientKind: req.clientKind,
+        redirectUrl: order.redirect_url,
+      },
+    },
+    {},
+  ).catch((error) => {
+    Sentry.captureException(error);
+  });
+
+  res.json({
+    status: 'redirect',
+    checkoutUrl: order.redirect_url,
+    orderTrackingId: order.order_tracking_id,
+  });
+});
 
 const normalizeSafaricomPhone = (phone: string) => {
   const digits = phone.replace(/\D/g, '');
@@ -1108,6 +1572,8 @@ app.use(
           'https://api.stripe.com',
           'https://sandbox.safaricom.co.ke',
           'https://api.safaricom.co.ke',
+          'https://cybqa.pesapal.com',
+          'https://pay.pesapal.com',
         ].filter(Boolean),
       },
     },
@@ -1215,6 +1681,9 @@ app.post(
   verifyMpesaCallback(isProduction),
   handleMpesaCallback,
 );
+app.get('/api/payments/pesapal/callback', webhookLimiter, handlePesapalCallback);
+app.get('/api/webhooks/pesapal/ipn', webhookLimiter, handlePesapalIpn);
+app.post('/api/webhooks/pesapal/ipn', webhookLimiter, handlePesapalIpn);
 
 const bffRouter = express.Router();
 bffRouter.use(authLimiter);
@@ -1236,6 +1705,13 @@ bffRouter.post(
   createStripeCheckout,
 );
 bffRouter.post('/payments/mpesa/rent', paymentLimiter, requireAuth, validateBody(mpesaRentSchema), initiateMpesaRent);
+bffRouter.post(
+  '/payments/pesapal/rent',
+  paymentLimiter,
+  requireAuth,
+  validateBody(pesapalCheckoutSchema),
+  createPesapalRentCheckout,
+);
 
 bffRouter.post(
   '/users/provision',
@@ -1335,6 +1811,37 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
       status: 'redirect',
       checkoutUrl: session.url,
       subscriptionPaymentId: pending.id,
+    });
+    return;
+  }
+
+  if (body.paymentMethod === 'pesapal') {
+    assertAllowedRedirectUrl(body.successUrl, allowedRedirectOrigins);
+    assertAllowedRedirectUrl(body.cancelUrl, allowedRedirectOrigins);
+
+    const merchantReference = buildPesapalReference('SUB', pending.id);
+    const order = await submitPesapalOrder({
+      merchantReference,
+      amount,
+      description: `MyBoma ${body.tier} subscription`,
+      customer: actor,
+      cancellationUrl: body.cancelUrl || `${trimTrailingSlash(appBaseUrl)}/?subscription_payment=cancelled&provider=pesapal`,
+    });
+
+    await sb
+      .from('landlordSubscriptionPayments')
+      .update({
+        paymentProvider: 'pesapal',
+        providerCheckoutRequestId: order.order_tracking_id,
+        paymentReference: order.merchant_reference || merchantReference,
+      })
+      .eq('id', pending.id);
+
+    res.json({
+      status: 'redirect',
+      checkoutUrl: order.redirect_url,
+      subscriptionPaymentId: pending.id,
+      orderTrackingId: order.order_tracking_id,
     });
     return;
   }
