@@ -26,7 +26,7 @@ interface LandlordSignupFieldsProps {
 export const defaultLandlordSignupState = (): LandlordSignupFormState => ({
   tier: 'growth',
   billing: 'monthly',
-  rentPayoutMethod: 'mpesa',
+  rentPayoutMethod: 'cash',
   mpesaSettlementPhone: '',
   bankName: '',
   bankAccountNumber: '',

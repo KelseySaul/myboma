@@ -23,7 +23,7 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
     } catch {
       /* ignore */
     }
-    return { ...defaultLandlordSignupState(), tier: 'test' };
+    return { ...defaultLandlordSignupState(), tier: 'test', mpesaSettlementPhone: phone || '' };
   });
 
   return (
