@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import LandlordPricingSection from './LandlordPricingSection';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
 import {

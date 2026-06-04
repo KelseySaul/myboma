@@ -453,14 +453,16 @@ export default function App() {
           attempts++;
           const { data, error } = await supabase
             .from('users')
-            .select('subscriptionStatus, subscriptionExpiresAt')
+            .select('subscriptionStatus, subscriptionExpiresAt, role')
             .eq('uid', currentUserId)
             .maybeSingle();
           
           const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
+          console.log(`[Polling Activation] Attempt ${attempts}: status=${data?.subscriptionStatus}, role=${data?.role}, hasExpiry=${!!data?.subscriptionExpiresAt}`);
           
           if (isActive || attempts > 25) {
             clearInterval(poll);
+            console.log(`[Polling Finished] isActive=${isActive}, timing out=${attempts > 25}`);
             await refreshProfile();
             
             if (isActive) {

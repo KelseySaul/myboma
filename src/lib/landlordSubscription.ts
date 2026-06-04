@@ -84,12 +84,16 @@ export const getSubscriptionFeatures = (profile: {
   subscriptionPlan?: string | null;
   role?: string;
 }): SubscriptionFeatures => {
-  if (profile.role !== 'landlord') {
+  // Admins get pro features
+  if (profile.role === 'admin') {
     return SUBSCRIPTION_TIERS.pro.features;
   }
+  
+  // Everyone else must have a plan
   const parsed = parseSubscriptionPlan(profile.subscriptionPlan);
   if (!parsed) {
-    return { maxListings: null, maintenanceHub: true, label: 'Legacy' };
+    // Hunters or new landlords with no plan yet get starter features restricted to 1 unit
+    return { ...SUBSCRIPTION_TIERS.starter.features, maxListings: 1, label: 'Free Tier' };
   }
   return SUBSCRIPTION_TIERS[parsed.tier].features;
 };
@@ -112,10 +116,23 @@ export const isLandlordSubscriptionActive = (profile: {
   subscriptionStatus?: string | null;
   subscriptionExpiresAt?: string | null;
 }) => {
-  if (profile.role !== 'landlord') return true;
+  // Admins always have full access
+  if (profile.role === 'admin') return true;
+  
+  // Tenants don't need a landlord subscription to see their tenant dashboard
+  if (profile.role === 'tenant') return true;
+  
+  // If you are a hunter and not an admin/tenant, you are NOT an active landlord
+  if (profile.role === 'hunter') return false;
+  
+  // For landlords, check status and expiry
   if (profile.subscriptionStatus !== 'active') return false;
   if (!profile.subscriptionExpiresAt) return false;
-  return new Date(profile.subscriptionExpiresAt).getTime() > Date.now();
+  
+  const expiry = new Date(profile.subscriptionExpiresAt).getTime();
+  const now = Date.now();
+  
+  return expiry > now;
 };
 
 export const buildSubscriptionReceiptText = (input: {
