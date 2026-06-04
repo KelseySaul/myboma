@@ -1,6 +1,6 @@
-export type SubscriptionTier = 'starter' | 'growth' | 'pro';
+export type SubscriptionTier = 'test' | 'starter' | 'growth' | 'pro';
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
-export type SubscriptionPaymentMethod = 'stripe' | 'mpesa';
+export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
 
 export type SubscriptionFeatures = {
@@ -20,6 +20,14 @@ export const SUBSCRIPTION_TIERS: Record<
     highlights: string[];
   }
 > = {
+  test: {
+    id: 'test',
+    label: 'Test',
+    tagline: 'Internal testing only',
+    monthlyBaseKes: 100,
+    features: {maxListings: 1, maintenanceHub: true, label: 'Test'},
+    highlights: ['Testing only', '1 Unit', 'Maintenance included'],
+  },
   starter: {
     id: 'starter',
     label: 'Starter',

@@ -1,3 +1,4 @@
+import {randomUUID} from 'crypto';
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {Response} from 'express';
 import {z} from 'zod';
@@ -14,7 +15,7 @@ import {
   type SubscriptionTier,
 } from '../src/lib/landlordSubscription.ts';
 
-const tierSchema = z.enum(['starter', 'growth', 'pro']);
+const tierSchema = z.enum(['test', 'starter', 'growth', 'pro']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -34,7 +35,6 @@ export const landlordSubscriptionCheckoutSchema = z
     bankAccountName: z.string().max(120).optional(),
     cashPayoutNotes: z.string().max(280).optional(),
   })
-  .strict()
   .superRefine((body, ctx) => {
     if (body.rentPayoutMethod === 'mpesa' && !body.mpesaSettlementPhone?.trim()) {
       ctx.addIssue({
@@ -247,7 +247,7 @@ export const createPendingSubscriptionPayment = async (
         paymentChannel: input.paymentChannel,
         paymentReference: 'pending',
         status: 'pending',
-        receiptNumber: `PEND-${crypto.randomUUID().slice(0, 12).toUpperCase()}`,
+        receiptNumber: `PEND-${randomUUID().slice(0, 12).toUpperCase()}`,
         periodStart: new Date().toISOString(),
         periodEnd: new Date().toISOString(),
       },

@@ -33,10 +33,14 @@ export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Pro
   const payload = contentType.includes('application/json') ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message =
-      typeof payload === 'object' && payload && 'error' in payload
-        ? String((payload as {error: unknown}).error)
-        : `Request failed with status ${response.status}`;
+    let message = `Request failed with status ${response.status}`;
+    if (typeof payload === 'object' && payload) {
+      if ('error' in payload) message = String(payload.error);
+      if ('details' in payload && Array.isArray(payload.details)) {
+        const details = payload.details.map((d: any) => `${d.path}: ${d.message}`).join(', ');
+        message = `${message} (${details})`;
+      }
+    }
     throw new Error(message);
   }
 

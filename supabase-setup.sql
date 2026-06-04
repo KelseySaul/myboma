@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS public."rentPayments" (
   "dueDate" date NOT NULL,
   "paidAt" timestamptz,
   "receiptUrl" text,
-  "paymentProvider" text CHECK ("paymentProvider" IS NULL OR "paymentProvider" IN ('stripe', 'mpesa', 'manual')),
+  "paymentProvider" text CHECK ("paymentProvider" IS NULL OR "paymentProvider" IN ('stripe', 'mpesa', 'manual', 'pesapal')),
   "providerReference" text,
   "providerCheckoutRequestId" text,
   "providerMerchantRequestId" text,
@@ -354,7 +354,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "rentPayoutMethod" text
   CHECK ("rentPayoutMethod" IS NULL OR "rentPayoutMethod" IN ('cash', 'mpesa', 'bank'));
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "cashPayoutNotes" text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "subscriptionPlan" text
-  CHECK ("subscriptionPlan" IS NULL OR "subscriptionPlan" IN ('monthly', 'quarterly', 'yearly'));
+  CHECK ("subscriptionPlan" IS NULL OR "subscriptionPlan" LIKE '%:%');
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "subscriptionStatus" text NOT NULL DEFAULT 'none'
   CHECK ("subscriptionStatus" IN ('none', 'pending', 'active', 'expired', 'suspended'));
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "subscriptionExpiresAt" timestamptz;

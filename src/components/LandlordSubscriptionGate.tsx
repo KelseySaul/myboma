@@ -6,6 +6,7 @@ import {
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
   type PendingLandlordSubscription,
   type SubscriptionTier,
+  type BillingPeriod,
 } from '../lib/landlordSubscription';
 
 interface LandlordSubscriptionGateProps {
@@ -22,7 +23,7 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
     } catch {
       /* ignore */
     }
-    return defaultLandlordSignupState();
+    return { ...defaultLandlordSignupState(), tier: 'test' };
   });
 
   return (
@@ -49,8 +50,8 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
       </div>
 
       <LandlordPricingSection
-        onGetStarted={(tier: SubscriptionTier) => {
-          setForm((prev) => ({ ...prev, tier }));
+        onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
+          setForm((prev) => ({ ...prev, tier, billing }));
           document.getElementById('landlord-plans')?.scrollIntoView({ behavior: 'smooth' });
         }}
       />

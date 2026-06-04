@@ -192,6 +192,7 @@ const validateBody =
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     const parsed = schema.safeParse(sanitizeInput(req.body));
     if (!parsed.success) {
+      console.error('[Validation Failed]', parsed.error.issues);
       return res.status(400).json({
         error: 'Invalid request body',
         details: parsed.error.issues.map((issue) => ({
@@ -778,6 +779,7 @@ const getPesapalAccessToken = async () => {
 
   const body = (await response.json().catch(() => ({}))) as {token?: string; message?: string; error?: {message?: string}};
   if (!response.ok || !body.token) {
+    console.error('[Pesapal Auth Failed]', {status: response.status, body});
     throw new Error(body.error?.message || body.message || `Pesapal authentication failed with status ${response.status}`);
   }
 
@@ -1826,6 +1828,9 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
       description: `MyBoma ${body.tier} subscription`,
       customer: actor,
       cancellationUrl: body.cancelUrl || `${trimTrailingSlash(appBaseUrl)}/?subscription_payment=cancelled&provider=pesapal`,
+    }).catch(err => {
+      console.error('[Pesapal Order Failed]', err);
+      throw err;
     });
 
     await sb
