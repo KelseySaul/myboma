@@ -71,8 +71,11 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
                   </span>
                 )}
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{tier.label}</p>
-                <p className="mt-1 text-3xl font-black tabular-nums text-zinc-900">{formatPlanPrice(amount)}</p>
-                <p className="text-xs font-bold text-zinc-500">{tier.tagline}</p>
+                <div className="flex items-baseline gap-1.5 mt-1">
+                  <p className="text-3xl font-black tabular-nums text-zinc-900">{formatPlanPrice(amount)}</p>
+                  <span className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">One-time</span>
+                </div>
+                <p className="text-xs font-bold text-zinc-500 mt-1">{tier.tagline}</p>
                 <ul className="mt-5 flex-1 space-y-2">
                   {tier.highlights.map((item) => (
                     <li key={item} className="flex items-start gap-2 text-xs font-medium text-zinc-600">

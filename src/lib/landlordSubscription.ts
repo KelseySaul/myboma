@@ -55,9 +55,9 @@ export const SUBSCRIPTION_TIERS: Record<
 };
 
 export const BILLING_PERIODS: { id: BillingPeriod; label: string; months: number; multiplier: number }[] = [
-  { id: 'monthly', label: 'Monthly', months: 1, multiplier: 1 },
-  { id: 'quarterly', label: 'Quarterly', months: 3, multiplier: 2.7 },
-  { id: 'yearly', label: 'Yearly', months: 12, multiplier: 9.6 },
+  { id: 'monthly', label: 'Monthly (Prepaid)', months: 1, multiplier: 1 },
+  { id: 'quarterly', label: 'Quarterly (Prepaid)', months: 3, multiplier: 2.7 },
+  { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 9.6 },
 ];
 
 export const encodeSubscriptionPlan = (tier: SubscriptionTier, billing: BillingPeriod) => `${tier}:${billing}`;

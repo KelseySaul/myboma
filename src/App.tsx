@@ -443,7 +443,21 @@ export default function App() {
 
     if (subscriptionPayment === 'success') {
       toast.success('Payment received. Activating your subscription…');
-      void refreshProfile();
+      // Poll for profile update because IPN might be slightly delayed
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const { data } = await supabase
+          .from('users')
+          .select('subscriptionStatus')
+          .eq('uid', user?.id)
+          .maybeSingle();
+        
+        if (data?.subscriptionStatus === 'active' || attempts > 10) {
+          clearInterval(poll);
+          void refreshProfile();
+        }
+      }, 2000);
       handledPaymentReturn = true;
     } else if (subscriptionPayment === 'processing') {
       toast('Subscription payment is processing. Your plan will activate after confirmation.');

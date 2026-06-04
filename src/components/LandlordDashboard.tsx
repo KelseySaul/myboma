@@ -1315,7 +1315,20 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="mt-4 space-y-6 animate-in fade-in duration-500">
             {/* Quick stats row */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-1 bg-indigo-600 rounded-2xl p-5 flex flex-col gap-3 shadow-lg shadow-indigo-500/20">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-indigo-100">Subscription</p>
+                  <FontAwesomeIcon icon={faBolt} className="text-indigo-200 h-3 w-3" />
+                </div>
+                <p className="text-xl font-black text-white leading-tight">{subscriptionFeatures.label} Plan</p>
+                <p className="text-[9px] font-bold text-indigo-100 uppercase tracking-wider">
+                  {profile.subscriptionExpiresAt 
+                    ? `Active until ${new Date(profile.subscriptionExpiresAt).toLocaleDateString()}` 
+                    : 'Prepaid Plan'}
+                </p>
+              </div>
+
               {[
                 {
                   label: 'Total Units',
@@ -1325,13 +1338,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                   icon: faHome,
                 },
                 {
-                  label: 'Occupancy',
-                  value: properties.length
-                    ? `${Math.round((properties.filter(p => p.status === 'rented').length / properties.length) * 100)}%`
-                    : '0%',
-                  sub: `${properties.filter(p => p.status === 'rented').length} rented`,
-                  color: 'bg-emerald-500/10 text-emerald-600',
-                  icon: faUsers,
+                  label: 'Listings Limit',
+                  value: `${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`,
+                  sub: 'Units Capacity',
+                  color: 'bg-purple-500/10 text-purple-600',
+                  icon: faChartPie,
                 },
                 {
                   label: 'Revenue (Paid)',
