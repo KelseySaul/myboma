@@ -442,23 +442,29 @@ export default function App() {
     const rentPayment = params.get('rent_payment');
 
     if (subscriptionPayment === 'success') {
-      toast.success('Payment received. Activating your subscription…');
-      // Poll for profile update because IPN might be slightly delayed
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        const { data } = await supabase
-          .from('users')
-          .select('subscriptionStatus')
-          .eq('uid', user?.id)
-          .maybeSingle();
+      const currentUserId = user?.id;
+      if (currentUserId) {
+        toast.success('Payment received. Activating your subscription…');
+        handledPaymentReturn = true;
         
-        if (data?.subscriptionStatus === 'active' || attempts > 10) {
-          clearInterval(poll);
-          void refreshProfile();
-        }
-      }, 2000);
-      handledPaymentReturn = true;
+        // Poll for profile update because IPN might be slightly delayed
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          const { data } = await supabase
+            .from('users')
+            .select('subscriptionStatus')
+            .eq('uid', currentUserId)
+            .maybeSingle();
+          
+          if (data?.subscriptionStatus === 'active' || attempts > 20) {
+            clearInterval(poll);
+            await refreshProfile();
+            // Clear URL only after we have confirmed activation or timed out
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }, 2000);
+      }
     } else if (subscriptionPayment === 'processing') {
       toast('Subscription payment is processing. Your plan will activate after confirmation.');
       handledPaymentReturn = true;
@@ -478,7 +484,8 @@ export default function App() {
       handledPaymentReturn = true;
     }
 
-    if (handledPaymentReturn) {
+    // For non-polling cases, clear immediately. For polling, it's handled inside the interval.
+    if (handledPaymentReturn && subscriptionPayment !== 'success') {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [user?.id, refreshProfile]);
