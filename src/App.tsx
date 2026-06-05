@@ -460,19 +460,24 @@ export default function App() {
           const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
           console.log(`[Polling Activation] Attempt ${attempts}: status=${data?.subscriptionStatus}, role=${data?.role}, hasExpiry=${!!data?.subscriptionExpiresAt}`);
           
-          if (isActive || attempts > 25) {
+          if (isActive || attempts > 50) {
             clearInterval(poll);
-            console.log(`[Polling Finished] isActive=${isActive}, timing out=${attempts > 25}`);
+            console.log(`[Polling Finished] isActive=${isActive}, timing out=${attempts > 50}`);
             await refreshProfile();
             
             if (isActive) {
               toast.success('Subscription active! Welcome back.');
+            } else if (attempts > 50) {
+              toast.error('Activation is taking longer than expected. Please refresh in a moment.');
             }
             
             // Clear URL only after we have confirmed activation or timed out
             window.history.replaceState({}, '', window.location.pathname);
           }
         }, 2000);
+
+        // Cleanup interval if component unmounts or effect re-runs
+        return () => clearInterval(poll);
       }
     } else if (subscriptionPayment === 'processing') {
       toast('Subscription payment is processing. Your plan will activate after confirmation.');

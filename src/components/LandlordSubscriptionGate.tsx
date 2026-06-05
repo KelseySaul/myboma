@@ -31,10 +31,19 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
   if (isProcessing) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center bg-[#f8f9fa]">
-        <div className="text-center space-y-4">
+        <div className="text-center space-y-4 px-6">
           <div className="h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm font-black uppercase tracking-widest text-zinc-900">Activating your plan...</p>
           <p className="text-xs font-medium text-zinc-500">We've received your payment. One moment please.</p>
+          
+          <div className="pt-4">
+             <button 
+               onClick={onActivated}
+               className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 underline underline-offset-4"
+             >
+               Refresh status manually
+             </button>
+          </div>
         </div>
       </div>
     );
@@ -49,6 +58,12 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
             Signed in as <span className="font-bold text-zinc-900">{email}</span>. Choose a plan and pay with card or
             M-Pesa to unlock your dashboard.
           </p>
+          <button 
+            onClick={onActivated}
+            className="mt-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
+            Already paid? Tap here to sync
+          </button>
         </div>
 
         <div className="mt-6 rounded-3xl border border-zinc-100 bg-white p-5 shadow-sm">
