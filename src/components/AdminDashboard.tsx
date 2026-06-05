@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import { supabase } from '../supabase';
 import { provisionUser, updateUserStatus, deleteUserAccount } from '../lib/api';
 import { UserProfile, UserRole } from '../App';
@@ -509,6 +510,18 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       toast.error("Please fill in all required fields.");
       return;
     }
+
+    // Check landlord subscription limit
+    const landlord = users.find(u => u.uid === propertyForm.landlordId);
+    if (landlord) {
+      const landlordPropertiesCount = properties.filter(p => p.landlordId === landlord.uid).length;
+      const features = getSubscriptionFeatures(landlord);
+      if (features.maxListings != null && landlordPropertiesCount >= features.maxListings) {
+        toast.error(`Landlord ${landlord.displayName} has reached their plan limit of ${features.maxListings} listings.`);
+        return;
+      }
+    }
+
     try {
       const targetPlatformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? null : selectedPlatformId) : profile.platformId;
       if (!targetPlatformId && profile.isSuperAdmin && selectedPlatformId === 'all') {
@@ -542,6 +555,18 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       toast.error('Please select a landlord');
       return;
     }
+
+    // Check landlord subscription limit
+    const landlord = users.find(u => u.uid === bulkAddForm.landlordId);
+    if (landlord) {
+      const landlordPropertiesCount = properties.filter(p => p.landlordId === landlord.uid).length;
+      const features = getSubscriptionFeatures(landlord);
+      if (features.maxListings != null && landlordPropertiesCount + bulkAddForm.count > features.maxListings) {
+        toast.error(`Landlord ${landlord.displayName} can only add ${features.maxListings - landlordPropertiesCount} more units on their current plan.`);
+        return;
+      }
+    }
+
     if (bulkAddForm.buildingId === 'none') {
       toast.error('Please select a building');
       return;
