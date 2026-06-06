@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
 import {
@@ -11,12 +12,25 @@ import {
 interface LandlordSubscriptionGateProps {
   email: string;
   phone?: string;
-  onActivated: () => void;
+  onActivated: () => Promise<void> | void;
 }
 
 export default function LandlordSubscriptionGate({ email, phone, onActivated }: LandlordSubscriptionGateProps) {
   const params = new URLSearchParams(window.location.search);
   const isProcessing = params.get('subscription_payment') === 'success' || params.get('subscription_payment') === 'processing';
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await onActivated();
+      toast.success('Profile synced with server');
+    } catch (err) {
+      toast.error('Failed to sync profile');
+    } finally {
+      setTimeout(() => setIsSyncing(false), 1000);
+    }
+  };
 
   const [form, setForm] = useState<PendingLandlordSubscription>(() => {
     try {
@@ -38,10 +52,11 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
           
           <div className="pt-4">
              <button 
-               onClick={onActivated}
-               className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 underline underline-offset-4"
+               onClick={handleSync}
+               disabled={isSyncing}
+               className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 underline underline-offset-4 disabled:opacity-50"
              >
-               Refresh status manually
+               {isSyncing ? 'Syncing...' : 'Refresh status manually'}
              </button>
           </div>
         </div>
@@ -59,10 +74,11 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
             M-Pesa to unlock your dashboard.
           </p>
           <button 
-            onClick={onActivated}
-            className="mt-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="mt-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors disabled:opacity-50"
           >
-            Already paid? Tap here to sync
+            {isSyncing ? 'Syncing profile...' : 'Already paid? Tap here to sync'}
           </button>
         </div>
 

@@ -441,10 +441,16 @@ export default function App() {
     const subscriptionPayment = params.get('subscription_payment');
     const rentPayment = params.get('rent_payment');
 
-    if (subscriptionPayment === 'success') {
+    const isSubscriptionPending = subscriptionPayment === 'success' || subscriptionPayment === 'processing';
+
+    if (isSubscriptionPending) {
       const currentUserId = user?.id;
       if (currentUserId) {
-        toast.success('Payment received. Activating your subscription…');
+        if (subscriptionPayment === 'success') {
+          toast.success('Payment received. Activating your subscription…');
+        } else {
+          toast('Subscription payment is processing. Your plan will activate after confirmation.');
+        }
         handledPaymentReturn = true;
         
         // Poll for profile update because IPN might be slightly delayed
@@ -479,9 +485,6 @@ export default function App() {
         // Cleanup interval if component unmounts or effect re-runs
         return () => clearInterval(poll);
       }
-    } else if (subscriptionPayment === 'processing') {
-      toast('Subscription payment is processing. Your plan will activate after confirmation.');
-      handledPaymentReturn = true;
     } else if (subscriptionPayment === 'cancelled') {
       toast.error('Subscription payment was cancelled or not completed.');
       handledPaymentReturn = true;
@@ -499,7 +502,7 @@ export default function App() {
     }
 
     // For non-polling cases, clear immediately. For polling, it's handled inside the interval.
-    if (handledPaymentReturn && subscriptionPayment !== 'success') {
+    if (handledPaymentReturn && !isSubscriptionPending) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [user?.id, refreshProfile]);
