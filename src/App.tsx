@@ -762,6 +762,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         onLoginClick={() => setIsAuthOpen(true)} 
         isImpersonating={Boolean(impersonatedProfile)}
+        onHelpClick={() => setShowOnboarding(true)}
       />
       {/* Sidebar + content row */}
       <div className="flex flex-1 min-h-0">
