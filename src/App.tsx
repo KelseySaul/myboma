@@ -38,8 +38,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
 import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
+import OneSignalWeb from 'react-onesignal';
+import OneSignalNative from '@onesignal/capacitor-plugin';
+import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
+
+export const promptForPush = async () => {
+  if (Capacitor.isNativePlatform()) {
+    await OneSignalNative.Notifications.requestPermission(true);
+  } else {
+    await OneSignalWeb.Slidedown.promptPush();
+  }
+};
 
 export interface UserProfile {
   uid: string;
@@ -170,6 +181,44 @@ export default function App() {
   // Lifted tab state — shared between Sidebar and the active dashboard
   const [activeTab, setActiveTab] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Initialize OneSignal
+    const initOneSignal = async () => {
+      try {
+        const handleSubChange = (event: any) => {
+          if (event.current.optedIn) {
+            if (Capacitor.isNativePlatform()) {
+              OneSignalNative.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+            } else {
+              OneSignalWeb.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+            }
+          }
+        };
+
+        if (Capacitor.isNativePlatform()) {
+          OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
+          OneSignalNative.User.pushSubscription.addEventListener('change', handleSubChange);
+        } else {
+          await OneSignalWeb.init({
+            appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
+            allowLocalhostAsSecureOrigin: true,
+          });
+          OneSignalWeb.User.pushSubscription.addEventListener('change', handleSubChange);
+        }
+      } catch (err) {
+        console.error("OneSignal initialization error:", err);
+      }
+    };
+    initOneSignal();
+
+    // Patch history.replaceState to dispatch a custom event
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(this, args as any);
+      window.dispatchEvent(new Event('urlchange'));
+    };
+  }, []);
 
   // Forced password reset state
   const [newPassword, setNewPassword] = useState('');
@@ -371,6 +420,19 @@ export default function App() {
           const pref = localStorage.getItem(`myboma_default_page_${session.user.id}`);
           if (pref) setActiveTab(pref);
           await handleProfile(session.user);
+          // Tie this device to your Supabase User ID
+          if (Capacitor.isNativePlatform()) {
+            OneSignalNative.login(session.user.id);
+          } else {
+            OneSignalWeb.login(session.user.id);
+          }
+        } else {
+          // When they log out
+          if (Capacitor.isNativePlatform()) {
+            OneSignalNative.logout();
+          } else {
+            OneSignalWeb.logout();
+          }
         }
       } catch (err) {
         console.error("App: Session restore error:", err);
@@ -395,6 +457,12 @@ export default function App() {
         const pref = localStorage.getItem(`myboma_default_page_${currentUser.id}`);
         if (pref) setActiveTab(pref);
         handleProfile(currentUser).catch(() => {});
+        // Tie this device to your Supabase User ID
+        if (Capacitor.isNativePlatform()) {
+          OneSignalNative.login(currentUser.id);
+        } else {
+          OneSignalWeb.login(currentUser.id);
+        }
       } else {
         lastProcessedUserId = null;
         setProfile(null);
@@ -403,6 +471,12 @@ export default function App() {
         if (profileSubscription) {
           profileSubscription.unsubscribe();
           profileSubscription = null;
+        }
+        // When they log out
+        if (Capacitor.isNativePlatform()) {
+          OneSignalNative.logout();
+        } else {
+          OneSignalWeb.logout();
         }
       }
       
@@ -479,6 +553,7 @@ export default function App() {
             
             // Clear URL only after we have confirmed activation or timed out
             window.history.replaceState({}, '', window.location.pathname);
+            window.dispatchEvent(new Event('urlchange'));
           }
         }, 2000);
 
@@ -504,6 +579,7 @@ export default function App() {
     // For non-polling cases, clear immediately. For polling, it's handled inside the interval.
     if (handledPaymentReturn && !isSubscriptionPending) {
       window.history.replaceState({}, '', window.location.pathname);
+      window.dispatchEvent(new Event('urlchange'));
     }
   }, [user?.id, refreshProfile]);
 

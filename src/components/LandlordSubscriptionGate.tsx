@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
@@ -16,15 +16,35 @@ interface LandlordSubscriptionGateProps {
 }
 
 export default function LandlordSubscriptionGate({ email, phone, onActivated }: LandlordSubscriptionGateProps) {
-  const params = new URLSearchParams(window.location.search);
-  const isProcessing = params.get('subscription_payment') === 'success' || params.get('subscription_payment') === 'processing';
+  const [isProcessing, setIsProcessing] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('subscription_payment') === 'success' || params.get('subscription_payment') === 'processing';
+  });
   const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const params = new URLSearchParams(window.location.search);
+      setIsProcessing(params.get('subscription_payment') === 'success' || params.get('subscription_payment') === 'processing');
+    };
+    window.addEventListener('urlchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('urlchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
       await onActivated();
       toast.success('Profile synced with server');
+      
+      if (isProcessing) {
+        window.history.replaceState({}, '', window.location.pathname);
+        window.dispatchEvent(new Event('urlchange'));
+      }
     } catch (err) {
       toast.error('Failed to sync profile');
     } finally {
