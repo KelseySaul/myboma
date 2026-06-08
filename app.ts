@@ -447,10 +447,51 @@ const updateRentPayment = async (
   throw error;
 };
 
+const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
+  const ONE_SIGNAL_APP_ID = "16fe44a9-e285-4d7d-85f0-8b82014b9a71";
+  const ONE_SIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY; 
+  if (!ONE_SIGNAL_REST_API_KEY) return null;
+
+  const response = await fetch("https://onesignal.com/api/v1/notifications", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Authorization": `Basic ${ONE_SIGNAL_REST_API_KEY}`
+    },
+    body: JSON.stringify({
+      app_id: ONE_SIGNAL_APP_ID,
+      target_channel: "push",
+      include_aliases: {
+        external_id: [targetUserId]
+      },
+      headings: { en: title },
+      contents: { en: message }
+    })
+  });
+
+  return response.json();
+};
+
 const insertNotification = async (payload: Record<string, unknown>) => {
   const {supabase} = requireSupabase();
   const {error} = await supabase.from('notifications').insert([payload]);
   if (error) throw error;
+
+  if (payload.recipientEmail) {
+    const { data: user } = await supabase
+      .from('users')
+      .select('uid')
+      .eq('email', payload.recipientEmail)
+      .maybeSingle();
+
+    if (user?.uid) {
+      const title = String(payload.title || 'New Notification');
+      const message = String(payload.message || 'You have a new update.');
+      await sendPushNotification(user.uid, title, message).catch(err => {
+        console.error('[OneSignal] Failed to send push:', err);
+      });
+    }
+  }
 };
 
 const sendEmail = async ({to, subject, text}: {to?: string | null; subject: string; text: string}) => {
