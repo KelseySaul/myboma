@@ -98,7 +98,7 @@ export const markRentPaymentManual = (paymentId: string, note?: string) =>
   });
 
 export const startLandlordSubscriptionCheckout = (body: {
-  tier: 'starter' | 'growth' | 'pro';
+  tier: 'test' | 'starter' | 'growth' | 'pro';
   billing: 'monthly' | 'quarterly' | 'yearly';
   paymentMethod: 'stripe' | 'mpesa' | 'pesapal';
   phone?: string;

@@ -44,11 +44,30 @@ import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
 
+let oneSignalWebInitialized = false;
+let oneSignalNativeInitialized = false;
+
 export const promptForPush = async () => {
   if (Capacitor.isNativePlatform()) {
-    await OneSignalNative.Notifications.requestPermission(true);
+    if (oneSignalNativeInitialized) {
+      try {
+        await OneSignalNative.Notifications.requestPermission(true);
+      } catch (err) {
+        console.error("OneSignalNative promptForPush error:", err);
+      }
+    } else {
+      console.warn("OneSignal Native not initialized yet.");
+    }
   } else {
-    await OneSignalWeb.Slidedown.promptPush();
+    if (oneSignalWebInitialized) {
+      try {
+        await OneSignalWeb.Slidedown.promptPush();
+      } catch (err) {
+        console.error("OneSignalWeb promptForPush error:", err);
+      }
+    } else {
+      console.warn("OneSignal Web not initialized yet.");
+    }
   }
 };
 
@@ -189,22 +208,37 @@ export default function App() {
         const handleSubChange = (event: any) => {
           if (event.current.optedIn) {
             if (Capacitor.isNativePlatform()) {
-              OneSignalNative.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              if (oneSignalNativeInitialized) {
+                OneSignalNative.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              }
             } else {
-              OneSignalWeb.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              if (oneSignalWebInitialized) {
+                (OneSignalWeb as any).InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              }
             }
           }
         };
 
         if (Capacitor.isNativePlatform()) {
-          OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
-          OneSignalNative.User.pushSubscription.addEventListener('change', handleSubChange);
+          if (!oneSignalNativeInitialized) {
+            OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
+            OneSignalNative.User.pushSubscription.addEventListener('change', handleSubChange);
+            oneSignalNativeInitialized = true;
+          }
         } else {
-          await OneSignalWeb.init({
-            appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
-            allowLocalhostAsSecureOrigin: true,
-          });
-          OneSignalWeb.User.pushSubscription.addEventListener('change', handleSubChange);
+          if (!oneSignalWebInitialized) {
+            const isWindowInitted = typeof window !== 'undefined' && (window as any).OneSignal?.isInitted?.();
+            if (isWindowInitted) {
+              oneSignalWebInitialized = true;
+            } else {
+              await OneSignalWeb.init({
+                appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
+                allowLocalhostAsSecureOrigin: true,
+              });
+              oneSignalWebInitialized = true;
+            }
+            (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+          }
         }
       } catch (err) {
         console.error("OneSignal initialization error:", err);
@@ -422,16 +456,40 @@ export default function App() {
           await handleProfile(session.user);
           // Tie this device to your Supabase User ID
           if (Capacitor.isNativePlatform()) {
-            OneSignalNative.login(session.user.id);
+            if (oneSignalNativeInitialized) {
+              try {
+                OneSignalNative.login(session.user.id);
+              } catch (e) {
+                console.error("OneSignalNative.login failed:", e);
+              }
+            }
           } else {
-            OneSignalWeb.login(session.user.id);
+            if (oneSignalWebInitialized) {
+              try {
+                OneSignalWeb.login(session.user.id);
+              } catch (e) {
+                console.error("OneSignalWeb.login failed:", e);
+              }
+            }
           }
         } else {
           // When they log out
           if (Capacitor.isNativePlatform()) {
-            OneSignalNative.logout();
+            if (oneSignalNativeInitialized) {
+              try {
+                OneSignalNative.logout();
+              } catch (e) {
+                console.error("OneSignalNative.logout failed:", e);
+              }
+            }
           } else {
-            OneSignalWeb.logout();
+            if (oneSignalWebInitialized) {
+              try {
+                OneSignalWeb.logout();
+              } catch (e) {
+                console.error("OneSignalWeb.logout failed:", e);
+              }
+            }
           }
         }
       } catch (err) {
@@ -459,9 +517,21 @@ export default function App() {
         handleProfile(currentUser).catch(() => {});
         // Tie this device to your Supabase User ID
         if (Capacitor.isNativePlatform()) {
-          OneSignalNative.login(currentUser.id);
+          if (oneSignalNativeInitialized) {
+            try {
+              OneSignalNative.login(currentUser.id);
+            } catch (e) {
+              console.error("OneSignalNative.login failed:", e);
+            }
+          }
         } else {
-          OneSignalWeb.login(currentUser.id);
+          if (oneSignalWebInitialized) {
+            try {
+              OneSignalWeb.login(currentUser.id);
+            } catch (e) {
+              console.error("OneSignalWeb.login failed:", e);
+            }
+          }
         }
       } else {
         lastProcessedUserId = null;
@@ -474,9 +544,21 @@ export default function App() {
         }
         // When they log out
         if (Capacitor.isNativePlatform()) {
-          OneSignalNative.logout();
+          if (oneSignalNativeInitialized) {
+            try {
+              OneSignalNative.logout();
+            } catch (e) {
+              console.error("OneSignalNative.logout failed:", e);
+            }
+          }
         } else {
-          OneSignalWeb.logout();
+          if (oneSignalWebInitialized) {
+            try {
+              OneSignalWeb.logout();
+            } catch (e) {
+              console.error("OneSignalWeb.logout failed:", e);
+            }
+          }
         }
       }
       

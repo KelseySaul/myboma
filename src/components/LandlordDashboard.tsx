@@ -1295,12 +1295,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
           </div>
           <div className="hero-actions flex gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger render={
                 <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
                   <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
                   Create New
                 </button>
-              </DropdownMenuTrigger>
+              } />
               <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
                 <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
                   <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
