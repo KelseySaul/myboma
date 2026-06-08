@@ -1293,19 +1293,54 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
               </Button>
             </div>
           </div>
-          <div className="hero-actions flex flex-wrap gap-2">
-            <button className="btn-ghost text-[10px]" onClick={() => setIsBuildingOpen(true)}>
-              <FontAwesomeIcon icon={faBuilding} className="h-3.5 w-3.5" /> Add Building
-            </button>
-            <button className="btn-ghost text-[10px]" onClick={() => setIsCreateTenantOpen(true)}>
-              <FontAwesomeIcon icon={faUsers} className="h-3.5 w-3.5" /> Add Tenant
-            </button>
-            <button className="btn-primary text-[10px]" onClick={() => setIsBulkAddOpen(true)}>
-              <FontAwesomeIcon icon={faTools} className="h-3.5 w-3.5" /> Bulk Add Units
-            </button>
-            <button className="btn-primary text-[10px]" onClick={() => setIsAddOpen(true)}>
-              <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> New Asset
-            </button>
+          <div className="hero-actions flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
+                  Create New
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
+                <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                  <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-zinc-900">New Asset</div>
+                    <div className="text-[10px] text-zinc-500">List a single property</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                  <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-zinc-900">Bulk Add Units</div>
+                    <div className="text-[10px] text-zinc-500">Create multiple units</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-zinc-100 mx-2" />
+                <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                  <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-zinc-900">Add Tenant</div>
+                    <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                  <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs text-zinc-900">Add Building</div>
+                    <div className="text-[10px] text-zinc-500">Group your units</div>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -1591,11 +1626,24 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             )}
 
             {paginatedProperties.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="h-16 w-16 rounded-3xl bg-zinc-50 flex items-center justify-center text-zinc-300">
-                  <FontAwesomeIcon icon={faHome} className="h-8 w-8" />
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-6">
+                <div className="h-20 w-20 rounded-[2rem] bg-indigo-50/50 flex items-center justify-center text-indigo-300">
+                  <FontAwesomeIcon icon={faBuilding} className="h-10 w-10 text-indigo-400" />
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">No properties matching your criteria</p>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-black text-zinc-900">Your portfolio is empty</h3>
+                  <p className="text-sm font-medium text-zinc-500 max-w-sm mx-auto">
+                    Start by adding a building to group your units, or list a standalone property to begin collecting rent.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button className="btn-primary text-xs" onClick={() => setIsAddOpen(true)}>
+                    <FontAwesomeIcon icon={faHome} className="mr-2" /> New Asset
+                  </button>
+                  <button className="btn-ghost text-xs" onClick={() => setIsBuildingOpen(true)}>
+                    <FontAwesomeIcon icon={faBuilding} className="mr-2" /> Add Building
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1910,8 +1958,21 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                   <TableBody>
                     {paginatedTenants.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-bold text-xs uppercase tracking-widest">
-                          No tenants found
+                        <TableCell colSpan={4}>
+                          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+                            <div className="h-16 w-16 rounded-[1.5rem] bg-purple-50 flex items-center justify-center">
+                              <FontAwesomeIcon icon={faUsers} className="h-8 w-8 text-purple-400" />
+                            </div>
+                            <div className="space-y-1">
+                              <h3 className="text-base font-black text-zinc-900">No tenants yet</h3>
+                              <p className="text-xs font-medium text-zinc-500 max-w-xs mx-auto">
+                                Invite tenants via email. Once they sign up, assign them to units to start collecting rent.
+                              </p>
+                            </div>
+                            <button className="btn-primary text-[10px] mt-2" onClick={() => setIsCreateTenantOpen(true)}>
+                              <FontAwesomeIcon icon={faUsers} className="mr-2 h-3.5 w-3.5" /> Invite Tenant
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )}
