@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { UserProfile, UserRole } from '../App';
+import { UserProfile, UserRole, promptForPush } from '../App';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
@@ -117,6 +117,16 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
               </div>
             </>
           )}
+
+          <Button
+            variant="ghost"
+            onClick={() => promptForPush()}
+            className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
+            title="Enable Push Notifications"
+            aria-label="Enable Push Notifications"
+          >
+            <FontAwesomeIcon icon={faBell} />
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger render={
@@ -241,7 +251,16 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
           </DropdownMenu>
         </div>
       ) : (
-        <div className="topbar-right">
+        <div className="topbar-right flex items-center">
+          <Button
+            variant="ghost"
+            onClick={() => promptForPush()}
+            className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
+            title="Enable Push Notifications"
+            aria-label="Enable Push Notifications"
+          >
+            <FontAwesomeIcon icon={faBell} />
+          </Button>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
             <a className="rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100" href="/#product">Product</a>
             <a className="rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100" href="/#landlord-plans">Plans</a>
