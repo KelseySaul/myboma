@@ -107,10 +107,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     if (pwaTimerRef.current) clearTimeout(pwaTimerRef.current);
   };
 
-  const handleEnableNotifications = async () => {
-    await promptForPush();
-  };
-
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(() => {
     return localStorage.getItem('myboma_agreed_terms') === 'true';
@@ -384,13 +380,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
             >
               <FontAwesomeIcon icon={faArrowRight} className="text-sm text-indigo-300" />
               See the app
-            </button>
-            <button
-              onClick={handleEnableNotifications}
-              className="px-8 py-3 bg-white/10 hover:bg-white/15 border border-white/20 hover:border-white/30 hover:scale-[1.02] text-white rounded-2xl font-black text-sm active:scale-95 transition-all duration-250 flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faBell} className="text-sm text-yellow-300" />
-              Enable Alerts
             </button>
           </div>
         </div>

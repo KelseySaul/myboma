@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
-import { UserProfile } from '../App';
+import { UserProfile, promptForPush } from '../App';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   faShieldAlt,
   faCheckCircle,
   faDesktop,
+  faBell,
 } from '@fortawesome/free-solid-svg-icons';
 
 export default function SettingsPage({ profile }: { profile: UserProfile }) {
@@ -437,6 +438,30 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
             >
               <FontAwesomeIcon icon={prefSaved ? faCheckCircle : faSave} className="h-3.5 w-3.5" />
               {savingPref ? 'Saving…' : prefSaved ? 'Saved!' : 'Save Preferences'}
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Notifications Card ─────────────────────────────────── */}
+        <div className="bg-white rounded-3xl border border-zinc-100 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-50 flex items-center justify-between">
+            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-zinc-400 flex items-center gap-2">
+              <FontAwesomeIcon icon={faBell} className="h-3 w-3" />
+              Notifications
+            </h2>
+          </div>
+
+          <div className="p-6 space-y-5">
+            <p className="text-xs font-medium text-zinc-500 leading-relaxed">
+              Never miss an update. Allow push notifications to get instantly notified about payments, messages, and important events.
+            </p>
+
+            <Button
+              onClick={() => promptForPush()}
+              className="h-11 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black gap-2 transition-all active:scale-[0.98] w-full sm:w-auto"
+            >
+              <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
+              Manage Push Notifications
             </Button>
           </div>
         </div>
