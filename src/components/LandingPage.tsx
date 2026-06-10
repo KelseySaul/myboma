@@ -382,6 +382,17 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </div>
       </section>
 
+      {/* Immediate Property Discovery Grid */}
+      <section className="container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1">
+        <HunterDashboard
+          profile={null}
+          onLoginRequired={() => setIsAuthOpen(true)}
+          activeTab={propertyFilter}
+          setActiveTab={setPropertyFilter}
+          variant="embedded"
+        />
+      </section>
+
       <section id="product" className="bg-white px-4 py-14 sm:py-20">
         <div className="mx-auto max-w-6xl">
           <div className="mx-auto max-w-2xl text-center">
@@ -498,17 +509,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           setIsAuthOpen(true);
         }}
       />
-
-      {/* Immediate Property Discovery Grid */}
-      <section className="container mx-auto px-2 sm:px-4 pb-24 -mt-1">
-        <HunterDashboard
-          profile={null}
-          onLoginRequired={() => setIsAuthOpen(true)}
-          activeTab={propertyFilter}
-          setActiveTab={setPropertyFilter}
-          variant="embedded"
-        />
-      </section>
 
       {/* Auth Modal */}
       {isAuthOpen && (
