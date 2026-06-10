@@ -221,9 +221,9 @@ export default function App() {
 
         if (Capacitor.isNativePlatform()) {
           if (!oneSignalNativeInitialized) {
-            OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
-            OneSignalNative.User.pushSubscription.addEventListener('change', handleSubChange);
             oneSignalNativeInitialized = true;
+            OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
+            (OneSignalNative.User as any).PushSubscription.addEventListener('change', handleSubChange);
           }
         } else {
           if (!oneSignalWebInitialized) {
@@ -231,13 +231,23 @@ export default function App() {
             if (isWindowInitted) {
               oneSignalWebInitialized = true;
             } else {
-              await OneSignalWeb.init({
-                appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
-                allowLocalhostAsSecureOrigin: true,
-              });
               oneSignalWebInitialized = true;
+              try {
+                await OneSignalWeb.init({
+                  appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
+                  allowLocalhostAsSecureOrigin: true,
+                });
+              } catch (initErr: any) {
+                if (!initErr.message?.includes('already initialized')) {
+                  console.warn("OneSignal init issue:", initErr);
+                }
+              }
             }
-            (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+            if ((OneSignalWeb.User as any)?.PushSubscription) {
+              (OneSignalWeb.User as any).PushSubscription.addEventListener('change', handleSubChange);
+            } else if ((OneSignalWeb.User as any)?.pushSubscription) {
+              (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+            }
           }
         }
       } catch (err) {

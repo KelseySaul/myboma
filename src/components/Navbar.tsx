@@ -89,6 +89,14 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     }
   };
 
+  const handlePushNotificationRequest = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    toast.info("Please allow push notifications when prompted.");
+    promptForPush();
+  };
+
   return (
     <header 
       className={`fixed left-0 right-0 z-50 topbar transition-all duration-300 ${isImpersonating ? 'topbar-below-impersonation' : ''}`}
@@ -120,7 +128,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
 
           <Button
             variant="ghost"
-            onClick={() => promptForPush()}
+            onClick={handlePushNotificationRequest}
             className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
             title="Enable Push Notifications"
             aria-label="Enable Push Notifications"
@@ -254,7 +262,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
         <div className="topbar-right flex items-center">
           <Button
             variant="ghost"
-            onClick={() => promptForPush()}
+            onClick={handlePushNotificationRequest}
             className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
             title="Enable Push Notifications"
             aria-label="Enable Push Notifications"
