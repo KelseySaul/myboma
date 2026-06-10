@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import HunterDashboard from './HunterDashboard';
 import { getAuthPersistence, setAuthPersistence, supabase } from '../supabase';
+import { promptForPush } from '../App';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -106,13 +107,8 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     if (pwaTimerRef.current) clearTimeout(pwaTimerRef.current);
   };
 
-  const handleEnableNotifications = () => {
-    // @ts-ignore
-    window.OneSignalDeferred = window.OneSignalDeferred || [];
-    // @ts-ignore
-    window.OneSignalDeferred.push(function(OneSignal) {
-      OneSignal.Slidedown.promptPush();
-    });
+  const handleEnableNotifications = async () => {
+    await promptForPush();
   };
 
   const [loading, setLoading] = useState(false);
