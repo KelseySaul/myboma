@@ -11,7 +11,7 @@ import SettingsPage from './components/SettingsPage';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
-import { ReloadPrompt } from './components/ReloadPrompt';
+
 import { logAudit } from './lib/audit';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -1273,7 +1273,7 @@ export default function App() {
           onComplete={() => setShowOnboarding(false)}
         />
       )}
-      <ReloadPrompt />
+
     </div>
   );
 }
