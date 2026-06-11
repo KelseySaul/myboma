@@ -376,13 +376,14 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-              <button
-                onClick={handlePwaInstallClick}
+              <a
+                href="/myboma.apk"
+                download="myboma.apk"
                 className="group relative flex items-center gap-3 px-8 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
               >
                 <FontAwesomeIcon icon={faDownload} className="text-indigo-600 group-hover:rotate-12 transition-transform" />
                 Download App
-              </button>
+              </a>
               <button
                 onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
                 className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
@@ -747,6 +748,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                     <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-[10px] text-zinc-400 font-black uppercase tracking-widest hover:text-indigo-600 transition-colors">
                       {authMode === 'login' ? "New here? Sign Up" : "Have an account? Log In"}
                     </button>
+
                   </div>
                 </form>
               </div>
@@ -777,52 +779,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </Dialog>
       )}
 
-      {/* PWA Install Banner */}
-      {pwaVisible && (
-        <div
-          role="dialog"
-          aria-label="Install myboma app"
-          className="pwa-install-banner fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm"
-          style={{ animation: 'slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}
-        >
-          <div className="bg-zinc-900 text-white rounded-[1.5rem] shadow-2xl px-5 py-4 flex items-center gap-4">
-            <img src="/bomalog.webp" alt="myboma" className="h-11 w-11 rounded-xl shrink-0 shadow-lg bg-white p-1 object-contain" width="44" height="44" />
-            <div className="flex-1 min-w-0">
-              <p className="font-black text-sm leading-tight">Install myboma</p>
-              <p className="text-[11px] text-zinc-400 font-medium mt-0.5">Add to home screen for the best experience</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handlePwaInstall}
-                className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-xl transition-all"
-              >
-                Install
-              </button>
-              <a 
-                href="/myboma.apk"
-                download="myboma.apk"
-                className="flex items-center justify-center gap-2 bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-black px-3.5 py-2 rounded-xl transition-all"
-              >
-                <FontAwesomeIcon icon={faMobileScreen} className="h-3 w-3" />
-                APK
-              </a>
-              <button
-                onClick={handlePwaDismiss}
-                aria-label="Dismiss"
-                className="text-zinc-500 hover:text-zinc-300 text-lg leading-none px-1 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translate(-50%, 24px); }
-          to   { opacity: 1; transform: translate(-50%, 0); }
-        }
-      `}</style>
     </div>
   );
 }
