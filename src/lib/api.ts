@@ -74,6 +74,13 @@ export const provisionUser = (body: {
   platformId?: string | null;
   landlordId?: string;
   mustChangePassword?: boolean;
+  rentRouting?: 'admin' | 'direct';
+  rentPayoutMethod?: 'cash' | 'mpesa' | 'bank';
+  mpesaSettlementPhone?: string;
+  mpesaSettlementShortCode?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
 }) =>
   bffRequest<{uid: string; email: string; invitation: any}>('/users/provision', {
     method: 'POST',

@@ -23,6 +23,13 @@ export const provisionUserSchema = z
     platformId: z.string().uuid().nullable().optional(),
     landlordId: z.string().uuid().optional(),
     mustChangePassword: z.boolean().optional(),
+    rentRouting: z.enum(['direct', 'admin']).optional(),
+    rentPayoutMethod: z.enum(['cash', 'mpesa', 'bank']).optional(),
+    mpesaSettlementPhone: phoneSchema,
+    mpesaSettlementShortCode: z.string().optional(),
+    bankName: z.string().optional(),
+    bankAccountNumber: z.string().optional(),
+    bankAccountName: z.string().optional(),
   })
   .strict();
 
@@ -35,6 +42,14 @@ export const suspendUserSchema = z
 export const manualRentPaidSchema = z
   .object({
     note: z.string().max(500).optional(),
+  })
+  .strict();
+
+export const updatePlatformBrandingSchema = z
+  .object({
+    brandLogoUrl: z.string().url().or(z.literal('')).nullable().optional(),
+    brandPrimaryColor: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).or(z.literal('')).nullable().optional(),
+    brandSecondaryColor: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).or(z.literal('')).nullable().optional(),
   })
   .strict();
 
@@ -133,6 +148,10 @@ export const handleProvisionUser =
     }
 
     // 2. Upsert the profile
+    const isManagedLandlord = body.role === 'landlord';
+    const rentRecipientId = isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null;
+    const managedByAdminId = isManagedLandlord ? actor.uid : null;
+
     const {error: upsertError} = await supabase.from('users').upsert(
       [
         {
@@ -145,6 +164,19 @@ export const handleProvisionUser =
           isAdmin: body.role === 'admin',
           isSuperAdmin: false,
           mustChangePassword: body.mustChangePassword ?? true,
+          rentRecipientId,
+          managedByAdminId,
+          rentPayoutMethod: body.rentRouting === 'direct' ? body.rentPayoutMethod : null,
+          mpesaSettlementPhone: body.rentRouting === 'direct' ? body.mpesaSettlementPhone : null,
+          mpesaSettlementShortCode: body.rentRouting === 'direct' ? body.mpesaSettlementShortCode : null,
+          bankName: body.rentRouting === 'direct' ? body.bankName : null,
+          bankAccountNumber: body.rentRouting === 'direct' ? body.bankAccountNumber : null,
+          bankAccountName: body.rentRouting === 'direct' ? body.bankAccountName : null,
+          ...(isManagedLandlord ? {
+            subscriptionPlan: actor.subscriptionPlan ?? 'pro_plus:monthly',
+            subscriptionStatus: actor.subscriptionStatus ?? 'active',
+            subscriptionExpiresAt: actor.subscriptionExpiresAt ?? '2099-12-31T23:59:59Z',
+          } : {})
         },
       ],
       {onConflict: 'uid'},

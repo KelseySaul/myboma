@@ -52,34 +52,46 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
           </div>
         </div>
 
-        <div className="mt-10 grid gap-4 lg:grid-cols-3">
-          {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).map((tierId) => {
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[])
+            .filter((tierId) => tierId !== 'test')
+            .map((tierId) => {
             const tier = SUBSCRIPTION_TIERS[tierId];
             const amount = getSubscriptionAmount(tierId, billing);
             const isFeatured = tierId === 'growth';
+            const isProPlus = tierId === 'pro_plus';
 
             return (
               <article
                 key={tierId}
-                className={`relative flex flex-col rounded-3xl border bg-white p-6 shadow-[0_12px_40px_rgba(79,70,229,0.06)] ${
-                  isFeatured ? 'border-indigo-300 ring-2 ring-indigo-500/15' : 'border-zinc-100'
+                className={`relative flex flex-col rounded-3xl border p-6 shadow-[0_12px_40px_rgba(79,70,229,0.06)] ${
+                  isProPlus
+                    ? 'border-zinc-800 bg-zinc-900 text-white ring-2 ring-zinc-900/50'
+                    : isFeatured
+                    ? 'border-indigo-300 bg-white ring-2 ring-indigo-500/15'
+                    : 'border-zinc-100 bg-white'
                 }`}
               >
-                {isFeatured && (
+                {isFeatured && !isProPlus && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
                     Most popular
                   </span>
                 )}
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">{tier.label}</p>
+                {isProPlus && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-900 shadow-lg shadow-amber-400/20">
+                    Ultimate Admin
+                  </span>
+                )}
+                <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isProPlus ? 'text-zinc-400' : 'text-zinc-400'}`}>{tier.label}</p>
                 <div className="flex items-baseline gap-1.5 mt-1">
-                  <p className="text-3xl font-black tabular-nums text-zinc-900">{formatPlanPrice(amount)}</p>
-                  <span className="text-[10px] font-black uppercase text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded-md">One-time</span>
+                  <p className={`text-3xl font-black tabular-nums ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{formatPlanPrice(amount)}</p>
+                  <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md ${isProPlus ? 'text-zinc-300 bg-zinc-800' : 'text-indigo-500 bg-indigo-50'}`}>One-time</span>
                 </div>
-                <p className="text-xs font-bold text-zinc-500 mt-1">{tier.tagline}</p>
+                <p className={`text-xs font-bold mt-1 ${isProPlus ? 'text-zinc-400' : 'text-zinc-500'}`}>{tier.tagline}</p>
                 <ul className="mt-5 flex-1 space-y-2">
                   {tier.highlights.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-xs font-medium text-zinc-600">
-                      <FontAwesomeIcon icon={faCheck} className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
+                    <li key={item} className={`flex items-start gap-2 text-xs font-medium ${isProPlus ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                      <FontAwesomeIcon icon={faCheck} className={`mt-0.5 h-3 w-3 shrink-0 ${isProPlus ? 'text-amber-400' : 'text-emerald-500'}`} />
                       {item}
                     </li>
                   ))}
@@ -88,7 +100,9 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
                   type="button"
                   onClick={() => onGetStarted?.(tierId, billing)}
                   className={`mt-6 w-full rounded-2xl py-3 text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
-                    isFeatured
+                    isProPlus
+                      ? 'bg-amber-400 text-zinc-900 shadow-lg shadow-amber-400/20 hover:bg-amber-300'
+                      : isFeatured
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500'
                       : 'bg-zinc-900 text-white hover:bg-zinc-800'
                   }`}

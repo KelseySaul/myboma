@@ -231,22 +231,24 @@ export default function App() {
             if (isWindowInitted) {
               oneSignalWebInitialized = true;
             } else {
-              oneSignalWebInitialized = true;
               try {
                 await OneSignalWeb.init({
                   appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
                   allowLocalhostAsSecureOrigin: true,
                 });
+                oneSignalWebInitialized = true;
               } catch (initErr: any) {
                 if (!initErr.message?.includes('already initialized')) {
                   console.warn("OneSignal init issue:", initErr);
                 }
               }
             }
-            if ((OneSignalWeb.User as any)?.PushSubscription) {
-              (OneSignalWeb.User as any).PushSubscription.addEventListener('change', handleSubChange);
-            } else if ((OneSignalWeb.User as any)?.pushSubscription) {
-              (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+            if (oneSignalWebInitialized) {
+              if ((OneSignalWeb.User as any)?.PushSubscription) {
+                (OneSignalWeb.User as any).PushSubscription.addEventListener('change', handleSubChange);
+              } else if ((OneSignalWeb.User as any)?.pushSubscription) {
+                (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+              }
             }
           }
         }

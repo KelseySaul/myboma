@@ -1,4 +1,4 @@
-export type SubscriptionTier = 'test' | 'starter' | 'growth' | 'pro';
+export type SubscriptionTier = 'test' | 'starter' | 'growth' | 'pro' | 'pro_plus';
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
 export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
@@ -6,6 +6,8 @@ export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
 export type SubscriptionFeatures = {
   maxListings: number | null;
   maintenanceHub: boolean;
+  customBranding?: boolean;
+  adminAccount?: boolean;
   label: string;
 };
 
@@ -52,12 +54,20 @@ export const SUBSCRIPTION_TIERS: Record<
     features: { maxListings: null, maintenanceHub: true, label: 'Pro' },
     highlights: ['Unlimited listings', 'Maintenance hub', 'Priority support'],
   },
+  pro_plus: {
+    id: 'pro_plus',
+    label: 'Pro Plus',
+    tagline: 'White-label & admin control',
+    monthlyBaseKes: 5000,
+    features: { maxListings: null, maintenanceHub: true, customBranding: true, adminAccount: true, label: 'Pro Plus' },
+    highlights: ['Unlimited listings', 'White-label customization', 'Rent out as your own app', 'Full admin account access', 'Priority support'],
+  },
 };
 
 export const BILLING_PERIODS: { id: BillingPeriod; label: string; months: number; multiplier: number }[] = [
   { id: 'monthly', label: 'Monthly (Prepaid)', months: 1, multiplier: 1 },
-  { id: 'quarterly', label: 'Quarterly (Prepaid)', months: 3, multiplier: 2.7 },
-  { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 9.6 },
+  { id: 'quarterly', label: 'Quarterly (Prepaid)', months: 3, multiplier: 3 },
+  { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 12 },
 ];
 
 export const encodeSubscriptionPlan = (tier: SubscriptionTier, billing: BillingPeriod) => `${tier}:${billing}`;
@@ -84,9 +94,9 @@ export const getSubscriptionFeatures = (profile: {
   subscriptionPlan?: string | null;
   role?: string;
 }): SubscriptionFeatures => {
-  // Admins get pro features
+  // Admins get pro_plus features
   if (profile.role === 'admin') {
-    return SUBSCRIPTION_TIERS.pro.features;
+    return SUBSCRIPTION_TIERS.pro_plus.features;
   }
   
   // Everyone else must have a plan
