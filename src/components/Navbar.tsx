@@ -41,10 +41,29 @@ interface NavbarProps {
 export default function Navbar({ user, profile, activeView, setActiveView, setActiveTab, onLoginClick, isImpersonating, onHelpClick }: NavbarProps) {
   const { setTheme } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [platformBranding, setPlatformBranding] = useState<{ brandLogoUrl?: string, brandPrimaryColor?: string, brandSecondaryColor?: string, name?: string } | null>(null);
 
   useEffect(() => {
     setTheme('light');
   }, [setTheme]);
+
+  useEffect(() => {
+    if (profile?.platformId) {
+      supabase.from('platforms').select('name, brandLogoUrl, brandPrimaryColor, brandSecondaryColor').eq('id', profile.platformId).maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setPlatformBranding(data);
+            const root = document.documentElement;
+            if (data.brandPrimaryColor) {
+              root.style.setProperty('--brand-primary', data.brandPrimaryColor);
+            }
+            if (data.brandSecondaryColor) {
+              root.style.setProperty('--brand-secondary', data.brandSecondaryColor);
+            }
+          }
+        });
+    }
+  }, [profile?.platformId]);
 
   useEffect(() => {
     if (!profile?.email) return;
@@ -104,9 +123,15 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     >
       {/* Brand Container with Logo */}
       <div className="brand flex items-center gap-3">
-        <img src="/bomalog.webp" alt="myboma" className="h-8 object-contain" width="32" height="32" />
+        <img 
+          src={platformBranding?.brandLogoUrl || "/bomalog.webp"} 
+          alt={platformBranding?.name || "myboma"} 
+          className="h-8 object-contain" 
+          width="32" 
+          height="32" 
+        />
         <div>
-          <div className="brand-name">MYBOMA</div>
+          <div className="brand-name">{platformBranding?.name || 'MYBOMA'}</div>
           <div className="brand-sub">PROPERTY OS</div>
         </div>
       </div>
