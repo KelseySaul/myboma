@@ -11,6 +11,11 @@ const config: CapacitorConfig = {
   ios: {
     preferredContentMode: 'mobile',
   },
+  plugins: {
+    CapacitorUpdater: {
+      autoUpdate: true,
+    },
+  },
 };
 
 export default config;

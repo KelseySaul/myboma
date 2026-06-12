@@ -376,14 +376,24 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-              <a
-                href="/myboma.apk"
-                download="myboma.apk"
-                className="group relative flex items-center gap-3 px-8 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-              >
-                <FontAwesomeIcon icon={faDownload} className="text-indigo-600 group-hover:rotate-12 transition-transform" />
-                Download App
-              </a>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a
+                  href="/myboma.apk"
+                  download="myboma.apk"
+                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
+                  Download APK
+                </a>
+                <a
+                  href="/myboma.ipa"
+                  download="myboma.ipa"
+                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
+                  Download iOS App
+                </a>
+              </div>
               <button
                 onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
                 className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
@@ -408,20 +418,24 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       </section>
 
       {/* Social Proof Section */}
-      <section className="bg-white py-12 border-b border-zinc-100 overflow-hidden">
+      <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
         <div className="container mx-auto px-4">
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 opacity-40 hover:opacity-100 transition-opacity duration-500">
-             <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center text-white font-black text-[10px]">MB</div>
-                <span className="font-black text-zinc-900 tracking-tight uppercase text-xs">Trusted by 50+ Teams</span>
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 md:gap-20">
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-white font-black text-xs shadow-inner">MB</div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">Trusted by <span className="text-zinc-900 font-black">50+ Teams</span></span>
              </div>
-             <div className="flex items-center gap-3">
-                <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500 text-lg" />
-                <span className="font-black text-zinc-900 tracking-tight uppercase text-xs">Ksh 10M+ Collections tracked</span>
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500 text-xl" />
+                </div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">Ksh 10M+ <span className="text-zinc-900 font-black">Tracked</span></span>
              </div>
-             <div className="flex items-center gap-3">
-                <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-lg" />
-                <span className="font-black text-zinc-900 tracking-tight uppercase text-xs">500+ Tenants Managed</span>
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-xl" />
+                </div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">500+ <span className="text-zinc-900 font-black">Tenants</span></span>
              </div>
           </div>
         </div>
