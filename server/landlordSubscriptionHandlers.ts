@@ -15,7 +15,7 @@ import {
   type SubscriptionTier,
 } from '../src/lib/landlordSubscription.ts';
 
-const tierSchema = z.enum(['test', 'starter', 'growth', 'pro']);
+const tierSchema = z.enum(['test', 'starter', 'growth', 'pro', 'pro_plus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -154,7 +154,7 @@ export const activateLandlordSubscription = async (
   const {error: profileError} = await supabase
     .from('users')
     .update({
-      role: 'landlord',
+      role: input.tier === 'pro_plus' ? 'admin' : 'landlord',
       subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
       subscriptionStatus: 'active',
       subscriptionExpiresAt: periodEnd.toISOString(),
@@ -162,6 +162,17 @@ export const activateLandlordSubscription = async (
     .eq('uid', input.landlordId);
 
   if (profileError) throw profileError;
+
+  // Sync the subscription to any landlords managed by this admin
+  const {error: syncError} = await supabase
+    .from('users')
+    .update({
+      subscriptionStatus: 'active',
+      subscriptionExpiresAt: periodEnd.toISOString(),
+    })
+    .eq('managedByAdminId', input.landlordId);
+
+  if (syncError) console.error('Error syncing subscription to managed landlords:', syncError);
 
   const summary = `${input.landlordName} subscribed to ${label} (${input.paymentReference}).`;
   await deps.insertNotification({
@@ -211,7 +222,7 @@ export const saveLandlordPayoutProfile = async (
   const {error} = await supabase
     .from('users')
     .update({
-      role: 'landlord',
+      role: body.tier === 'pro_plus' ? 'admin' : 'landlord',
       rentPayoutMethod: body.rentPayoutMethod,
       subscriptionStatus: 'pending',
       cashPayoutNotes: body.cashPayoutNotes?.trim() || null,

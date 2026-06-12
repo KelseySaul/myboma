@@ -51,32 +51,43 @@ export default function LandlordSignupFields({
           Choose your plan
         </Label>
         <div className="mt-3 grid gap-2">
-          {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).map((tierId) => {
+          {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[])
+            .filter((tierId) => tierId !== 'test')
+            .map((tierId) => {
             const tier = SUBSCRIPTION_TIERS[tierId];
             const tierAmount = getSubscriptionAmount(tierId, value.billing);
             const periodLabel = value.billing === 'monthly' ? 'mo' : value.billing === 'quarterly' ? '3 mos' : 'yr';
+            const isProPlus = tierId === 'pro_plus';
+            const isSelected = value.tier === tierId;
+
+            let stateClasses = '';
+            if (isProPlus) {
+              stateClasses = isSelected
+                ? 'border-amber-400 bg-zinc-900 shadow-sm'
+                : 'border-transparent bg-zinc-800 hover:border-amber-400/50';
+            } else {
+              stateClasses = isSelected
+                ? 'border-indigo-500 bg-white shadow-sm'
+                : 'border-transparent bg-white/60 hover:border-indigo-200';
+            }
 
             return (
               <button
                 key={tierId}
                 type="button"
                 onClick={() => patch({ tier: tierId })}
-                className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
-                  value.tier === tierId
-                    ? 'border-indigo-500 bg-white shadow-sm'
-                    : 'border-transparent bg-white/60 hover:border-indigo-200'
-                }`}
+                className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${stateClasses}`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-black text-zinc-900">{tier.label}</span>
-                  <span className="text-[10px] font-black text-indigo-600">
+                  <span className={`text-xs font-black ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{tier.label}</span>
+                  <span className={`text-[10px] font-black ${isProPlus ? 'text-amber-400' : 'text-indigo-600'}`}>
                     {formatPlanPrice(tierAmount)}/{periodLabel}
                   </span>
                 </div>
-                <p className="mt-0.5 text-[10px] font-medium text-zinc-500">{tier.tagline}</p>
+                <p className={`mt-0.5 text-[10px] font-medium ${isProPlus ? 'text-zinc-400' : 'text-zinc-500'}`}>{tier.tagline}</p>
                 <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
                   {tier.highlights.map((h) => (
-                    <li key={h} className="text-[9px] font-bold text-zinc-400">
+                    <li key={h} className={`text-[9px] font-bold ${isProPlus ? 'text-zinc-500' : 'text-zinc-400'}`}>
                       · {h}
                     </li>
                   ))}

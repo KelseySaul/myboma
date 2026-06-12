@@ -11,7 +11,7 @@ import SettingsPage from './components/SettingsPage';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
-import { ReloadPrompt } from './components/ReloadPrompt';
+
 import { logAudit } from './lib/audit';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -38,8 +38,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
 import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
+import OneSignalWeb from 'react-onesignal';
+import OneSignalNative from '@onesignal/capacitor-plugin';
+import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
+
+let oneSignalWebInitialized = false;
+let oneSignalNativeInitialized = false;
+
+export const promptForPush = async () => {
+  if (Capacitor.isNativePlatform()) {
+    if (oneSignalNativeInitialized) {
+      try {
+        await OneSignalNative.Notifications.requestPermission(true);
+      } catch (err) {
+        console.error("OneSignalNative promptForPush error:", err);
+      }
+    } else {
+      console.warn("OneSignal Native not initialized yet.");
+    }
+  } else {
+    if (oneSignalWebInitialized) {
+      try {
+        await OneSignalWeb.Slidedown.promptPush();
+      } catch (err) {
+        console.error("OneSignalWeb promptForPush error:", err);
+      }
+    } else {
+      console.warn("OneSignal Web not initialized yet.");
+    }
+  }
+};
 
 export interface UserProfile {
   uid: string;
@@ -170,6 +200,71 @@ export default function App() {
   // Lifted tab state — shared between Sidebar and the active dashboard
   const [activeTab, setActiveTab] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Initialize OneSignal
+    const initOneSignal = async () => {
+      try {
+        const handleSubChange = (event: any) => {
+          if (event.current.optedIn) {
+            if (Capacitor.isNativePlatform()) {
+              if (oneSignalNativeInitialized) {
+                OneSignalNative.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              }
+            } else {
+              if (oneSignalWebInitialized) {
+                (OneSignalWeb as any).InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
+              }
+            }
+          }
+        };
+
+        if (Capacitor.isNativePlatform()) {
+          if (!oneSignalNativeInitialized) {
+            oneSignalNativeInitialized = true;
+            OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
+            (OneSignalNative.User as any).PushSubscription.addEventListener('change', handleSubChange);
+          }
+        } else {
+          if (!oneSignalWebInitialized) {
+            const isWindowInitted = typeof window !== 'undefined' && (window as any).OneSignal?.isInitted?.();
+            if (isWindowInitted) {
+              oneSignalWebInitialized = true;
+            } else {
+              try {
+                await OneSignalWeb.init({
+                  appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
+                  allowLocalhostAsSecureOrigin: true,
+                });
+                oneSignalWebInitialized = true;
+              } catch (initErr: any) {
+                if (!initErr.message?.includes('already initialized')) {
+                  console.warn("OneSignal init issue:", initErr);
+                }
+              }
+            }
+            if (oneSignalWebInitialized) {
+              if ((OneSignalWeb.User as any)?.PushSubscription) {
+                (OneSignalWeb.User as any).PushSubscription.addEventListener('change', handleSubChange);
+              } else if ((OneSignalWeb.User as any)?.pushSubscription) {
+                (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("OneSignal initialization error:", err);
+      }
+    };
+    initOneSignal();
+
+    // Patch history.replaceState to dispatch a custom event
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(this, args as any);
+      window.dispatchEvent(new Event('urlchange'));
+    };
+  }, []);
 
   // Forced password reset state
   const [newPassword, setNewPassword] = useState('');
@@ -371,6 +466,43 @@ export default function App() {
           const pref = localStorage.getItem(`myboma_default_page_${session.user.id}`);
           if (pref) setActiveTab(pref);
           await handleProfile(session.user);
+          // Tie this device to your Supabase User ID
+          if (Capacitor.isNativePlatform()) {
+            if (oneSignalNativeInitialized) {
+              try {
+                OneSignalNative.login(session.user.id);
+              } catch (e) {
+                console.error("OneSignalNative.login failed:", e);
+              }
+            }
+          } else {
+            if (oneSignalWebInitialized) {
+              try {
+                OneSignalWeb.login(session.user.id);
+              } catch (e) {
+                console.error("OneSignalWeb.login failed:", e);
+              }
+            }
+          }
+        } else {
+          // When they log out
+          if (Capacitor.isNativePlatform()) {
+            if (oneSignalNativeInitialized) {
+              try {
+                OneSignalNative.logout();
+              } catch (e) {
+                console.error("OneSignalNative.logout failed:", e);
+              }
+            }
+          } else {
+            if (oneSignalWebInitialized) {
+              try {
+                OneSignalWeb.logout();
+              } catch (e) {
+                console.error("OneSignalWeb.logout failed:", e);
+              }
+            }
+          }
         }
       } catch (err) {
         console.error("App: Session restore error:", err);
@@ -395,6 +527,24 @@ export default function App() {
         const pref = localStorage.getItem(`myboma_default_page_${currentUser.id}`);
         if (pref) setActiveTab(pref);
         handleProfile(currentUser).catch(() => {});
+        // Tie this device to your Supabase User ID
+        if (Capacitor.isNativePlatform()) {
+          if (oneSignalNativeInitialized) {
+            try {
+              OneSignalNative.login(currentUser.id);
+            } catch (e) {
+              console.error("OneSignalNative.login failed:", e);
+            }
+          }
+        } else {
+          if (oneSignalWebInitialized) {
+            try {
+              OneSignalWeb.login(currentUser.id);
+            } catch (e) {
+              console.error("OneSignalWeb.login failed:", e);
+            }
+          }
+        }
       } else {
         lastProcessedUserId = null;
         setProfile(null);
@@ -403,6 +553,24 @@ export default function App() {
         if (profileSubscription) {
           profileSubscription.unsubscribe();
           profileSubscription = null;
+        }
+        // When they log out
+        if (Capacitor.isNativePlatform()) {
+          if (oneSignalNativeInitialized) {
+            try {
+              OneSignalNative.logout();
+            } catch (e) {
+              console.error("OneSignalNative.logout failed:", e);
+            }
+          }
+        } else {
+          if (oneSignalWebInitialized) {
+            try {
+              OneSignalWeb.logout();
+            } catch (e) {
+              console.error("OneSignalWeb.logout failed:", e);
+            }
+          }
         }
       }
       
@@ -441,10 +609,16 @@ export default function App() {
     const subscriptionPayment = params.get('subscription_payment');
     const rentPayment = params.get('rent_payment');
 
-    if (subscriptionPayment === 'success') {
+    const isSubscriptionPending = subscriptionPayment === 'success' || subscriptionPayment === 'processing';
+
+    if (isSubscriptionPending) {
       const currentUserId = user?.id;
       if (currentUserId) {
-        toast.success('Payment received. Activating your subscription…');
+        if (subscriptionPayment === 'success') {
+          toast.success('Payment received. Activating your subscription…');
+        } else {
+          toast('Subscription payment is processing. Your plan will activate after confirmation.');
+        }
         handledPaymentReturn = true;
         
         // Poll for profile update because IPN might be slightly delayed
@@ -473,15 +647,13 @@ export default function App() {
             
             // Clear URL only after we have confirmed activation or timed out
             window.history.replaceState({}, '', window.location.pathname);
+            window.dispatchEvent(new Event('urlchange'));
           }
         }, 2000);
 
         // Cleanup interval if component unmounts or effect re-runs
         return () => clearInterval(poll);
       }
-    } else if (subscriptionPayment === 'processing') {
-      toast('Subscription payment is processing. Your plan will activate after confirmation.');
-      handledPaymentReturn = true;
     } else if (subscriptionPayment === 'cancelled') {
       toast.error('Subscription payment was cancelled or not completed.');
       handledPaymentReturn = true;
@@ -499,8 +671,9 @@ export default function App() {
     }
 
     // For non-polling cases, clear immediately. For polling, it's handled inside the interval.
-    if (handledPaymentReturn && subscriptionPayment !== 'success') {
+    if (handledPaymentReturn && !isSubscriptionPending) {
       window.history.replaceState({}, '', window.location.pathname);
+      window.dispatchEvent(new Event('urlchange'));
     }
   }, [user?.id, refreshProfile]);
 
@@ -683,6 +856,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         onLoginClick={() => setIsAuthOpen(true)} 
         isImpersonating={Boolean(impersonatedProfile)}
+        onHelpClick={() => setShowOnboarding(true)}
       />
       {/* Sidebar + content row */}
       <div className="flex flex-1 min-h-0">
@@ -1099,7 +1273,7 @@ export default function App() {
           onComplete={() => setShowOnboarding(false)}
         />
       )}
-      <ReloadPrompt />
+
     </div>
   );
 }

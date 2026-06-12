@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { UserProfile, UserRole } from '../App';
+import { UserProfile, UserRole, promptForPush } from '../App';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
@@ -14,7 +14,8 @@ import {
   faUserShield,
   faBuilding,
   faCog,
-  faBell
+  faBell,
+  faInfoCircle
 } from '@fortawesome/free-solid-svg-icons';
 import {
   DropdownMenu,
@@ -34,15 +35,35 @@ interface NavbarProps {
   setActiveTab?: (tab: string) => void;
   onLoginClick?: () => void;
   isImpersonating?: boolean;
+  onHelpClick?: () => void;
 }
 
-export default function Navbar({ user, profile, activeView, setActiveView, setActiveTab, onLoginClick, isImpersonating }: NavbarProps) {
+export default function Navbar({ user, profile, activeView, setActiveView, setActiveTab, onLoginClick, isImpersonating, onHelpClick }: NavbarProps) {
   const { setTheme } = useTheme();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [platformBranding, setPlatformBranding] = useState<{ brandLogoUrl?: string, brandPrimaryColor?: string, brandSecondaryColor?: string, name?: string } | null>(null);
 
   useEffect(() => {
     setTheme('light');
   }, [setTheme]);
+
+  useEffect(() => {
+    if (profile?.platformId) {
+      supabase.from('platforms').select('name, brandLogoUrl, brandPrimaryColor, brandSecondaryColor').eq('id', profile.platformId).maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setPlatformBranding(data);
+            const root = document.documentElement;
+            if (data.brandPrimaryColor) {
+              root.style.setProperty('--brand-primary', data.brandPrimaryColor);
+            }
+            if (data.brandSecondaryColor) {
+              root.style.setProperty('--brand-secondary', data.brandSecondaryColor);
+            }
+          }
+        });
+    }
+  }, [profile?.platformId]);
 
   useEffect(() => {
     if (!profile?.email) return;
@@ -87,6 +108,14 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     }
   };
 
+  const handlePushNotificationRequest = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    toast.info("Please allow push notifications when prompted.");
+    promptForPush();
+  };
+
   return (
     <header 
       className={`fixed left-0 right-0 z-50 topbar transition-all duration-300 ${isImpersonating ? 'topbar-below-impersonation' : ''}`}
@@ -94,9 +123,15 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     >
       {/* Brand Container with Logo */}
       <div className="brand flex items-center gap-3">
-        <img src="/bomalog.webp" alt="myboma" className="h-8 object-contain" width="32" height="32" />
+        <img 
+          src={platformBranding?.brandLogoUrl || "/bomalog.webp"} 
+          alt={platformBranding?.name || "myboma"} 
+          className="h-8 object-contain" 
+          width="32" 
+          height="32" 
+        />
         <div>
-          <div className="brand-name">MYBOMA</div>
+          <div className="brand-name">{platformBranding?.name || 'MYBOMA'}</div>
           <div className="brand-sub">PROPERTY OS</div>
         </div>
       </div>
@@ -115,6 +150,16 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
               </div>
             </>
           )}
+
+          <Button
+            variant="ghost"
+            onClick={handlePushNotificationRequest}
+            className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
+            title="Enable Push Notifications"
+            aria-label="Enable Push Notifications"
+          >
+            <FontAwesomeIcon icon={faBell} />
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger render={
@@ -211,6 +256,18 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                     <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-700">Settings</span>
                   </DropdownMenuItem>
                 )}
+                
+                {profile && onHelpClick && (
+                  <DropdownMenuItem 
+                    onClick={onHelpClick} 
+                    className="cursor-pointer rounded-xl px-4 py-2.5 m-1 transition-all flex items-center hover:bg-zinc-50 group"
+                  >
+                    <div className="h-7 w-7 rounded-lg bg-zinc-50 group-hover:bg-white flex items-center justify-center mr-3 shadow-sm border border-zinc-100">
+                      <FontAwesomeIcon icon={faInfoCircle} className="h-3.5 w-3.5 text-zinc-500 group-hover:text-zinc-700" />
+                    </div>
+                    <span className="font-bold text-[11px] uppercase tracking-wider text-zinc-700">Quick Start Tour</span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuGroup>
               
               <DropdownMenuSeparator className="mx-4 bg-zinc-100" />
@@ -227,7 +284,16 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
           </DropdownMenu>
         </div>
       ) : (
-        <div className="topbar-right">
+        <div className="topbar-right flex items-center">
+          <Button
+            variant="ghost"
+            onClick={handlePushNotificationRequest}
+            className="h-8 w-8 rounded-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 transition-colors p-0 flex items-center justify-center mr-1"
+            title="Enable Push Notifications"
+            aria-label="Enable Push Notifications"
+          >
+            <FontAwesomeIcon icon={faBell} />
+          </Button>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
             <a className="rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100" href="/#product">Product</a>
             <a className="rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-100" href="/#landlord-plans">Plans</a>

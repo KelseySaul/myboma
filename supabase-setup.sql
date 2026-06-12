@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS public.platforms (
   name text NOT NULL,
   slug text UNIQUE NOT NULL,
   "ownerEmail" text,
+  "brandLogoUrl" text,
+  "brandPrimaryColor" text,
+  "brandSecondaryColor" text,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
@@ -19,6 +22,8 @@ CREATE TABLE IF NOT EXISTS public.platforms (
 CREATE TABLE IF NOT EXISTS public.users (
   uid uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   "platformId" uuid REFERENCES public.platforms(id) ON DELETE SET NULL,
+  "managedByAdminId" uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  "rentRecipientId" uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   email text UNIQUE NOT NULL,
   "displayName" text NOT NULL DEFAULT 'User',
   role text NOT NULL DEFAULT 'hunter' CHECK (role IN ('landlord', 'tenant', 'hunter', 'admin')),
@@ -184,12 +189,17 @@ DROP POLICY IF EXISTS "Allow all operations" ON public.audit_logs;
 
 -- 3. Safe upgrades for databases created before this script was repaired
 ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS "ownerEmail" text;
+ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS "brandLogoUrl" text;
+ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS "brandPrimaryColor" text;
+ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS "brandSecondaryColor" text;
 ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS slug text;
 ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
 ALTER TABLE public.platforms ADD COLUMN IF NOT EXISTS "createdAt" timestamptz NOT NULL DEFAULT now();
 
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "platformId" uuid REFERENCES public.platforms(id) ON DELETE SET NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "managedByAdminId" uuid REFERENCES auth.users(id) ON DELETE SET NULL;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "rentRecipientId" uuid REFERENCES auth.users(id) ON DELETE SET NULL;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "displayName" text NOT NULL DEFAULT 'User';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'hunter';

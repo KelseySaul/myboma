@@ -23,6 +23,7 @@ import {
   provisionUserSchema,
   suspendUserSchema,
   syncSuperAdminFromEnv,
+  updatePlatformBrandingSchema,
 } from './server/adminHandlers.ts';
 import {
   activateLandlordSubscription,
@@ -326,7 +327,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   const {data: profileRow, error: profileError} = await supabase
     .from('users')
     .select(
-      'uid,email,displayName,role,platformId,phone,isAdmin,isSuperAdmin,stripeAccountId,mpesaSettlementPhone,mpesaSettlementShortCode',
+      'uid,email,displayName,role,platformId,phone,isAdmin,isSuperAdmin,stripeAccountId,mpesaSettlementPhone,mpesaSettlementShortCode,subscriptionPlan,subscriptionStatus,subscriptionExpiresAt',
     )
     .eq('uid', user.id)
     .maybeSingle();
@@ -449,10 +450,51 @@ const updateRentPayment = async (
   throw error;
 };
 
+const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
+  const ONE_SIGNAL_APP_ID = "16fe44a9-e285-4d7d-85f0-8b82014b9a71";
+  const ONE_SIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY; 
+  if (!ONE_SIGNAL_REST_API_KEY) return null;
+
+  const response = await fetch("https://onesignal.com/api/v1/notifications", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Authorization": `Basic ${ONE_SIGNAL_REST_API_KEY}`
+    },
+    body: JSON.stringify({
+      app_id: ONE_SIGNAL_APP_ID,
+      target_channel: "push",
+      include_aliases: {
+        external_id: [targetUserId]
+      },
+      headings: { en: title },
+      contents: { en: message }
+    })
+  });
+
+  return response.json();
+};
+
 const insertNotification = async (payload: Record<string, unknown>) => {
   const {supabase} = requireSupabase();
   const {error} = await supabase.from('notifications').insert([payload]);
   if (error) throw error;
+
+  if (payload.recipientEmail) {
+    const { data: user } = await supabase
+      .from('users')
+      .select('uid')
+      .eq('email', payload.recipientEmail)
+      .maybeSingle();
+
+    if (user?.uid) {
+      const title = String(payload.title || 'New Notification');
+      const message = String(payload.message || 'You have a new update.');
+      await sendPushNotification(user.uid, title, message).catch(err => {
+        console.error('[OneSignal] Failed to send push:', err);
+      });
+    }
+  }
 };
 
 const sendEmail = async ({to, subject, text}: {to?: string | null; subject: string; text: string}) => {
@@ -1748,6 +1790,26 @@ bffRouter.delete(
   }),
 );
 
+bffRouter.put(
+  '/platforms/:id/branding',
+  requireAuth,
+  requireAdmin,
+  validateBody(updatePlatformBrandingSchema),
+  asyncHandler(async (req, res) => {
+    const {supabase: sb} = requireSupabase();
+    const actor = req.profile!;
+    const platformId = req.params.id;
+    if (!actor.isSuperAdmin && actor.platformId !== platformId) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    const body = req.validatedBody as z.infer<typeof updatePlatformBrandingSchema>;
+    const {error} = await sb.from('platforms').update(body).eq('id', platformId);
+    if (error) throw error;
+    res.json({updated: true});
+  }),
+);
+
 const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
   const body = getValidatedBody<z.infer<typeof landlordSubscriptionCheckoutSchema>>(req);
   const actor = req.profile!;
@@ -1963,13 +2025,35 @@ bffRouter.post(
 
     const rentPayment = payment as RentPaymentRecord;
     const isOwner = rentPayment.landlordId === actor.uid;
+    const isTenant = rentPayment.tenantId === actor.uid;
     const isPlatformAdmin =
       (actor.isAdmin || actor.isSuperAdmin) &&
       (!actor.platformId || rentPayment.platformId === actor.platformId);
 
-    if (!isOwner && !actor.isSuperAdmin && !isPlatformAdmin) {
+    if (!isOwner && !isTenant && !actor.isSuperAdmin && !isPlatformAdmin) {
       console.warn(`[Manual Payment] Unauthorized attempt by ${actor.email} to mark payment ${paymentId} as paid.`);
-      res.status(403).json({error: 'You cannot mark this payment as paid'});
+      res.status(403).json({error: 'You cannot access this payment'});
+      return;
+    }
+
+    if (isTenant && !isOwner && !actor.isSuperAdmin && !isPlatformAdmin) {
+      // Tenant is submitting receipt for verification
+      const existingMeta = (rentPayment as any).paymentMetadata || {};
+      const {error: updateError} = await sb
+        .from('rentPayments')
+        .update({
+          status: 'verifying',
+          paymentMetadata: { 
+            ...existingMeta, 
+            submittedReceipt: note ?? null, 
+            submittedAt: new Date().toISOString() 
+          }
+        })
+        .eq('id', paymentId);
+        
+      if (updateError) throw updateError;
+      console.log(`[Manual Payment] Tenant ${actor.email} submitted payment ${paymentId} for verification`);
+      res.json({status: 'verifying', paymentId: rentPayment.id});
       return;
     }
 
@@ -1998,6 +2082,78 @@ bffRouter.post(
   asyncHandler(async (req, res) => {
     const {supabase: sb} = requireSupabase();
     await handleSendRentReminder(req, res, { supabase: sb, sendEmail, insertNotification });
+  }),
+);
+
+bffRouter.post(
+  '/admin/init-platform',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const {supabase: sb} = requireSupabase();
+    const actor = req.profile!;
+
+    if (actor.role !== 'admin') {
+      res.status(403).json({error: 'Only admins can init platform'});
+      return;
+    }
+
+    if (actor.platformId) {
+      res.json({status: 'exists', platformId: actor.platformId});
+      return;
+    }
+
+    const {data: platform, error: platformError} = await sb
+      .from('platforms')
+      .insert([{name: `${actor.displayName}'s Platform`, status: 'active'}])
+      .select('id')
+      .single();
+
+    if (platformError) throw platformError;
+
+    const {error: userError} = await sb
+      .from('users')
+      .update({platformId: platform.id})
+      .eq('uid', actor.uid);
+
+    if (userError) throw userError;
+
+    res.json({status: 'created', platformId: platform.id});
+  }),
+);
+
+bffRouter.put(
+  '/platforms/:id/branding',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const {supabase: sb} = requireSupabase();
+    const actor = req.profile!;
+    const platformId = req.params.id;
+
+    if (!actor.isSuperAdmin && actor.platformId !== platformId) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    if (actor.role !== 'admin' && !actor.isSuperAdmin) {
+      res.status(403).json({error: 'Only admins can update branding'});
+      return;
+    }
+
+    const {name, brandLogoUrl, brandPrimaryColor, brandSecondaryColor} = req.body;
+
+    const {error} = await sb
+      .from('platforms')
+      .update({
+        name,
+        brandLogoUrl,
+        brandPrimaryColor,
+        brandSecondaryColor,
+      })
+      .eq('id', platformId);
+
+    if (error) throw error;
+    res.json({status: 'success'});
+>>>>>>> origin/master
   }),
 );
 
