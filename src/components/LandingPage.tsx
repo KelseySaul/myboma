@@ -36,6 +36,7 @@ import {
   type BillingPeriod,
 } from '../lib/landlordSubscription';
 import {joinWaitlist, unsubscribeFromWaitlist} from '../lib/waitlist';
+import { Capacitor } from '@capacitor/core';
 
 // Move PWA prompt to module level so it persists across renders
 let _pwaPromptEvent: any = null;
@@ -46,6 +47,7 @@ interface LandingPageProps {
 }
 
 export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPageProps) {
+  const isNative = Capacitor.isNativePlatform();
   const [propertyFilter, setPropertyFilter] = useState('all');
   const [pwaPrompt, setPwaPrompt] = useState<any>(null);
   const [pwaVisible, setPwaVisible] = useState(false);
@@ -354,71 +356,75 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   return (
     <div className="flex flex-col min-h-screen bg-white transition-colors duration-300 selection:bg-indigo-100 overflow-x-hidden">
       {/* Sleek Premium Welcome Hero */}
-      <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
-        {/* Advanced Glassmorphism Overlay */}
-        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
-        
-        {/* Animated Mesh Gradient Blobs */}
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+      {!isNative && (
+        <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
+          {/* Advanced Glassmorphism Overlay */}
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
+          
+          {/* Animated Mesh Gradient Blobs */}
+          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
 
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
-              Property management, simplified
-            </p>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-              One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
-            </h1>
-            <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
-              Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
-            </p>
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
+                Property management, simplified
+              </p>
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
+              </h1>
+              <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
+                Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
+              </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href="/myboma.apk"
-                  download="myboma.apk"
-                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href="/myboma.apk"
+                    download="myboma.apk"
+                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
+                    Download APK
+                  </a>
+                  <a
+                    href="/myboma.ipa"
+                    download="myboma.ipa"
+                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
+                    Download iOS App
+                  </a>
+                </div>
+                <button
+                  onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
+                  className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
                 >
-                  <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
-                  Download APK
-                </a>
-                <a
-                  href="/myboma.ipa"
-                  download="myboma.ipa"
-                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-                >
-                  <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
-                  Download iOS App
-                </a>
+                  <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
+                  Explore Features
+                </button>
               </div>
-              <button
-                onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
-                className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-              >
-                <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
-                Explore Features
-              </button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Immediate Property Discovery Grid */}
-      <section className="container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1">
+      <section className={isNative ? "container mx-auto px-2 sm:px-4 py-6 sm:py-8" : "container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1"}>
         <HunterDashboard
           profile={null}
           onLoginRequired={() => setIsAuthOpen(true)}
           activeTab={propertyFilter}
           setActiveTab={setPropertyFilter}
-          variant="embedded"
+          variant={isNative ? "default" : "embedded"}
         />
       </section>
 
-      {/* Social Proof Section */}
-      <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
+      {!isNative && (
+        <>
+          {/* Social Proof Section */}
+          <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
         <div className="container mx-auto px-4">
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 md:gap-20">
              <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
@@ -582,14 +588,16 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </div>
       </section>
 
-      <LandlordPricingSection
-        onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
-          setLandlordSignup((prev) => ({ ...prev, tier, billing }));
-          setSelectedRole('landlord');
-          setAuthMode('signup');
-          setIsAuthOpen(true);
-        }}
-      />
+          <LandlordPricingSection
+            onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
+              setLandlordSignup((prev) => ({ ...prev, tier, billing }));
+              setSelectedRole('landlord');
+              setAuthMode('signup');
+              setIsAuthOpen(true);
+            }}
+          />
+        </>
+      )}
 
       {/* Auth Modal */}
       {isAuthOpen && (
