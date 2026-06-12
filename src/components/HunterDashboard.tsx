@@ -35,6 +35,7 @@ import { logAudit } from '../lib/audit';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { differenceInDays, parseISO, format } from 'date-fns';
+import { faHeart } from '@fortawesome/free-solid-svg-icons';
 
 interface Property {
   id: string;
@@ -48,6 +49,7 @@ interface Property {
   images: string[];
   status: 'available' | 'rented' | 'booked';
   amenities: string[];
+  createdAt?: string;
 }
 
 const getAmenityIcon = (name: string) => {
@@ -93,6 +95,26 @@ export default function HunterDashboard({
     checkOut: format(new Date(Date.now() + 86400000), 'yyyy-MM-dd'),
   });
 
+  const [likedPropertyIds, setLikedPropertyIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('myboma_liked_properties');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggleLike = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setLikedPropertyIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      localStorage.setItem('myboma_liked_properties', JSON.stringify(Array.from(next)));
+      return next;
+    });
+  };
+
   useEffect(() => {
     let isActive = true;
     let propSub: any = null;
@@ -101,7 +123,8 @@ export default function HunterDashboard({
       const { data: props } = await supabase
         .from('properties')
         .select('*')
-        .eq('status', 'available');
+        .eq('status', 'available')
+        .order('createdAt', { ascending: false });
       if (!isActive) return;
 
       if (props) setProperties(props);
@@ -130,11 +153,19 @@ export default function HunterDashboard({
     };
   }, []);
 
-  const filteredProperties = properties.filter(p => 
-    (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-     p.location.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    (filterType === 'all' || p.type === filterType)
-  );
+  const filteredProperties = properties
+    .filter(p => 
+      (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       p.location.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      (filterType === 'all' || p.type === filterType)
+    )
+    .sort((a, b) => {
+      const aLiked = likedPropertyIds.has(a.id);
+      const bLiked = likedPropertyIds.has(b.id);
+      if (aLiked && !bLiked) return -1;
+      if (!aLiked && bLiked) return 1;
+      return 0; // Already sorted by createdAt DESC from Supabase
+    });
 
   const handleBook = async (property: Property) => {
     if (!profile) {
@@ -486,6 +517,18 @@ export default function HunterDashboard({
                      <Badge className="bg-white/90 dark:bg-black/90 text-zinc-900 dark:text-white border-none px-1.5 py-0 sm:px-2 sm:py-0.5 rounded-md sm:rounded-lg font-black text-[7px] sm:text-[8px] uppercase tracking-widest backdrop-blur-md shadow-lg">
                         {property.type}
                      </Badge>
+                  </div>
+                  <div className="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 flex gap-2">
+                    <button
+                      onClick={(e) => toggleLike(e, property.id)}
+                      className={`flex items-center justify-center h-7 w-7 sm:h-9 sm:w-9 rounded-full backdrop-blur-md transition-all shadow-lg ${
+                        likedPropertyIds.has(property.id)
+                          ? 'bg-white text-rose-500 scale-110'
+                          : 'bg-black/30 text-white hover:bg-white/90 hover:text-rose-500'
+                      }`}
+                    >
+                      <FontAwesomeIcon icon={faHeart} className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </button>
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-70 sm:opacity-60" />
                   <div className="absolute bottom-1.5 left-1.5 right-1.5 sm:bottom-3 sm:left-3 sm:right-3">

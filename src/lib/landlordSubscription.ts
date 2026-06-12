@@ -1,4 +1,4 @@
-export type SubscriptionTier = 'test' | 'starter' | 'growth' | 'pro' | 'pro_plus';
+export type SubscriptionTier = 'test' | 'starter' | 'pro' | 'proplus';
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
 export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
@@ -6,8 +6,6 @@ export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
 export type SubscriptionFeatures = {
   maxListings: number | null;
   maintenanceHub: boolean;
-  customBranding?: boolean;
-  adminAccount?: boolean;
   label: string;
 };
 
@@ -38,36 +36,28 @@ export const SUBSCRIPTION_TIERS: Record<
     features: { maxListings: 3, maintenanceHub: false, label: 'Starter' },
     highlights: ['Up to 3 listings', 'Tenant & rent ledger', 'No maintenance hub'],
   },
-  growth: {
-    id: 'growth',
-    label: 'Growth',
-    tagline: 'Active property managers',
-    monthlyBaseKes: 1500,
-    features: { maxListings: 20, maintenanceHub: true, label: 'Growth' },
-    highlights: ['Up to 20 listings', 'Full maintenance hub', 'Notifications & automations'],
-  },
   pro: {
     id: 'pro',
     label: 'Pro',
-    tagline: 'Portfolios at scale',
-    monthlyBaseKes: 2999,
-    features: { maxListings: null, maintenanceHub: true, label: 'Pro' },
-    highlights: ['Unlimited listings', 'Maintenance hub', 'Priority support'],
+    tagline: 'Active property managers',
+    monthlyBaseKes: 1500,
+    features: { maxListings: 20, maintenanceHub: true, label: 'Pro' },
+    highlights: ['Up to 20 listings', 'Full maintenance hub', 'Notifications & automations'],
   },
-  pro_plus: {
-    id: 'pro_plus',
+  proplus: {
+    id: 'proplus',
     label: 'Pro Plus',
-    tagline: 'White-label & admin control',
-    monthlyBaseKes: 5000,
-    features: { maxListings: null, maintenanceHub: true, customBranding: true, adminAccount: true, label: 'Pro Plus' },
-    highlights: ['Unlimited listings', 'White-label customization', 'Rent out as your own app', 'Full admin account access', 'Priority support'],
+    tagline: 'Portfolios at scale',
+    monthlyBaseKes: 10000,
+    features: { maxListings: null, maintenanceHub: true, label: 'Pro Plus' },
+    highlights: ['Unlimited listings', 'Maintenance hub', 'Notifications & automations'],
   },
 };
 
 export const BILLING_PERIODS: { id: BillingPeriod; label: string; months: number; multiplier: number }[] = [
   { id: 'monthly', label: 'Monthly (Prepaid)', months: 1, multiplier: 1 },
-  { id: 'quarterly', label: 'Quarterly (Prepaid)', months: 3, multiplier: 3 },
-  { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 12 },
+  { id: 'quarterly', label: 'Quarterly (Prepaid)', months: 3, multiplier: 2.7 },
+  { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 9.6 },
 ];
 
 export const encodeSubscriptionPlan = (tier: SubscriptionTier, billing: BillingPeriod) => `${tier}:${billing}`;
@@ -94,9 +84,9 @@ export const getSubscriptionFeatures = (profile: {
   subscriptionPlan?: string | null;
   role?: string;
 }): SubscriptionFeatures => {
-  // Admins get pro_plus features
+  // Admins get pro features
   if (profile.role === 'admin') {
-    return SUBSCRIPTION_TIERS.pro_plus.features;
+    return SUBSCRIPTION_TIERS.pro.features;
   }
   
   // Everyone else must have a plan
