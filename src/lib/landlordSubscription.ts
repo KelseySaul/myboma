@@ -1,4 +1,4 @@
-export type SubscriptionTier = 'test' | 'starter' | 'growth' | 'pro';
+export type SubscriptionTier = 'test' | 'starter' | 'pro' | 'proplus';
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
 export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
@@ -36,21 +36,21 @@ export const SUBSCRIPTION_TIERS: Record<
     features: { maxListings: 3, maintenanceHub: false, label: 'Starter' },
     highlights: ['Up to 3 listings', 'Tenant & rent ledger', 'No maintenance hub'],
   },
-  growth: {
-    id: 'growth',
-    label: 'Growth',
-    tagline: 'Active property managers',
-    monthlyBaseKes: 1500,
-    features: { maxListings: 20, maintenanceHub: true, label: 'Growth' },
-    highlights: ['Up to 20 listings', 'Full maintenance hub', 'Notifications & automations'],
-  },
   pro: {
     id: 'pro',
     label: 'Pro',
+    tagline: 'Active property managers',
+    monthlyBaseKes: 1500,
+    features: { maxListings: 20, maintenanceHub: true, label: 'Pro' },
+    highlights: ['Up to 20 listings', 'Full maintenance hub', 'Notifications & automations'],
+  },
+  proplus: {
+    id: 'proplus',
+    label: 'Pro Plus',
     tagline: 'Portfolios at scale',
-    monthlyBaseKes: 2999,
-    features: { maxListings: null, maintenanceHub: true, label: 'Pro' },
-    highlights: ['Unlimited listings', 'Maintenance hub', 'Priority support'],
+    monthlyBaseKes: 10000,
+    features: { maxListings: null, maintenanceHub: true, label: 'Pro Plus' },
+    highlights: ['Unlimited listings', 'Maintenance hub', 'Notifications & automations'],
   },
 };
 

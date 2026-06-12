@@ -591,22 +591,24 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const sendRentReminder = async (payment: RentPayment) => {
     try {
-      const prop = properties.find(p => p.id === payment.propertyId);
-      await supabase
-        .from('notifications')
-        .insert([{
-          recipientEmail: payment.tenantId.toLowerCase(),
-          platformId: profile.platformId,
-          type: 'reminder',
-          title: 'Rent Payment Reminder',
-          message: `This is a reminder to pay rent for ${prop?.title}. Amount: KSh ${payment.amount}. Due: ${payment.dueDate}`,
-          propertyId: payment.propertyId,
-          createdAt: new Date().toISOString(),
-          read: false
-        }]);
-      toast.success(`Reminder sent to ${payment.tenantId}`);
-    } catch (error) {
-      toast.error("Failed to send reminder");
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/web/notifications/remind-rent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ rentPaymentId: payment.id }),
+      });
+
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || 'Failed to send reminder');
+      }
+
+      toast.success(`Reminder sent successfully!`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send reminder");
     }
   };
 
@@ -1804,12 +1806,21 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                           <TableCell className="text-sm font-black tabular-nums">KES {Number(payment.amount).toLocaleString()}</TableCell>
                           <TableCell className="px-4 py-3 text-right">
                             {payment.status !== 'paid' ? (
-                              <Button 
-                                className="h-7 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white border-none"
-                                onClick={() => handleMarkAsPaid(payment.id)}
-                              >
-                                Mark Paid
-                              </Button>
+                              <div className="flex flex-col gap-1 sm:flex-row justify-end">
+                                <Button 
+                                  variant="outline"
+                                  className="h-7 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest bg-white hover:bg-zinc-100 text-zinc-600 border-zinc-200"
+                                  onClick={() => sendRentReminder(payment)}
+                                >
+                                  Remind
+                                </Button>
+                                <Button 
+                                  className="h-7 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white border-none"
+                                  onClick={() => handleMarkAsPaid(payment.id)}
+                                >
+                                  Mark Paid
+                                </Button>
+                              </div>
                             ) : (
                               <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[8px] font-black uppercase">Cleared</Badge>
                             )}

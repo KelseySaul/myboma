@@ -56,7 +56,7 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
           {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).map((tierId) => {
             const tier = SUBSCRIPTION_TIERS[tierId];
             const amount = getSubscriptionAmount(tierId, billing);
-            const isFeatured = tierId === 'growth';
+            const isFeatured = tierId === 'pro';
 
             return (
               <article

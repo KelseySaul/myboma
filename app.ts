@@ -38,6 +38,8 @@ import {
   type SubscriptionTier,
 } from './src/lib/landlordSubscription.ts';
 import type {AuthenticatedRequest, RentPaymentRecord, UserProfileRecord} from './server/types.ts';
+import { handleSendRentReminder, processAutomatedRentReminders } from './server/notificationHandlers.ts';
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -1989,6 +1991,16 @@ bffRouter.post(
   }),
 );
 
+bffRouter.post(
+  '/notifications/remind-rent',
+  requireAuth,
+  validateBody(z.object({ rentPaymentId: uuidSchema })),
+  asyncHandler(async (req, res) => {
+    const {supabase: sb} = requireSupabase();
+    await handleSendRentReminder(req, res, { supabase: sb, sendEmail, insertNotification });
+  }),
+);
+
 app.use('/api/web', bffRouter);
 app.use('/api/mobile', bffRouter);
 
@@ -2054,5 +2066,17 @@ if (process.env.VERCEL !== '1') {
     `);
   });
 }
+
+// Scheduled Tasks
+cron.schedule('0 8 * * *', async () => {
+  console.log('[Cron] Running automated rent reminders...');
+  try {
+    const { supabase: sb } = requireSupabase();
+    await processAutomatedRentReminders({ supabase: sb, sendEmail, insertNotification });
+    console.log('[Cron] Automated rent reminders processed.');
+  } catch (err) {
+    console.error('[Cron] Error processing automated rent reminders:', err);
+  }
+});
 
 export default app;
