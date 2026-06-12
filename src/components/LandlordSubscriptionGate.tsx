@@ -39,7 +39,7 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
     } catch {
       /* ignore */
     }
-    return { ...defaultLandlordSignupState(), tier: 'test', mpesaSettlementPhone: phone || '' };
+    return { ...defaultLandlordSignupState(), tier: 'starter', mpesaSettlementPhone: phone || '' };
   });
 
   if (isProcessing) {

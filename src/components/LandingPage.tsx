@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import HunterDashboard from './HunterDashboard';
 import { getAuthPersistence, setAuthPersistence, supabase } from '../supabase';
+import { promptForPush } from '../App';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +18,10 @@ import {
   faMobileAlt,
   faEye,
   faEyeSlash,
-  faDownload
+  faDownload,
+  faBell,
+  faChartPie,
+  faUsers
 } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -104,6 +108,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     // Don't show again this session
     if (pwaTimerRef.current) clearTimeout(pwaTimerRef.current);
   };
+
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(() => {
     return localStorage.getItem('myboma_agreed_terms') === 'true';
@@ -349,82 +354,169 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   return (
     <div className="flex flex-col min-h-screen bg-white transition-colors duration-300 selection:bg-indigo-100 overflow-x-hidden">
       {/* Sleek Premium Welcome Hero */}
-      <section className="relative pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+      <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
+        {/* Advanced Glassmorphism Overlay */}
+        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
+        
+        {/* Animated Mesh Gradient Blobs */}
+        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
 
-        <div className="container mx-auto px-4 relative z-10 text-center max-w-4xl py-4 sm:py-6">
-          <p className="mb-3 text-[10px] font-black uppercase tracking-[0.24em] text-indigo-200 sm:text-xs">
-            Property management, simplified
-          </p>
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-[-0.04em] text-white leading-tight mb-2 sm:mb-4 drop-shadow-lg">
-            One home for your properties.
-          </h1>
-          <p className="text-sm sm:text-lg text-zinc-200 max-w-xl mx-auto font-medium leading-relaxed mb-4 sm:mb-6 drop-shadow-md px-1">
-            Track listings, tenants, rent, maintenance, and bookings from a clean workspace built for Kenyan property teams.
-          </p>
+        <div className="container mx-auto px-4 relative z-10">
+          <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
+            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
+              Property management, simplified
+            </p>
+            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+              One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
+            </h1>
+            <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
+              Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
+            </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mt-4 sm:mt-8">
-            <button
-              onClick={handlePwaInstallClick}
-              className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-500/20 active:scale-95 transition-all duration-250"
-            >
-              <FontAwesomeIcon icon={faDownload} className="text-sm" />
-              Download app
-            </button>
-            <button
-              onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
-              className="px-8 py-3 bg-white/10 hover:bg-white/15 border border-white/20 hover:border-white/30 hover:scale-[1.02] text-white rounded-2xl font-black text-sm active:scale-95 transition-all duration-250 flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faArrowRight} className="text-sm text-indigo-300" />
-              See the app
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a
+                  href="/myboma.apk"
+                  download="myboma.apk"
+                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
+                  Download APK
+                </a>
+                <a
+                  href="/myboma.ipa"
+                  download="myboma.ipa"
+                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
+                  Download iOS App
+                </a>
+              </div>
+              <button
+                onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
+                className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
+                Explore Features
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="product" className="bg-white px-4 py-14 sm:py-20">
-        <div className="mx-auto max-w-6xl">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-600">Built for daily work</p>
-            <h2 className="mt-3 text-2xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-              The important numbers stay close.
+      {/* Immediate Property Discovery Grid */}
+      <section className="container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1">
+        <HunterDashboard
+          profile={null}
+          onLoginRequired={() => setIsAuthOpen(true)}
+          activeTab={propertyFilter}
+          setActiveTab={setPropertyFilter}
+          variant="embedded"
+        />
+      </section>
+
+      {/* Social Proof Section */}
+      <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 md:gap-20">
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-white font-black text-xs shadow-inner">MB</div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">Trusted by <span className="text-zinc-900 font-black">50+ Teams</span></span>
+             </div>
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500 text-xl" />
+                </div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">Ksh 10M+ <span className="text-zinc-900 font-black">Tracked</span></span>
+             </div>
+             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-xl" />
+                </div>
+                <span className="font-bold text-zinc-600 tracking-tight text-sm">500+ <span className="text-zinc-900 font-black">Tenants</span></span>
+             </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="product" className="relative bg-zinc-50/50 px-4 py-20 sm:py-32 overflow-hidden">
+        {/* Subtle background decorative elements */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent" />
+        
+        <div className="mx-auto max-w-7xl relative">
+          <div className="mx-auto max-w-3xl text-center mb-16 sm:mb-24">
+            <h2 className="text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl lg:text-6xl mb-6">
+              The important numbers <span className="text-indigo-600">stay close.</span>
             </h2>
-            <p className="mt-3 text-sm font-medium leading-6 text-zinc-600 sm:text-base">
-              See portfolio health at a glance, keep tenant work organized, and give your team a clear operating view.
+            <p className="text-lg font-medium leading-relaxed text-zinc-600">
+              See portfolio health at a glance, keep tenant work organized, and give your team a clear operating view from any device.
             </p>
           </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            {[
-              ['Portfolio visibility', 'Listings, occupancy, collections, and costs in one place.'],
-              ['Tenant operations', 'Invite tenants, manage rent records, and track maintenance work.'],
-              ['Team oversight', 'Give property managers and admins a focused control center.'],
-            ].map(([title, description]) => (
-              <article key={title} className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500" />
-                <h3 className="mt-3 text-sm font-black text-zinc-900">{title}</h3>
-                <p className="mt-1 text-xs font-medium leading-5 text-zinc-600">{description}</p>
-              </article>
-            ))}
-          </div>
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
+            {/* Feature Cards Column */}
+            <div className="space-y-4">
+              {[
+                { 
+                  title: 'Portfolio Visibility', 
+                  description: 'Listings, occupancy, collections, and costs in one unified dashboard.',
+                  icon: faChartPie,
+                  color: 'text-indigo-600',
+                  bg: 'bg-indigo-50'
+                },
+                { 
+                  title: 'Tenant Operations', 
+                  description: 'Invite tenants, manage rent records, and track maintenance work in real-time.',
+                  icon: faUsers,
+                  color: 'text-purple-600',
+                  bg: 'bg-purple-50'
+                },
+                { 
+                  title: 'Team Oversight', 
+                  description: 'Give property managers and admins a focused control center with granular permissions.',
+                  icon: faShieldAlt,
+                  color: 'text-blue-600',
+                  bg: 'bg-blue-50'
+                },
+              ].map((feature) => (
+                <article 
+                  key={feature.title} 
+                  className="group p-6 rounded-3xl border border-zinc-200 bg-white hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="flex gap-5">
+                    <div className={`shrink-0 w-12 h-12 rounded-2xl ${feature.bg} flex items-center justify-center transition-transform group-hover:scale-110`}>
+                      <FontAwesomeIcon icon={feature.icon} className={`text-xl ${feature.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-zinc-900 mb-1">{feature.title}</h3>
+                      <p className="text-sm font-medium leading-relaxed text-zinc-500">{feature.description}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
 
-          <div className="mt-9 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-5 sm:justify-center sm:gap-6">
-            {[
-              ['/screenshots/mobile-dashboard.webp', 'Owner dashboard', 'Track rent and occupancy'],
-              ['/screenshots/mobile-tenants.webp', 'Tenant operations', 'Keep every tenancy organized'],
-              ['/screenshots/mobile-insights.webp', 'Portfolio insights', 'See performance clearly'],
-            ].map(([src, title, description]) => (
-              <figure key={src} className="w-[238px] shrink-0 snap-center sm:w-[260px]">
-                <div className="relative overflow-hidden rounded-[2.25rem] border-[7px] border-zinc-950 bg-zinc-950 p-1 shadow-[0_22px_55px_rgba(15,23,42,0.2)]">
-                  <div className="absolute left-1/2 top-0 z-10 h-5 w-24 -translate-x-1/2 rounded-b-2xl bg-zinc-950" />
-                  <img className="aspect-[390/844] w-full rounded-[1.65rem] bg-white object-contain" src={src} alt={`MyBoma mobile app ${title.toLowerCase()} screen`} loading="lazy" />
-                </div>
-                <figcaption className="px-2 pt-4 text-center">
-                  <h3 className="text-sm font-black text-zinc-900">{title}</h3>
-                  <p className="mt-1 text-xs font-medium text-zinc-500">{description}</p>
-                </figcaption>
-              </figure>
-            ))}
+            {/* Floating App Screenshots Column */}
+            <div className="relative mt-12 lg:mt-0 lg:ml-8 h-[500px] sm:h-[600px] flex items-center justify-center">
+              {/* Main Phone */}
+              <div className="relative z-20 w-[240px] sm:w-[280px] animate-float shadow-2xl rounded-[3rem] border-[8px] border-zinc-950 bg-zinc-950 overflow-hidden">
+                 <img src="/screenshots/mobile-dashboard.webp" alt="Dashboard" className="w-full aspect-[390/844] object-cover" />
+              </div>
+              
+              {/* Secondary Phones (Floating) */}
+              <div className="absolute z-10 -left-4 sm:left-0 top-1/2 -translate-y-1/2 w-[200px] sm:w-[240px] animate-float-delayed opacity-40 hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] border-[6px] border-zinc-950 bg-zinc-950 overflow-hidden hidden sm:block">
+                 <img src="/screenshots/mobile-tenants.webp" alt="Tenants" className="w-full aspect-[390/844] object-cover" />
+              </div>
+              
+              <div className="absolute z-10 -right-4 sm:right-0 top-1/2 -translate-y-1/2 w-[200px] sm:w-[240px] animate-float opacity-40 hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] border-[6px] border-zinc-950 bg-zinc-950 overflow-hidden hidden sm:block" style={{ animationDelay: '1s' }}>
+                 <img src="/screenshots/mobile-insights.webp" alt="Insights" className="w-full aspect-[390/844] object-cover" />
+              </div>
+
+              {/* Decorative elements */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-indigo-500/5 rounded-full blur-[100px] -z-10" />
+            </div>
           </div>
         </div>
       </section>
@@ -498,17 +590,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           setIsAuthOpen(true);
         }}
       />
-
-      {/* Immediate Property Discovery Grid */}
-      <section className="container mx-auto px-2 sm:px-4 pb-24 -mt-1">
-        <HunterDashboard
-          profile={null}
-          onLoginRequired={() => setIsAuthOpen(true)}
-          activeTab={propertyFilter}
-          setActiveTab={setPropertyFilter}
-          variant="embedded"
-        />
-      </section>
 
       {/* Auth Modal */}
       {isAuthOpen && (
@@ -681,6 +762,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                     <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-[10px] text-zinc-400 font-black uppercase tracking-widest hover:text-indigo-600 transition-colors">
                       {authMode === 'login' ? "New here? Sign Up" : "Have an account? Log In"}
                     </button>
+
                   </div>
                 </form>
               </div>
@@ -711,44 +793,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </Dialog>
       )}
 
-      {/* PWA Install Banner */}
-      {pwaVisible && (
-        <div
-          role="dialog"
-          aria-label="Install myboma app"
-          className="pwa-install-banner fixed left-1/2 -translate-x-1/2 z-50 w-[calc(100vw-2rem)] max-w-sm"
-          style={{ animation: 'slideUp 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}
-        >
-          <div className="bg-zinc-900 text-white rounded-[1.5rem] shadow-2xl px-5 py-4 flex items-center gap-4">
-            <img src="/bomalog.webp" alt="myboma" className="h-11 w-11 rounded-xl shrink-0 shadow-lg bg-white p-1 object-contain" width="44" height="44" />
-            <div className="flex-1 min-w-0">
-              <p className="font-black text-sm leading-tight">Install myboma</p>
-              <p className="text-[11px] text-zinc-400 font-medium mt-0.5">Add to home screen for the best experience</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <button
-                onClick={handlePwaInstall}
-                className="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-xl transition-all"
-              >
-                Install
-              </button>
-              <button
-                onClick={handlePwaDismiss}
-                aria-label="Dismiss"
-                className="text-zinc-500 hover:text-zinc-300 text-lg leading-none px-1 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <style>{`
-        @keyframes slideUp {
-          from { opacity: 0; transform: translate(-50%, 24px); }
-          to   { opacity: 1; transform: translate(-50%, 0); }
-        }
-      `}</style>
     </div>
   );
 }
