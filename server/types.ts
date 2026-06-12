@@ -22,6 +22,9 @@ export interface UserProfileRecord {
   stripeAccountId?: string | null;
   mpesaSettlementPhone?: string | null;
   mpesaSettlementShortCode?: string | null;
+  subscriptionPlan?: string | null;
+  subscriptionStatus?: string | null;
+  subscriptionExpiresAt?: string | null;
 }
 
 export interface RentPaymentRecord {

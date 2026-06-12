@@ -125,7 +125,23 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
   // Admin capabilities states
   const [isInviteUserOpen, setIsInviteUserOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState<{ email: string; displayName: string; password?: string; role: UserRole }>({ email: '', displayName: '', password: '', role: profile.role === 'landlord' ? 'tenant' : 'landlord' });
+  const [inviteForm, setInviteForm] = useState<{ 
+    email: string; 
+    displayName: string; 
+    password?: string; 
+    role: UserRole;
+    rentRouting?: 'admin' | 'direct';
+    rentPayoutMethod?: 'cash' | 'mpesa' | 'bank';
+    mpesaSettlementPhone?: string;
+  }>({ 
+    email: '', 
+    displayName: '', 
+    password: '', 
+    role: profile.role === 'landlord' ? 'tenant' : 'landlord',
+    rentRouting: 'admin',
+    rentPayoutMethod: 'mpesa',
+    mpesaSettlementPhone: ''
+  });
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ title: '', description: '', type: 'residential', price: '', location: '', landlordId: '', images: '' });
   const [isAddBuildingOpen, setIsAddBuildingOpen] = useState(false);
@@ -409,6 +425,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         platformId: targetPlatformId,
         landlordId: profile.uid,
         mustChangePassword: true,
+        rentRouting: inviteForm.role === 'landlord' ? inviteForm.rentRouting : undefined,
+        rentPayoutMethod: inviteForm.role === 'landlord' && inviteForm.rentRouting === 'direct' ? inviteForm.rentPayoutMethod : undefined,
+        mpesaSettlementPhone: inviteForm.role === 'landlord' && inviteForm.rentRouting === 'direct' ? inviteForm.mpesaSettlementPhone : undefined,
       });
 
       if (result.invitation) {
@@ -423,7 +442,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
       toast.success("User created and invited successfully!");
       setIsInviteUserOpen(false);
-      setInviteForm({ email: '', displayName: '', password: '', role: 'landlord' });
+      setInviteForm({ email: '', displayName: '', password: '', role: 'landlord', rentRouting: 'admin', rentPayoutMethod: 'mpesa', mpesaSettlementPhone: '' });
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
     }
@@ -1411,6 +1430,47 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                             {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
                           </select>
                         </div>
+
+                        {inviteForm.role === 'landlord' && profile.isAdmin && (
+                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4">
+                            <h4 className="text-sm font-black uppercase tracking-widest text-zinc-600">Rent Payment Settings</h4>
+                            
+                            <div className="grid gap-2">
+                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Who Receives Rent Payments?</label>
+                              <select 
+                                className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" 
+                                value={inviteForm.rentRouting} 
+                                onChange={e => setInviteForm({...inviteForm, rentRouting: e.target.value as 'admin' | 'direct'})}
+                              >
+                                <option value="admin">Admin's Account (Centralized)</option>
+                                <option value="direct">Landlord's Account (Direct)</option>
+                              </select>
+                            </div>
+
+                            {inviteForm.rentRouting === 'direct' && (
+                              <>
+                                <div className="grid gap-2">
+                                  <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Payout Method</label>
+                                  <select 
+                                    className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" 
+                                    value={inviteForm.rentPayoutMethod} 
+                                    onChange={e => setInviteForm({...inviteForm, rentPayoutMethod: e.target.value as 'mpesa' | 'bank' | 'cash'})}
+                                  >
+                                    <option value="mpesa">M-Pesa</option>
+                                    <option value="bank">Bank Transfer</option>
+                                    <option value="cash">Cash/Other</option>
+                                  </select>
+                                </div>
+                                {inviteForm.rentPayoutMethod === 'mpesa' && (
+                                  <div className="grid gap-2">
+                                    <label className="text-xs font-black uppercase tracking-widest text-zinc-400">M-Pesa Settlement Phone / Till Number</label>
+                                    <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={inviteForm.mpesaSettlementPhone || ''} onChange={e => setInviteForm({...inviteForm, mpesaSettlementPhone: e.target.value})} placeholder="e.g. 254700000000 or Till No" />
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <DialogFooter>
                         <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsInviteUserOpen(false)}>Cancel</Button>

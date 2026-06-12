@@ -1,0 +1,85 @@
+0000000000000000000000000000000000000000 2cc101ff729453efe4ae6dd4116c1c887cc7d025 Kelsey <sailkelsey@gmail.com> 1776944355 +0300	commit (initial): Initial commit
+2cc101ff729453efe4ae6dd4116c1c887cc7d025 8130daad384ffb0cce6e3572591e937857e69289 Kelsey <sailkelsey@gmail.com> 1776948308 +0300	commit: Refactor: Move Supabase credentials to environment variables
+8130daad384ffb0cce6e3572591e937857e69289 2e0d5fdab56f3ca6bd3af0aff5fd7a188b783b4a Kelsey <sailkelsey@gmail.com> 1777279726 +0300	commit: added api gateway and rate limiting
+2e0d5fdab56f3ca6bd3af0aff5fd7a188b783b4a 34460686dbe5a3496369d3dc7ac0fe53a4928cea Kelsey <sailkelsey@gmail.com> 1778565687 +0300	commit: feat: implement dark mode, upgrade icons to FontAwesome, and enhance dashboards
+34460686dbe5a3496369d3dc7ac0fe53a4928cea 8835ea006a49166ac37c3c9cc41a51db36385d3d Kelsey <sailkelsey@gmail.com> 1779432854 +0300	commit: feat: Add multi-tenancy support, admin pagination, responsive fixes and UI polishing
+8835ea006a49166ac37c3c9cc41a51db36385d3d 53609c1ff1edb2354e7cfa79bb6e64db574a3ebb Kelsey <sailkelsey@gmail.com> 1779434359 +0300	commit: docs: Add UI screenshots to README
+53609c1ff1edb2354e7cfa79bb6e64db574a3ebb d9e5bee17a97089f37019154fd44e00e26fbb1b1 Kelsey <sailkelsey@gmail.com> 1779448856 +0300	commit: Update dashboard UI and fix navigation
+d9e5bee17a97089f37019154fd44e00e26fbb1b1 3ac42d7722c2ee6df3fef8140c7961dd1f7a4303 Kelsey <sailkelsey@gmail.com> 1779452553 +0300	commit: feat: Add rent payments, profile settings, and UI improvements
+3ac42d7722c2ee6df3fef8140c7961dd1f7a4303 709518fc651472107b2d59c83a985fe9fc31e998 Kelsey <sailkelsey@gmail.com> 1779452618 +0300	commit: fix: Add missing faEdit fontawesome imports
+709518fc651472107b2d59c83a985fe9fc31e998 5d3bb95a7dc02505be27d3c58423776a34eed911 Kelsey <sailkelsey@gmail.com> 1779453421 +0300	commit: fix: Add missing Textarea import in AdminDashboard
+0000000000000000000000000000000000000000 fbd58d3edf60f13d47af71b25ec510cc5196abb1 Kelsey <sailkelsey@gmail.com> 1779649181 +0300	commit (initial): Initial commit
+fbd58d3edf60f13d47af71b25ec510cc5196abb1 6d70b4ab5ffcd4587592b8f5d72a5ad2e0a47cc6 Kelsey <sailkelsey@gmail.com> 1779650116 +0300	commit: fix: modal scroll cutoff on mobile + add PWA install banner
+6d70b4ab5ffcd4587592b8f5d72a5ad2e0a47cc6 3acea7c119df0838e707a5a4fa6dab5f66c22c6e Kelsey <sailkelsey@gmail.com> 1779650491 +0300	commit: fix: tighten dashboard spacing - reduce table padding, card headers, section gaps
+3acea7c119df0838e707a5a4fa6dab5f66c22c6e 7948709ed12eed84cde5b69f3f2d45fe8ff8bf9e Kelsey <sailkelsey@gmail.com> 1779650882 +0300	commit: feat: add role-based onboarding tour for first-time users
+7948709ed12eed84cde5b69f3f2d45fe8ff8bf9e 6309e485818572687adc90f20ef426df74b9176b Kelsey <sailkelsey@gmail.com> 1779692503 +0300	commit: feat: persistent landlord mobile navigation, menu active tab highlights, and landing page PWA download button
+6309e485818572687adc90f20ef426df74b9176b 92687a3509926b2181e1df0163d6b8ca89a79edb Kelsey <sailkelsey@gmail.com> 1779692869 +0300	commit: fix: onboarding tour responsive horizontal and vertical translation centering on mobile viewports
+92687a3509926b2181e1df0163d6b8ca89a79edb 8516ac95d0a0abf6e113408f0f293e64aa081763 Kelsey <sailkelsey@gmail.com> 1779693191 +0300	commit: fix: make tenant registry table row action dropdown buttons persistently visible for mobile accessibility
+8516ac95d0a0abf6e113408f0f293e64aa081763 22926d87c2e15300c2c4ab80dbdd6f3c3d885d92 Kelsey <sailkelsey@gmail.com> 1779693391 +0300	commit: fix: resolve raw UUID rendering in property Select triggers by explicitly rendering titles in SelectValue
+22926d87c2e15300c2c4ab80dbdd6f3c3d885d92 24578cff7a0ec3c485749b86b56205fa9e87afaa Kelsey <sailkelsey@gmail.com> 1779693683 +0300	commit: fix: remove mobile bottom navbar from public landing view and give PWA app logos a white background
+24578cff7a0ec3c485749b86b56205fa9e87afaa 814568255b2ce3a7ba5e62bdea5e5b130ea90fa6 Kelsey <sailkelsey@gmail.com> 1779694096 +0300	commit: fix: generate PWA maskable launcher icons with a clean white background and set PWA theme color to white
+814568255b2ce3a7ba5e62bdea5e5b130ea90fa6 e0fbbd89bbbc805b11819fb45b289a33183e271f Kelsey <sailkelsey@gmail.com> 1779696859 +0300	commit: UI Navbar Updates
+e0fbbd89bbbc805b11819fb45b289a33183e271f ddb198cc6284bf1e99619e0e01713b8e64f9e0cc Kelsey <sailkelsey@gmail.com> 1779699757 +0300	commit: feat: implement landlord finance ledger and tenant payment enhancements
+ddb198cc6284bf1e99619e0e01713b8e64f9e0cc 670662f21166acbc499240fdb6c71c952dac4bbe Kelsey <sailkelsey@gmail.com> 1779703230 +0300	commit: feat: refactor server logic, add rent invoicing, and enhance dashboards
+670662f21166acbc499240fdb6c71c952dac4bbe c81eca9177387980e975e76af2e52d78dad42b24 Kelsey <sailkelsey@gmail.com> 1779710420 +0300	commit: fix: add loading state to tenant creation and fix password sanitization
+c81eca9177387980e975e76af2e52d78dad42b24 dbe573048fd7146d6b227c87713b5b1c7ce75ab8 Kelsey <sailkelsey@gmail.com> 1779715230 +0300	commit: fix: ensure new tenants appear in list by maintaining invitations
+dbe573048fd7146d6b227c87713b5b1c7ce75ab8 4a741a49fc9f1cdfe3129697197ff69a6bc4f230 Kelsey <sailkelsey@gmail.com> 1779715859 +0300	commit: fix: ensure instant tenant visibility by returning invitation from server
+4a741a49fc9f1cdfe3129697197ff69a6bc4f230 141fb86b3b535015c6a4bf30aca1aa03a58a8014 Kelsey <sailkelsey@gmail.com> 1779949735 +0300	commit: feat: implement landlord house editing & premium multi-image gallery with upload & delete features
+141fb86b3b535015c6a4bf30aca1aa03a58a8014 7873b7332c16d628ac74ce4ec8c930547af735ce Kelsey <sailkelsey@gmail.com> 1779950242 +0300	commit: fix: resolve tenant duplicate rendering & make property gallery touch swipable with visible chevrons
+7873b7332c16d628ac74ce4ec8c930547af735ce e97eab3b4a539d8e7a49bf5f0e4586a3a77fe3a2 Kelsey <sailkelsey@gmail.com> 1779951480 +0300	commit: feat: implement notifications hub, old password check, tenant view renames, and real-time badges
+e97eab3b4a539d8e7a49bf5f0e4586a3a77fe3a2 eadfb8571977c53207e93aebea55c2046f32e8c8 Kelsey <sailkelsey@gmail.com> 1779952368 +0300	commit: Fix case-insensitive tenant deletions, optional chaining payment crash, and admin tenant purges in backend
+eadfb8571977c53207e93aebea55c2046f32e8c8 70faf597081d67f646dba3a4b5b3f3161daf4d27 Kelsey <sailkelsey@gmail.com> 1779954159 +0300	commit: feat: add search bars and pagination to all dashboard table views
+0000000000000000000000000000000000000000 831f7bdae13c77adceee1126d8889e92b5eb43d7 Kelsey <sailkelsey@gmail.com> 1780053293 +0300	commit (initial): Initial commit with optimized performance and updated logo
+831f7bdae13c77adceee1126d8889e92b5eb43d7 cfb62030a353b5cb765cb5e286a8113e1d858da6 Kelsey <sailkelsey@gmail.com> 1780053674 +0300	commit: Regenerate PWA and mobile assets with new logo
+cfb62030a353b5cb765cb5e286a8113e1d858da6 7032208f408daaf7f255e077b1da90fb245d4bfb Kelsey <sailkelsey@gmail.com> 1780056829 +0300	commit: Fix UI, implement PWA auto-update prompt, and manage missing asset groups
+7032208f408daaf7f255e077b1da90fb245d4bfb 779e35853bb332788f256a0cacc9d8ebf089330c Kelsey <sailkelsey@gmail.com> 1780057067 +0300	commit: feat: Add temporary password field for admin user invitations
+779e35853bb332788f256a0cacc9d8ebf089330c ab48564c53699ba19aa94cd0f82d2520ba1d214f Kelsey <sailkelsey@gmail.com> 1780057870 +0300	commit: fix: Add error handling and logging to handleDeleteUser
+ab48564c53699ba19aa94cd0f82d2520ba1d214f 4b5799c7a9dc6ea405365ff5c56f6a70865cf6cd Kelsey <sailkelsey@gmail.com> 1780058271 +0300	commit: fix: Import Select component in AdminDashboard
+4b5799c7a9dc6ea405365ff5c56f6a70865cf6cd 036a217e4f17cd25669f47591a36e4c8511afa17 Kelsey <sailkelsey@gmail.com> 1780058645 +0300	commit: fix: Add flex-wrap to Assets tab buttons container
+036a217e4f17cd25669f47591a36e4c8511afa17 6e9b14d7e2a9d79fc6400565acb6118a71c9f1d2 Kelsey <sailkelsey@gmail.com> 1780059371 +0300	commit: fix: Fetch data with null platformId using .is() instead of fake UUID
+6e9b14d7e2a9d79fc6400565acb6118a71c9f1d2 5136bc9af1999cf789804ff080cb319004312451 Kelsey <sailkelsey@gmail.com> 1780059596 +0300	commit: feat: Delete properties and tenants when a building is deleted
+5136bc9af1999cf789804ff080cb319004312451 3f078cdedb945986d821896e54048475d9568702 Kelsey <sailkelsey@gmail.com> 1780059835 +0300	commit: fix: Admin provision logic checks both isAdmin and role
+3f078cdedb945986d821896e54048475d9568702 115121c510ac7c3ccf2b7d867392c05c6e1ab609 Kelsey <sailkelsey@gmail.com> 1780060860 +0300	commit: feat: Allow landlords to provision other landlords and hunters
+115121c510ac7c3ccf2b7d867392c05c6e1ab609 fd4247d6e9b96c97c294ea3165961eb839ea24c6 Kelsey <sailkelsey@gmail.com> 1780060990 +0300	commit: feat: Allow users to be invited without a platform
+fd4247d6e9b96c97c294ea3165961eb839ea24c6 039f0c0d2ae6937f54438c2d40507534ef5bbefe Kelsey <sailkelsey@gmail.com> 1780062073 +0300	commit: feat: Restrict admin users list to only users they invited
+039f0c0d2ae6937f54438c2d40507534ef5bbefe 3ab71f4499d0cb0acb56de1a7be0794829a0889a Kelsey <sailkelsey@gmail.com> 1780062394 +0300	commit: fix: Update RLS to allow users to read profiles they invited
+3ab71f4499d0cb0acb56de1a7be0794829a0889a 443e1793348ac10417eb36fa53474334d2cd1462 Kelsey <sailkelsey@gmail.com> 1780062448 +0300	commit: feat: Restrict admin data to their own creations
+443e1793348ac10417eb36fa53474334d2cd1462 96ec6b6328c59362133665c32ba903d14ef2d207 Kelsey <sailkelsey@gmail.com> 1780063563 +0300	commit: fix(backend): Allow creators to delete users and add watch mode
+96ec6b6328c59362133665c32ba903d14ef2d207 a76f0986c0131309d6619fec8cc40a8b2e39fbda Kelsey <sailkelsey@gmail.com> 1780078304 +0300	commit: fix(pwa): Add solid white background to icons and configure Vercel API routing
+a76f0986c0131309d6619fec8cc40a8b2e39fbda 68bebbf67cf07e86e87d4b5e60d46c13684dd2f1 Kelsey <sailkelsey@gmail.com> 1780078763 +0300	commit: fix(backend): Remove import.meta.url to prevent Vercel Serverless Function crash
+68bebbf67cf07e86e87d4b5e60d46c13684dd2f1 048312aa4954a2505db973868e4fab8113766c63 Kelsey <sailkelsey@gmail.com> 1780135189 +0300	commit: feat: Add property manager assignment and fix dashboard filters
+048312aa4954a2505db973868e4fab8113766c63 f173bf74e31c597625218da73b40fc801c750e91 Kelsey <sailkelsey@gmail.com> 1780225079 +0300	commit: fix(vercel): Resolve ERR_UNSUPPORTED_DIR_IMPORT and ERR_MODULE_NOT_FOUND
+f173bf74e31c597625218da73b40fc801c750e91 5fb07193f43861df190517c1cc1cc24661d3a518 Kelsey <sailkelsey@gmail.com> 1780240526 +0300	commit: fix(audit): implement security, performance, and reliability fixes from system audit
+5fb07193f43861df190517c1cc1cc24661d3a518 8343ff263018d998e423615882149601c42980c5 Kelsey <sailkelsey@gmail.com> 1780240728 +0300	commit: fix(landlord): make building edit and delete buttons always visible
+8343ff263018d998e423615882149601c42980c5 93252cad3964383c6f638daa3b60320e2ce0c893 Kelsey <sailkelsey@gmail.com> 1780242286 +0300	commit: Refactored the login logic and fixed typos
+93252cad3964383c6f638daa3b60320e2ce0c893 5c67362c9315863088903f27978258579d4f76f8 Kelsey <sailkelsey@gmail.com> 1780243394 +0300	commit: fix(vercel): restore API entry and route /api to Express BFF
+5c67362c9315863088903f27978258579d4f76f8 69495d8fa8715298a2a15f3728ceaf33b0a3dc99 Kelsey <sailkelsey@gmail.com> 1780243836 +0300	commit: fix(vercel): bundle app.ts into API function and fix ESM import
+69495d8fa8715298a2a15f3728ceaf33b0a3dc99 6973d39bf9ea6ee2e723d3ce60362aa9145b2e20 Kelsey <sailkelsey@gmail.com> 1780299563 +0300	commit: Refactor dashboard UI and update styling
+6973d39bf9ea6ee2e723d3ce60362aa9145b2e20 2a72cc2db82c0af2ef631b0dd28bae027b175f0d Kelsey <sailkelsey@gmail.com> 1780300754 +0300	commit: fix(ios-pwa): respect safe areas so Sign In is tappable on iPhone
+2a72cc2db82c0af2ef631b0dd28bae027b175f0d 45bee5ea85165406acb8678a7056456acd4ba83a Kelsey <sailkelsey@gmail.com> 1780303720 +0300	commit: feat(landlords): require subscription and rent payout setup on signup
+45bee5ea85165406acb8678a7056456acd4ba83a caa1a154c27243c8ec4143a6d0890d9ec780f343 Kelsey <sailkelsey@gmail.com> 1780304971 +0300	commit: Payments updates for stripe and mpesa
+caa1a154c27243c8ec4143a6d0890d9ec780f343 b3c275f7b93c6068561930da7665929556d31d11 Kelsey <sailkelsey@gmail.com> 1780305391 +0300	commit: Fix subscription plan updates and billing selection synch on signup modal
+b3c275f7b93c6068561930da7665929556d31d11 075a6f437b836e4018f3b811d79d003d7edaec8b Kelsey <sailkelsey@gmail.com> 1780390564 +0300	commit: New landing page UI
+0000000000000000000000000000000000000000 6cefe2ce022b475018b7389673400b624ddd09fe Kelsey <sailkelsey@gmail.com> 1780399280 +0300	commit (initial): UI Updates
+6cefe2ce022b475018b7389673400b624ddd09fe f62b9635ad0f833aa063979ac657712bc48df7ee Kelsey <sailkelsey@gmail.com> 1780557539 +0300	commit: feat: integrate pesapal landlord subscription payment system and migrations
+f62b9635ad0f833aa063979ac657712bc48df7ee f62b9635ad0f833aa063979ac657712bc48df7ee Kelsey <sailkelsey@gmail.com> 1780557643 +0300	checkout: moving from master to main-fresh
+f62b9635ad0f833aa063979ac657712bc48df7ee cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780561779 +0300	commit: feat: enhance pesapal integration with streamlined UI and bug fixes
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e f62b9635ad0f833aa063979ac657712bc48df7ee Kelsey <sailkelsey@gmail.com> 1780562209 +0300	checkout: moving from main-fresh to master
+f62b9635ad0f833aa063979ac657712bc48df7ee cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562209 +0300	merge main-fresh: Fast-forward
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562218 +0300	checkout: moving from master to main-fresh
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562231 +0300	checkout: moving from main-fresh to master
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562242 +0300	checkout: moving from master to main-fresh
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562253 +0300	checkout: moving from main-fresh to master
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562260 +0300	checkout: moving from master to main-fresh
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562273 +0300	checkout: moving from main-fresh to master
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780562283 +0300	checkout: moving from master to main-fresh
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e 7466e769c481180bf20b077e57ca39b6c24801ed Kelsey <sailkelsey@gmail.com> 1780562917 +0300	commit: fix: update vercel bundle config and standardize crypto imports
+7466e769c481180bf20b077e57ca39b6c24801ed e30dacbb2135ca001b0e61230dbd71a5bfd9b958 Kelsey <sailkelsey@gmail.com> 1780563112 +0300	commit: fix: resolve 400 error by defaulting rent payout to cash and pre-filling phone
+e30dacbb2135ca001b0e61230dbd71a5bfd9b958 b6d237f8c94218352ee369697e6278ef4723eaa7 Kelsey <sailkelsey@gmail.com> 1780564115 +0300	commit: feat: improve post-payment experience and plan clarity
+b6d237f8c94218352ee369697e6278ef4723eaa7 766bb5735603f99461b9e98c69567eb48bc356dd Kelsey <sailkelsey@gmail.com> 1780564797 +0300	commit: fix: stabilize post-payment redirection and profile polling
+766bb5735603f99461b9e98c69567eb48bc356dd cc946f0942047d9184f279c05878810d8272dcbf Kelsey <sailkelsey@gmail.com> 1780572845 +0300	commit: fix: polish subscription activation and resolve mobile UI issues
+cc946f0942047d9184f279c05878810d8272dcbf f0f57f02e8a4d95f3eed8ce316d64a28f61dd7b0 Kelsey <sailkelsey@gmail.com> 1780581010 +0300	commit: fix: harden subscription logic and clean up redundant UI sections
+f0f57f02e8a4d95f3eed8ce316d64a28f61dd7b0 4e17d67e3a455f9a290e539cabf2c44bb93c528b Kelsey <sailkelsey@gmail.com> 1780661150 +0300	commit: fix: enhance subscription activation polling and enforce house limits in admin panel
+4e17d67e3a455f9a290e539cabf2c44bb93c528b 8b13b008cb919d6dbcb6a9e516495de6eaa6f3f7 Kelsey <sailkelsey@gmail.com> 1780663885 +0300	commit: fix: add loading state and toast feedback to subscription sync button
+0000000000000000000000000000000000000000 1b22cd876355abab04499def9f0c728d048cd3aa Kelsey <sailkelsey@gmail.com> 1780730671 +0300	commit (initial): fix: maintain loading state and poll for processing pesapal payments
+1b22cd876355abab04499def9f0c728d048cd3aa cf1d32f9151c09386870b087efd3de38d58c2ef1 Kelsey <sailkelsey@gmail.com> 1780730685 +0300	commit (amend): Initial commit with pesapal processing fix

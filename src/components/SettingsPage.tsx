@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { UserProfile } from '../App';
+import { UserProfile, promptForPush } from '../App';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import {
   faShieldAlt,
   faCheckCircle,
   faDesktop,
+  faBell,
 } from '@fortawesome/free-solid-svg-icons';
 
 export default function SettingsPage({ profile }: { profile: UserProfile }) {
@@ -56,6 +57,70 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
       toast.success('Preferences updated!');
       setTimeout(() => setPrefSaved(false), 3000);
     }, 400);
+  };
+
+  /* ── Platform Branding form (Admin only) ──────────────────── */
+  const [brandingForm, setBrandingForm] = useState({
+    brandLogoUrl: '',
+    brandPrimaryColor: '',
+    brandSecondaryColor: '',
+  });
+  const [platformName, setPlatformName] = useState('');
+  const [savingBranding, setSavingBranding] = useState(false);
+
+  useEffect(() => {
+    if (profile.role === 'admin') {
+      if (profile.platformId) {
+        supabase.from('platforms').select('*').eq('id', profile.platformId).maybeSingle()
+          .then(({ data }) => {
+            if (data) {
+              setPlatformName(data.name || '');
+              setBrandingForm({
+                brandLogoUrl: data.brandLogoUrl || '',
+                brandPrimaryColor: data.brandPrimaryColor || '',
+                brandSecondaryColor: data.brandSecondaryColor || '',
+              });
+            }
+          });
+      } else {
+        // Init platform for this admin if missing
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            fetch('/api/web/admin/init-platform', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${session.access_token}` }
+            }).then(res => res.json()).then(data => {
+              if (data.status === 'created') {
+                toast.success('Platform initialized!');
+                window.location.reload();
+              }
+            }).catch(console.error);
+          }
+        });
+      }
+    }
+  }, [profile]);
+
+  const handleSaveBranding = async () => {
+    if (!profile.platformId) return;
+    setSavingBranding(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/web/platforms/${profile.platformId}/branding`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ ...brandingForm, name: platformName })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success('Branding updated successfully! Refresh the page to see changes.');
+    } catch (err: any) {
+      toast.error('Failed to update branding: ' + err.message);
+    } finally {
+      setSavingBranding(false);
+    }
   };
 
   const getPageOptions = () => {
@@ -101,6 +166,25 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
       toast.error('Failed to upload avatar');
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile.platformId) return;
+    setSavingBranding(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const fileName = `${profile.uid}/platforms/${profile.platformId}/logo-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('properties').upload(fileName, file, { upsert: true });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
+      setBrandingForm(prev => ({ ...prev, brandLogoUrl: publicUrl }));
+      toast.success('Logo uploaded!');
+    } catch {
+      toast.error('Failed to upload logo');
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -441,8 +525,131 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
           </div>
         </div>
 
+        {/* ── Notifications Card ─────────────────────────────────── */}
+        <div className="bg-white rounded-3xl border border-zinc-100 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden">
+          <div className="px-6 py-4 border-b border-zinc-50 flex items-center justify-between">
+            <h2 className="text-xs font-black uppercase tracking-[0.18em] text-zinc-400 flex items-center gap-2">
+              <FontAwesomeIcon icon={faBell} className="h-3 w-3" />
+              Notifications
+            </h2>
+          </div>
+
+          <div className="p-6 space-y-5">
+            <p className="text-xs font-medium text-zinc-500 leading-relaxed">
+              Never miss an update. Allow push notifications to get instantly notified about payments, messages, and important events.
+            </p>
+
+            <Button
+              onClick={() => promptForPush()}
+              className="h-11 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black gap-2 transition-all active:scale-[0.98] w-full sm:w-auto"
+            >
+              <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
+              Manage Push Notifications
+            </Button>
+          </div>
+        </div>
+
+        {/* ── White-Label Customization (Admin Only) ──────────────── */}
+        {profile.role === 'admin' && (
+          <div className="bg-white rounded-3xl border border-zinc-100 shadow-[0_2px_16px_rgba(0,0,0,0.04)] overflow-hidden lg:col-span-2">
+            <div className="px-6 py-4 border-b border-zinc-50 flex items-center justify-between">
+              <h2 className="text-xs font-black uppercase tracking-[0.18em] text-zinc-400 flex items-center gap-2">
+                <FontAwesomeIcon icon={faDesktop} className="h-3 w-3 text-amber-500" />
+                Custom Branding (Pro Plus)
+              </h2>
+            </div>
+            <div className="p-6 space-y-5">
+              <p className="text-xs font-medium text-zinc-500 leading-relaxed max-w-2xl">
+                As a Pro Plus admin, you can fully customize the appearance of the application. Add your own logos, set custom primary colors, and customize the domain name to rent out this app as your own SaaS.
+              </p>
+              
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Platform Name</label>
+                  <Input 
+                    className="h-11 rounded-xl" 
+                    value={platformName} 
+                    onChange={e => setPlatformName(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Primary Color (Hex)</label>
+                  <div className="flex gap-2 items-center">
+                    <Input 
+                      type="color"
+                      className="h-11 w-14 rounded-xl p-1 cursor-pointer border-zinc-200" 
+                      value={brandingForm.brandPrimaryColor || '#4F46E5'}
+                      onChange={e => setBrandingForm(prev => ({ ...prev, brandPrimaryColor: e.target.value }))}
+                    />
+                    <Input 
+                      className="h-11 rounded-xl flex-1 font-mono text-xs" 
+                      placeholder="#4F46E5" 
+                      value={brandingForm.brandPrimaryColor}
+                      onChange={e => setBrandingForm(prev => ({ ...prev, brandPrimaryColor: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Secondary Color (Hex)</label>
+                  <div className="flex gap-2 items-center">
+                    <Input 
+                      type="color"
+                      className="h-11 w-14 rounded-xl p-1 cursor-pointer border-zinc-200" 
+                      value={brandingForm.brandSecondaryColor || '#10B981'}
+                      onChange={e => setBrandingForm(prev => ({ ...prev, brandSecondaryColor: e.target.value }))}
+                    />
+                    <Input 
+                      className="h-11 rounded-xl flex-1 font-mono text-xs" 
+                      placeholder="#10B981" 
+                      value={brandingForm.brandSecondaryColor}
+                      onChange={e => setBrandingForm(prev => ({ ...prev, brandSecondaryColor: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Custom Logo</label>
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center shrink-0 overflow-hidden relative">
+                      {brandingForm.brandLogoUrl ? (
+                        <img src={brandingForm.brandLogoUrl} alt="Logo preview" className="h-full w-full object-contain p-1" />
+                      ) : (
+                        <FontAwesomeIcon icon={faCamera} className="text-zinc-300" />
+                      )}
+                      {savingBranding && (
+                        <div className="absolute inset-0 bg-white/50 flex items-center justify-center">
+                          <div className="h-4 w-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="cursor-pointer">
+                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={savingBranding} />
+                        <div className="h-11 px-4 rounded-xl border border-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-600 hover:bg-zinc-50 transition-colors">
+                          Upload Image
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Button 
+                  onClick={handleSaveBranding}
+                  disabled={savingBranding}
+                  className="h-11 px-8 rounded-xl bg-amber-400 hover:bg-amber-500 text-zinc-900 font-black gap-2 transition-all active:scale-[0.98]"
+                >
+                  <FontAwesomeIcon icon={faSave} className="h-3.5 w-3.5" />
+                  {savingBranding ? 'Saving...' : 'Save Branding Options'}
+                </Button>
+                <p className="mt-2 text-[9px] font-black uppercase tracking-widest text-zinc-400">Once saved, refresh the app to see your custom colors and logo take effect globally.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Spacer for mobile bottom nav */}
-        <div className="h-8" />
+        <div className="h-8 lg:col-span-2" />
       </div>
     </div>
   );

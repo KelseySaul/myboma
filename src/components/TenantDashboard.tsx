@@ -117,6 +117,10 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
   const [isUploading, setIsUploading] = useState(false);
   const [payingAction, setPayingAction] = useState<string | null>(null);
   const [selectedPaymentForBank, setSelectedPaymentForBank] = useState<RentPayment | null>(null);
+  const [isManualPaymentOpen, setIsManualPaymentOpen] = useState(false);
+  const [manualPaymentForm, setManualPaymentForm] = useState({ receiptCode: '' });
+  const [selectedManualPaymentId, setSelectedManualPaymentId] = useState<string | null>(null);
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
 
   const [tenantProfile, setTenantProfile] = useState({
     displayName: profile.displayName || '',
@@ -157,13 +161,26 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
         
         const { data: landlordData } = await supabase
           .from('users')
-          .select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName')
+          .select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName,rentRecipientId,rentPayoutMethod,mpesaSettlementPhone')
           .eq('uid', propData.landlordId)
           .single();
           
         if (landlordData) {
           if (!isActive) return;
-          setLandlord(landlordData as Landlord);
+          if (landlordData.rentRecipientId && landlordData.rentRecipientId !== landlordData.uid) {
+            const { data: recipientData } = await supabase
+              .from('users')
+              .select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName,rentPayoutMethod,mpesaSettlementPhone')
+              .eq('uid', landlordData.rentRecipientId)
+              .single();
+            if (recipientData) {
+              setLandlord(recipientData as Landlord);
+            } else {
+              setLandlord(landlordData as Landlord);
+            }
+          } else {
+            setLandlord(landlordData as Landlord);
+          }
         }
       }
 
@@ -522,54 +539,105 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
         ? 'Notices'
         : 'Rent Dashboard';
 
-  const payButtons = (payment: RentPayment) => (
-    <div className="grid grid-cols-2 gap-2">
-      <Button
-        className="col-span-2 h-10 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-        onClick={() => handlePayRent(payment.id, 'pesapal')}
-        disabled={Boolean(payingAction)}
-      >
-        <FontAwesomeIcon icon={payingAction === `pesapal:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `pesapal:${payment.id}` ? 'animate-spin' : ''} />
-        Pesapal
-      </Button>
-      <Button
-        className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-        onClick={() => handlePayRent(payment.id, 'mpesa')}
-        disabled={Boolean(payingAction)}
-      >
-        <FontAwesomeIcon icon={payingAction === `mpesa:${payment.id}` ? faSpinner : faMobileAlt} className={payingAction === `mpesa:${payment.id}` ? 'animate-spin' : ''} />
-        Mobile Money
-      </Button>
-      <Button
-        className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-        onClick={() => {
-          setSelectedPaymentForBank(payment);
-          setIsBankOpen(true);
-        }}
-        disabled={Boolean(payingAction)}
-      >
-        <FontAwesomeIcon icon={faBuilding} />
-        Bank
-      </Button>
-      <Button
-        className="h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black text-[9px] uppercase tracking-widest gap-2 col-span-2"
-        onClick={() => handlePayRent(payment.id, 'stripe')}
-        disabled={Boolean(payingAction)}
-      >
-        <FontAwesomeIcon icon={payingAction === `stripe:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `stripe:${payment.id}` ? 'animate-spin' : ''} />
-        Card / International
-      </Button>
-    </div>
-  );
+  const handleManualPaymentSubmit = async () => {
+    if (!manualPaymentForm.receiptCode || !selectedManualPaymentId) {
+      toast.error("Please enter the M-Pesa receipt code.");
+      return;
+    }
+    setIsSubmittingManual(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/web/rent-payments/${selectedManualPaymentId}/mark-manual`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ note: `M-Pesa Receipt: ${manualPaymentForm.receiptCode}` })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast.success("Payment submitted for verification.");
+      setIsManualPaymentOpen(false);
+      setManualPaymentForm({ receiptCode: '' });
+      setSelectedManualPaymentId(null);
+    } catch (err: any) {
+      toast.error("Failed to submit payment: " + err.message);
+    } finally {
+      setIsSubmittingManual(false);
+    }
+  };
 
-  const paymentStatusBadge = (payment: RentPayment) => (
-    <Badge className={`border-none px-3 py-1 font-black text-[9px] uppercase tracking-widest ${
-      payment.status === 'paid' ? 'bg-emerald-500 text-white' :
-      payment.status === 'overdue' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
-    }`}>
-      {payment.status}
-    </Badge>
-  );
+  const payButtons = (payment: RentPayment) => {
+    if (landlord && landlord.rentPayoutMethod === 'mpesa') {
+      return (
+        <div className="grid grid-cols-1 gap-2">
+          <Button
+            className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+            onClick={() => {
+              setSelectedManualPaymentId(payment.id);
+              setIsManualPaymentOpen(true);
+            }}
+          >
+            <FontAwesomeIcon icon={faMobileAlt} />
+            Pay via M-Pesa (Manual)
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          className="col-span-2 h-10 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          onClick={() => handlePayRent(payment.id, 'pesapal')}
+          disabled={Boolean(payingAction)}
+        >
+          <FontAwesomeIcon icon={payingAction === `pesapal:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `pesapal:${payment.id}` ? 'animate-spin' : ''} />
+          Pesapal
+        </Button>
+        <Button
+          className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          onClick={() => handlePayRent(payment.id, 'mpesa')}
+          disabled={Boolean(payingAction)}
+        >
+          <FontAwesomeIcon icon={payingAction === `mpesa:${payment.id}` ? faSpinner : faMobileAlt} className={payingAction === `mpesa:${payment.id}` ? 'animate-spin' : ''} />
+          Mobile Money
+        </Button>
+        <Button
+          className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          onClick={() => {
+            setSelectedPaymentForBank(payment);
+            setIsBankOpen(true);
+          }}
+          disabled={Boolean(payingAction)}
+        >
+          <FontAwesomeIcon icon={faBuilding} />
+          Bank
+        </Button>
+        <Button
+          className="h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black text-[9px] uppercase tracking-widest gap-2 col-span-2"
+          onClick={() => handlePayRent(payment.id, 'stripe')}
+          disabled={Boolean(payingAction)}
+        >
+          <FontAwesomeIcon icon={payingAction === `stripe:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `stripe:${payment.id}` ? 'animate-spin' : ''} />
+          Card / International
+        </Button>
+      </div>
+    );
+  };
+
+  const paymentStatusBadge = (payment: RentPayment) => {
+    let color = 'bg-amber-500 text-white';
+    if (payment.status === 'paid') color = 'bg-emerald-500 text-white';
+    else if (payment.status === 'verifying') color = 'bg-indigo-500 text-white';
+    else if (payment.status === 'overdue') color = 'bg-rose-500 text-white';
+    
+    return (
+      <Badge className={`border-none px-3 py-1 font-black text-[9px] uppercase tracking-widest ${color}`}>
+        {payment.status}
+      </Badge>
+    );
+  };
 
   return (
     <div className="db min-h-screen pb-24 sm:pb-12 animate-in fade-in duration-700">
@@ -640,6 +708,53 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
                 </DialogContent>
               </Dialog>
             )}
+
+            <Dialog open={isManualPaymentOpen} onOpenChange={setIsManualPaymentOpen}>
+              <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-emerald-600">Manual M-Pesa Payment</DialogTitle>
+                  <DialogDescription className="font-medium text-zinc-500">
+                    Your landlord requires direct M-Pesa payments. Please follow the instructions below and provide the receipt code.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-6 py-4">
+                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4 border border-zinc-100 dark:border-zinc-700">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Instructions</p>
+                    <ol className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 space-y-2 list-decimal list-inside">
+                      <li>Go to your M-Pesa menu and select <strong>Send Money</strong> or <strong>Lipa na M-Pesa</strong>.</li>
+                      <li>
+                        Use the recipient number/till: 
+                        <span className="ml-2 font-black text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded-md">
+                          {landlord?.mpesaSettlementPhone || landlord?.phone || 'Not provided'}
+                        </span>
+                      </li>
+                      <li>Enter the exact rent amount.</li>
+                      <li>Complete the transaction with your PIN.</li>
+                      <li>Copy the M-Pesa receipt code (e.g., <span className="font-mono text-xs">RKJ4...</span>) and paste it below.</li>
+                    </ol>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">M-Pesa Receipt Code</label>
+                    <Input 
+                      className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800 font-mono uppercase" 
+                      placeholder="e.g. RKJ4ABC123" 
+                      value={manualPaymentForm.receiptCode}
+                      onChange={e => setManualPaymentForm({...manualPaymentForm, receiptCode: e.target.value.toUpperCase()})}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsManualPaymentOpen(false)}>Cancel</Button>
+                  <Button 
+                    className="h-10 px-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black" 
+                    onClick={handleManualPaymentSubmit}
+                    disabled={isSubmittingManual}
+                  >
+                    {isSubmittingManual ? 'Verifying...' : 'Submit Verification'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>

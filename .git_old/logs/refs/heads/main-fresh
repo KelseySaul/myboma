@@ -1,0 +1,12 @@
+0000000000000000000000000000000000000000 f62b9635ad0f833aa063979ac657712bc48df7ee Kelsey <sailkelsey@gmail.com> 1780557643 +0300	branch: Created from HEAD
+f62b9635ad0f833aa063979ac657712bc48df7ee cda27f40ff08fc225ad4d982ba5316a6a9289e7e Kelsey <sailkelsey@gmail.com> 1780561779 +0300	commit: feat: enhance pesapal integration with streamlined UI and bug fixes
+cda27f40ff08fc225ad4d982ba5316a6a9289e7e 7466e769c481180bf20b077e57ca39b6c24801ed Kelsey <sailkelsey@gmail.com> 1780562917 +0300	commit: fix: update vercel bundle config and standardize crypto imports
+7466e769c481180bf20b077e57ca39b6c24801ed e30dacbb2135ca001b0e61230dbd71a5bfd9b958 Kelsey <sailkelsey@gmail.com> 1780563112 +0300	commit: fix: resolve 400 error by defaulting rent payout to cash and pre-filling phone
+e30dacbb2135ca001b0e61230dbd71a5bfd9b958 b6d237f8c94218352ee369697e6278ef4723eaa7 Kelsey <sailkelsey@gmail.com> 1780564115 +0300	commit: feat: improve post-payment experience and plan clarity
+b6d237f8c94218352ee369697e6278ef4723eaa7 766bb5735603f99461b9e98c69567eb48bc356dd Kelsey <sailkelsey@gmail.com> 1780564797 +0300	commit: fix: stabilize post-payment redirection and profile polling
+766bb5735603f99461b9e98c69567eb48bc356dd cc946f0942047d9184f279c05878810d8272dcbf Kelsey <sailkelsey@gmail.com> 1780572845 +0300	commit: fix: polish subscription activation and resolve mobile UI issues
+cc946f0942047d9184f279c05878810d8272dcbf f0f57f02e8a4d95f3eed8ce316d64a28f61dd7b0 Kelsey <sailkelsey@gmail.com> 1780581010 +0300	commit: fix: harden subscription logic and clean up redundant UI sections
+f0f57f02e8a4d95f3eed8ce316d64a28f61dd7b0 4e17d67e3a455f9a290e539cabf2c44bb93c528b Kelsey <sailkelsey@gmail.com> 1780661150 +0300	commit: fix: enhance subscription activation polling and enforce house limits in admin panel
+4e17d67e3a455f9a290e539cabf2c44bb93c528b 8b13b008cb919d6dbcb6a9e516495de6eaa6f3f7 Kelsey <sailkelsey@gmail.com> 1780663885 +0300	commit: fix: add loading state and toast feedback to subscription sync button
+0000000000000000000000000000000000000000 1b22cd876355abab04499def9f0c728d048cd3aa Kelsey <sailkelsey@gmail.com> 1780730671 +0300	commit (initial): fix: maintain loading state and poll for processing pesapal payments
+1b22cd876355abab04499def9f0c728d048cd3aa cf1d32f9151c09386870b087efd3de38d58c2ef1 Kelsey <sailkelsey@gmail.com> 1780730685 +0300	commit (amend): Initial commit with pesapal processing fix
