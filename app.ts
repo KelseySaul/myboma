@@ -2121,41 +2121,6 @@ bffRouter.post(
   }),
 );
 
-bffRouter.put(
-  '/platforms/:id/branding',
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
-    const actor = req.profile!;
-    const platformId = req.params.id;
-
-    if (!actor.isSuperAdmin && actor.platformId !== platformId) {
-      res.status(403).json({error: 'Forbidden'});
-      return;
-    }
-
-    if (actor.role !== 'admin' && !actor.isSuperAdmin) {
-      res.status(403).json({error: 'Only admins can update branding'});
-      return;
-    }
-
-    const {name, brandLogoUrl, brandPrimaryColor, brandSecondaryColor} = req.body;
-
-    const {error} = await sb
-      .from('platforms')
-      .update({
-        name,
-        brandLogoUrl,
-        brandPrimaryColor,
-        brandSecondaryColor,
-      })
-      .eq('id', platformId);
-
-    if (error) throw error;
-    res.json({status: 'success'});
->>>>>>> origin/master
-  }),
-);
 
 app.use('/api/web', bffRouter);
 app.use('/api/mobile', bffRouter);
