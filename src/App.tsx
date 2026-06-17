@@ -11,6 +11,7 @@ import SettingsPage from './components/SettingsPage';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
+import { tenantConfig } from './config/tenant';
 
 import { logAudit } from './lib/audit';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -687,8 +688,8 @@ export default function App() {
             <div className="absolute inset-0 rounded-3xl bg-zinc-200/60 blur-xl animate-pulse scale-150" />
             {/* The logo image — starts blurred, reveals to sharp */}
             <img
-              src="/bomalog.webp"
-              alt="myboma"
+              src={tenantConfig.logoUrl}
+              alt={tenantConfig.appName}
               className="relative h-20 w-20 object-contain rounded-2xl animate-logo-reveal shadow-xl bg-white p-2"
             />
           </div>
@@ -696,10 +697,10 @@ export default function App() {
           <div className="flex flex-col items-center gap-1" style={{ animation: 'fadeInUp 0.8s 0.6s ease-out both' }}>
             <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase"
               style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              myboma
+              {tenantConfig.appName}
             </span>
             <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-zinc-400">
-              Property OS
+              {tenantConfig.companyName}
             </span>
           </div>
           {/* Subtle progress indicator */}
@@ -891,8 +892,8 @@ export default function App() {
                <div className="relative flex items-center justify-center">
                  <div className="absolute inset-0 rounded-2xl bg-zinc-100/80 blur-lg animate-pulse scale-150" />
                  <img
-                   src="/bomalog.webp"
-                   alt="myboma"
+                   src={tenantConfig.logoUrl}
+                   alt={tenantConfig.appName}
                    className="relative h-12 w-12 object-contain rounded-xl animate-logo-reveal bg-white p-1 shadow-xs"
                  />
                </div>

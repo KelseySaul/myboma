@@ -37,6 +37,7 @@ import {
 } from '../lib/landlordSubscription';
 import {joinWaitlist, unsubscribeFromWaitlist} from '../lib/waitlist';
 import { Capacitor } from '@capacitor/core';
+import { tenantConfig } from '../config/tenant';
 
 // Move PWA prompt to module level so it persists across renders
 let _pwaPromptEvent: any = null;
@@ -49,6 +50,7 @@ interface LandingPageProps {
 export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPageProps) {
   const isNative = Capacitor.isNativePlatform();
   const [propertyFilter, setPropertyFilter] = useState('all');
+  const [mobileSearchTerm, setMobileSearchTerm] = useState('');
   const [pwaPrompt, setPwaPrompt] = useState<any>(null);
   const [pwaVisible, setPwaVisible] = useState(false);
   const pwaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -80,7 +82,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     setPwaVisible(false);
     setPwaPrompt(null);
     if (outcome === 'accepted') {
-      toast.success('MyBoma is installing on your device.');
+      toast.success(`${tenantConfig.appName} is installing on your device.`);
     }
   };
 
@@ -90,7 +92,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       ('standalone' in window.navigator && Boolean((window.navigator as Navigator & {standalone?: boolean}).standalone));
 
     if (isStandalone) {
-      toast.info('MyBoma is already installed on this device.');
+      toast.info(`${tenantConfig.appName} is already installed on this device.`);
       return;
     }
 
@@ -100,7 +102,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     }
 
     toast.info(
-      "Install MyBoma from your browser menu. On iPhone, tap Share then 'Add to Home Screen'. On Android or desktop, choose 'Install App' or 'Add to Home Screen'.",
+      `Install ${tenantConfig.appName} from your browser menu. On iPhone, tap Share then 'Add to Home Screen'. On Android or desktop, choose 'Install App' or 'Add to Home Screen'.`,
       {duration: 7000},
     );
   };
@@ -147,7 +149,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     url.searchParams.delete('unsubscribe');
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     void unsubscribeFromWaitlist({token: unsubscribeToken})
-      .then(() => toast.success('You have been unsubscribed from MyBoma emails.'))
+      .then(() => toast.success(`You have been unsubscribed from ${tenantConfig.appName} emails.`))
       .catch((error: Error) => toast.error(error.message));
   }, []);
 
@@ -184,7 +186,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       await joinWaitlist(waitlistEmail.trim().toLowerCase());
       setWaitlistJoined(true);
       setWaitlistEmail('');
-      toast.success('You are on the MyBoma waitlist.');
+      toast.success(`You are on the ${tenantConfig.appName} waitlist.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not join the waitlist.');
     } finally {
@@ -198,7 +200,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     try {
       await unsubscribeFromWaitlist({email: unsubscribeEmail.trim().toLowerCase()});
       setUnsubscribeEmail('');
-      toast.success('You have been unsubscribed from MyBoma emails.');
+      toast.success(`You have been unsubscribed from ${tenantConfig.appName} emails.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not process your unsubscribe request.');
     } finally {
@@ -381,16 +383,16 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
               <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
                 <div className="flex flex-col sm:flex-row gap-3">
                   <a
-                    href="/myboma.apk"
-                    download="myboma.apk"
+                    href={tenantConfig.appLinks.android}
+                    download="app.apk"
                     className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
                   >
                     <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
                     Download APK
                   </a>
                   <a
-                    href="/myboma.ipa"
-                    download="myboma.ipa"
+                    href={tenantConfig.appLinks.ios}
+                    download="app.ipa"
                     className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
                   >
                     <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
@@ -410,14 +412,17 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </section>
       )}
 
+      {/* ── NATIVE MOBILE HERO ───────────────────────────────────── */}
+      {/* Removed per white labeling restructuring. The properties grid is now the absolute top element. */}
+
       {/* Immediate Property Discovery Grid */}
-      <section className={isNative ? "container mx-auto px-2 sm:px-4 py-6 sm:py-8" : "container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1"}>
+      <section className={isNative ? "container mx-auto px-2 sm:px-4 py-4 pt-safe" : "container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1"}>
         <HunterDashboard
           profile={null}
           onLoginRequired={() => setIsAuthOpen(true)}
           activeTab={propertyFilter}
           setActiveTab={setPropertyFilter}
-          variant={isNative ? "default" : "embedded"}
+          variant="embedded"
         />
       </section>
 
@@ -531,7 +536,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_0.9fr] md:items-center">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">Early access</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Be first to know when MyBoma opens.</h2>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Be first to know when {tenantConfig.appName} opens.</h2>
             <p className="mt-4 max-w-xl text-sm font-medium leading-6 text-zinc-300 sm:text-base">
               Join the waitlist for launch updates and important product news. No clutter. Unsubscribe in one step whenever you want.
             </p>
@@ -539,7 +544,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:p-6">
             {waitlistJoined ? (
               <div className="rounded-2xl bg-emerald-400/10 p-4 text-sm font-bold text-emerald-200">
-                You are on the list. Watch your inbox for MyBoma updates.
+                You are on the list. Watch your inbox for {tenantConfig.appName} updates.
               </div>
             ) : (
               <form className="space-y-3" onSubmit={handleWaitlistSubmit}>
@@ -605,10 +610,10 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           <DialogContent className={`${selectedRole === 'landlord' && authMode === 'signup' ? 'sm:max-w-[480px]' : 'sm:max-w-[400px]'} w-[calc(100vw-2rem)] rounded-[2rem] p-0 border-none shadow-2xl max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem))] flex flex-col overflow-hidden mt-[var(--sat)]`}>
             <div className="bg-gradient-to-br from-zinc-900 to-black p-6 text-center text-white relative shrink-0">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center transition-transform hover:rotate-12">
-                <img src="/bomalog.webp" alt="myboma" className="h-10 w-10 object-contain rounded-xl bg-white p-1" width="40" height="40" />
+                <img src={tenantConfig.logoUrl} alt={tenantConfig.appName} className="h-10 w-10 object-contain rounded-xl bg-white p-1" width="40" height="40" />
               </div>
               <DialogTitle className="text-2xl font-black">
-                {authMode === 'login' ? 'Welcome Home' : 'Join myboma'}
+                {authMode === 'login' ? 'Welcome Home' : `Join ${tenantConfig.appName}`}
               </DialogTitle>
               <DialogDescription className="text-zinc-500 mt-1 text-xs font-bold uppercase tracking-widest">
                 {authMode === 'login' 
