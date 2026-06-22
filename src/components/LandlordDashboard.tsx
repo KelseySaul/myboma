@@ -2806,12 +2806,12 @@ function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, bui
         <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-bold mt-0.5"><FontAwesomeIcon icon={faMapMarkerAlt} className="h-2.5 w-2.5" />{property.location}</div>
       </CardHeader>
       <CardContent className="px-4 py-0"><p className="text-lg font-black text-zinc-900 dark:text-white tabular-nums">KSh {property.price.toLocaleString()}</p></CardContent>
-      <CardFooter className="flex gap-2 p-4 mt-2">
-        <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1.5" /> Edit</Button>
+      <CardFooter className="flex gap-1.5 p-4 mt-2">
+        <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1 sm:mr-1.5" /> Edit</Button>
         {profile.uid === property.landlordId && (
-          <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Access</Button>
+          <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1 sm:mr-1.5" /> Access</Button>
         )}
-        <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1.5" /> Del</Button>
+        <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1 sm:mr-1.5" /> Del</Button>
       </CardFooter>
     </Card>
   );
