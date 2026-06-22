@@ -132,7 +132,9 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
   return (
     <header 
       className={`fixed left-0 right-0 z-50 transition-all duration-300 ${
-        isNative ? 'pointer-events-none bg-transparent border-none flex items-center justify-end px-4 sm:px-6' : 'topbar'
+        isNative 
+          ? 'pointer-events-none bg-transparent border-none flex items-center justify-end px-4 sm:px-6' 
+          : 'topbar sm:flex flex items-center justify-end sm:justify-between pointer-events-none sm:pointer-events-auto bg-transparent sm:bg-white border-none sm:border-b dark:sm:border-zinc-800/50 px-4 sm:px-4'
       } ${isImpersonating ? 'topbar-below-impersonation' : ''}`}
       style={{ 
         top: isImpersonating ? 'var(--impersonation-height)' : 0,
@@ -142,7 +144,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     >
       {/* Brand Container with Logo */}
       {!isNative && (
-        <div className="brand flex items-center gap-3">
+        <div className="brand items-center gap-3 hidden sm:flex">
           <img 
             src={platformBranding?.brandLogoUrl || tenantConfig.logoUrl} 
             alt={platformBranding?.name || tenantConfig.appName} 
@@ -159,10 +161,10 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
 
       {/* Right Side Options */}
       {user ? (
-        <div className={`topbar-right pointer-events-auto ${isNative ? 'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-1.5 rounded-full shadow-sm border border-zinc-200/50 dark:border-zinc-800/50' : ''}`}>
+        <div className={`topbar-right pointer-events-auto ${isNative ? 'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-1.5 rounded-full shadow-sm border border-zinc-200/50 dark:border-zinc-800/50' : 'bg-white/80 dark:bg-zinc-900/80 sm:bg-transparent dark:sm:bg-transparent backdrop-blur-md sm:backdrop-blur-none p-1.5 sm:p-0 rounded-full sm:rounded-none shadow-sm sm:shadow-none border border-zinc-200/50 dark:border-zinc-800/50 sm:border-none'}`}>
           {profile && !isNative && (
             <>
-              <span className="role-badge">
+              <span className="role-badge hidden sm:block">
                 {profile.isSuperAdmin ? 'SUPER ADMIN' : (activeView || profile.role || 'hunter').toUpperCase()}
               </span>
               <div className="user-info hidden sm:block">
