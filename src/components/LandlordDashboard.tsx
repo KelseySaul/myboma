@@ -2789,29 +2789,30 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
 function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string }) {
   return (
-    <Card className="overflow-hidden border-none shadow-sm dark:bg-zinc-900/50 cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1 group rounded-2xl">
-      <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-        <img src={property.images[0] || `https://picsum.photos/seed/${property.id}/800/600`} alt={property.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-        <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
-          <Badge className={`shadow-lg border-none px-2 py-0.5 font-black text-[8px] uppercase tracking-widest ${property.status === 'available' ? 'bg-emerald-500 text-white' : property.status === 'rented' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-white'}`}>{property.status}</Badge>
-          {buildingName && <Badge className="bg-zinc-950/80 text-white border-none px-2 py-0.5 font-black text-[7px] uppercase tracking-widest backdrop-blur-sm">{buildingName}</Badge>}
+    <Card className="overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm dark:bg-zinc-900/50 cursor-pointer transition-all hover:shadow-md group rounded-2xl flex flex-col">
+      <div className="flex flex-row p-3 gap-3 items-center">
+        <div className="h-20 w-24 shrink-0 rounded-xl bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+          <img src={property.images[0] || `https://picsum.photos/seed/${property.id}/400/300`} alt={property.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
+          <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
+            <Badge className={`shadow-sm border-none px-1.5 py-0 font-black text-[7px] uppercase tracking-widest ${property.status === 'available' ? 'bg-emerald-500 text-white' : property.status === 'rented' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-white'}`}>{property.status}</Badge>
+          </div>
+        </div>
+        <div className="flex flex-col flex-1 min-w-0 py-0.5">
+          <div className="flex items-center justify-between mb-1">
+            <Badge variant="outline" className="border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 font-bold text-[8px] uppercase px-1.5 py-0">{property.type}</Badge>
+            {property.unitNumber && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">U-{property.unitNumber}</span>}
+          </div>
+          <CardTitle className="text-sm font-black text-zinc-900 dark:text-white line-clamp-1">{property.title}</CardTitle>
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-bold mt-0.5 truncate"><FontAwesomeIcon icon={faMapMarkerAlt} className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{property.location}</span></div>
+          <p className="text-sm font-black text-zinc-900 dark:text-white mt-1.5 tabular-nums">KSh {property.price.toLocaleString()}</p>
         </div>
       </div>
-      <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-1">
-          <Badge variant="outline" className="border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 font-bold text-[8px] uppercase">{property.type}</Badge>
-          {property.unitNumber && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">U-{property.unitNumber}</span>}
-        </div>
-        <CardTitle className="text-sm font-black text-zinc-900 dark:text-white line-clamp-1">{property.title}</CardTitle>
-        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-bold mt-0.5"><FontAwesomeIcon icon={faMapMarkerAlt} className="h-2.5 w-2.5" />{property.location}</div>
-      </CardHeader>
-      <CardContent className="px-4 py-0"><p className="text-lg font-black text-zinc-900 dark:text-white tabular-nums">KSh {property.price.toLocaleString()}</p></CardContent>
-      <CardFooter className="flex gap-1.5 p-4 mt-2">
-        <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1 sm:mr-1.5" /> Edit</Button>
+      <CardFooter className="flex gap-1.5 px-3 pb-3 pt-0 mt-0">
+        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1 sm:mr-1.5" /> Edit</Button>
         {profile.uid === property.landlordId && (
-          <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1 sm:mr-1.5" /> Access</Button>
+          <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1 sm:mr-1.5" /> Access</Button>
         )}
-        <Button variant="ghost" size="sm" className="flex-1 h-9 px-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1 sm:mr-1.5" /> Del</Button>
+        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1 sm:mr-1.5" /> Del</Button>
       </CardFooter>
     </Card>
   );
