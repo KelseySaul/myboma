@@ -1043,7 +1043,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   );
 
   return (
-    <div className="db min-h-screen pb-12 animate-in fade-in duration-700">
+    <div className="db pb-12 animate-in fade-in duration-700">
       {/* Hero Page Header */}
       <div className="hero">
         <div className="hero-meta">

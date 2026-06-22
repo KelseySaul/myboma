@@ -466,7 +466,7 @@ export default function HunterDashboard({
   );
 
   return (
-    <div className={`db animate-in fade-in duration-700 ${variant === 'embedded' ? 'min-h-0 pb-8' : 'min-h-screen pb-24'}`}>
+    <div className={`db animate-in fade-in duration-700 ${variant === 'embedded' ? 'pb-8' : 'pb-24 sm:pb-8'}`}>
       {variant === 'embedded' ? (
         <div className="listing-sticky-bar sticky z-20 -mx-2 sm:-mx-0 border-b border-zinc-100 bg-white/95 px-3 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 sm:rounded-2xl sm:border sm:shadow-sm sm:top-0">
           {searchInput}

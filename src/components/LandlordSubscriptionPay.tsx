@@ -32,7 +32,17 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
 
       if (result.checkoutUrl) {
         if (Capacitor.isNativePlatform()) {
-          await Browser.open({ url: result.checkoutUrl });
+          try {
+            await Browser.open({ url: result.checkoutUrl, presentationStyle: 'popover' });
+          } catch (err) {
+            console.error('Browser.open failed, falling back', err);
+            // Fallback 1: system browser
+            const newWindow = window.open(result.checkoutUrl, '_system');
+            if (!newWindow) {
+              // Fallback 2: webview navigation
+              window.location.href = result.checkoutUrl;
+            }
+          }
         } else {
           window.location.href = result.checkoutUrl;
         }
