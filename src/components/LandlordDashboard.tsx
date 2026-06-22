@@ -1273,92 +1273,79 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   return (
     <div className="db min-h-screen pb-24 animate-in fade-in duration-700">
-      {activeTab === 'tenants' ? (
-        <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2">
+      <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
+        <div>
           <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
-          <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight">Tenants</h1>
-          <div className="text-zinc-500 font-medium text-sm mt-1">
-            {tenantList.filter(t => t.status === 'active').length} active · {tenantList.filter(t => t.status === 'invited').length} invited · {properties.filter(p => p.status === 'available').length} vacant units
-          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight capitalize">
+            {activeTab === 'dashboard' || !activeTab ? 'Overview' : 
+             activeTab === 'properties' ? 'Units' : 
+             activeTab === 'finances' ? 'Finance' : 
+             activeTab === 'maintenance' ? 'Repairs' : 
+             activeTab === 'automations' ? 'Notifications' : 
+             activeTab}
+          </h1>
+          {activeTab === 'tenants' && (
+            <div className="text-zinc-500 font-medium text-sm mt-1">
+              {tenantList.filter(t => t.status === 'active').length} active · {tenantList.filter(t => t.status === 'invited').length} invited · {properties.filter(p => p.status === 'available').length} vacant units
+            </div>
+          )}
+          {activeTab === 'properties' && (
+            <div className="text-zinc-500 font-medium text-sm mt-1">
+              {properties.length} total units · {properties.filter(p => p.status === 'available').length} vacant
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="hero">
-          <div className="hero-meta">
-            <span className="lvl-badge">Asset Portfolio</span>
-            <div className="status-dot">
-              <span className="status-pulse"></span>
-              Owner Verified
-            </div>
-          </div>
-          <div className="hero-row">
-            <div>
-              <h1 className="hero-title">Command Center</h1>
-              <div className="flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-zinc-400 mt-2 font-bold">
-                <div className="flex items-center gap-1.5">
-                  <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                  <span>{profile.phone || 'No phone set'}</span>
+        
+        {activeTab !== 'tenants' && activeTab !== 'settings' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={
+              <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
+                <span className="hidden sm:inline">Create New</span>
+              </button>
+            } />
+            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+              <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <FontAwesomeIcon icon={faEnvelope} className="h-3 w-3" />
-                  <span>{profile.email}</span>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">New Asset</div>
+                  <div className="text-[10px] text-zinc-500">List a single property</div>
                 </div>
-                <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900" onClick={() => setIsProfileOpen(true)}>
-                  Secure Profile
-                </Button>
-              </div>
-            </div>
-            <div className="hero-actions flex gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                    <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                    Create New
-                  </button>
-                } />
-                <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
-                  <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                    <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-zinc-900">New Asset</div>
-                      <div className="text-[10px] text-zinc-500">List a single property</div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                    <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-zinc-900">Bulk Add Units</div>
-                      <div className="text-[10px] text-zinc-500">Create multiple units</div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-zinc-100 mx-2" />
-                  <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                    <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-zinc-900">Add Tenant</div>
-                      <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                    <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-xs text-zinc-900">Add Building</div>
-                      <div className="text-[10px] text-zinc-500">Group your units</div>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Bulk Add Units</div>
+                  <div className="text-[10px] text-zinc-500">Create multiple units</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800 mx-2" />
+              <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Add Tenant</div>
+                  <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Add Building</div>
+                  <div className="text-[10px] text-zinc-500">Group your units</div>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
 
       <div className="px-6 mt-6">
         {/* ── Dashboard Overview ─────────────────────── */}
