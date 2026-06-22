@@ -791,32 +791,28 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
           <div className="space-y-4">
             {property && landlord ? (
               <>
-                <div className="grid gap-4 lg:grid-cols-3">
-                  <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-                    <CardHeader className="p-3 pb-1.5 sm:p-6 sm:pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-black uppercase tracking-widest text-zinc-400">Rent Arrears</CardTitle>
-                        <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-4 w-4' : 'text-emerald-500 h-4 w-4'} />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-1.5 sm:p-6 sm:pt-2">
-                      <p className={`text-2xl sm:text-3xl font-black tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
-                      <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
-                    </CardContent>
-                  </Card>
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Rent Arrears</span>
+                      <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-4 w-4' : 'text-emerald-500 h-4 w-4'} />
+                    </div>
+                    <div>
+                      <p className={`text-2xl font-black tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
+                      <p className="mt-1 text-xs font-bold text-zinc-400">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
+                    </div>
+                  </div>
 
-                  <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-                    <CardHeader className="p-3 pb-1.5 sm:p-6 sm:pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-black uppercase tracking-widest text-zinc-400">Upcoming Rent</CardTitle>
-                        <FontAwesomeIcon icon={faClock} className="text-amber-500 h-4 w-4" />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-1.5 sm:p-6 sm:pt-2">
+                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Upcoming Rent</span>
+                      <FontAwesomeIcon icon={faClock} className="text-amber-500 h-4 w-4" />
+                    </div>
+                    <div>
                       {displayUpcoming ? (
                         <>
-                          <p className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
-                          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                          <p className="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                             Due {formatDate(displayUpcoming.dueDate)}
                             <span className="mx-2 text-zinc-300">•</span>
                             <span className={upcomingDaysRemaining! <= 3 ? 'text-rose-500' : 'text-emerald-500'}>
@@ -828,251 +824,243 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
                         </>
                       ) : (
                         <>
-                          <p className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-white tabular-nums">KES 0</p>
-                          <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">Rent clear</p>
+                          <p className="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">KES 0</p>
+                          <p className="mt-1 text-xs font-bold text-emerald-600">Rent clear</p>
                         </>
                       )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
 
-                  <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-                    <CardHeader className="p-3 pb-1.5 sm:p-6 sm:pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-black uppercase tracking-widest text-zinc-400">Pay Rent</CardTitle>
-                        <FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-1.5 sm:p-6 sm:pt-2">
+                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Pay Rent</span>
+                      <FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />
+                    </div>
+                    <div>
                       {nextPayment ? (
-                        <div className="space-y-2 sm:space-y-4">
-                          <div>
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-base sm:text-lg font-black text-zinc-900 dark:text-white">{formatMoney(nextPayment.amount)}</p>
+                        <div className="space-y-3">
+                          <div className="flex flex-col">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-lg font-black text-zinc-900 dark:text-white">{formatMoney(nextPayment.amount)}</p>
                               {paymentStatusBadge(nextPayment)}
                             </div>
-                            <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-zinc-400">Due {formatDate(nextPayment.dueDate)}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Due {formatDate(nextPayment.dueDate)}</p>
                           </div>
                           {payButtons(nextPayment)}
                         </div>
                       ) : payments.length === 0 ? (
-                        <div className="flex items-center gap-3 rounded-2xl bg-amber-500/10 p-4 text-amber-700">
-                          <FontAwesomeIcon icon={faExclamationCircle} className="h-5 w-5" />
-                          <p className="font-black text-[10px] uppercase tracking-widest">No rent invoice yet — ask your landlord to assign you and create a payment record</p>
+                        <div className="flex items-center gap-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 p-3 text-amber-700 dark:text-amber-500">
+                          <FontAwesomeIcon icon={faExclamationCircle} className="h-4 w-4" />
+                          <p className="font-bold text-[10px] uppercase tracking-widest">No invoice</p>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/10 p-4 text-emerald-700">
-                          <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5" />
-                          <p className="font-black text-[10px] uppercase tracking-widest">No pending rent — all invoices are cleared</p>
+                        <div className="flex items-center gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-500">
+                          <FontAwesomeIcon icon={faCheckCircle} className="h-4 w-4" />
+                          <p className="font-bold text-[10px] uppercase tracking-widest">All clear</p>
                         </div>
                       )}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
 
-                <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 overflow-hidden rounded-3xl">
+                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden mt-2">
                   <div className="grid sm:grid-cols-5 h-full">
-                    <div className="sm:col-span-3 p-5 space-y-4 flex flex-col justify-center">
-                      <div>
-                        <Badge className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-none px-2 py-0.5 font-black text-[8px] uppercase tracking-[0.2em] mb-2">Current Residence</Badge>
+                    <div className="sm:col-span-3 p-5 flex flex-col justify-center">
+                      <div className="mb-4">
+                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md mb-2 inline-block">Current Residence</span>
                         <h2 className="text-xl font-black text-zinc-900 dark:text-white leading-tight">{property.title}</h2>
-                        <div className="flex items-center gap-2 text-zinc-400 mt-1 font-bold text-xs">
+                        <div className="flex items-center gap-2 text-zinc-500 mt-1 font-bold text-xs">
                           <FontAwesomeIcon icon={faMapMarkerAlt} className="text-zinc-400" />
                           {property.location}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-zinc-50 dark:border-zinc-800">
+                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
                         <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-0.5">Rent Cycle</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Rent Cycle</p>
                           <p className="text-xs font-black text-zinc-900 dark:text-white">Monthly</p>
                         </div>
                         <div>
-                          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-0.5">Lease Status</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Lease Status</p>
                           <p className="text-xs font-black text-emerald-600">Active</p>
                         </div>
                       </div>
                     </div>
-                    <div className="sm:col-span-2 bg-zinc-50 dark:bg-zinc-800/50 border-l border-zinc-50 dark:border-zinc-800 flex items-center">
-                      <div className="p-5 flex flex-col justify-center">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-3">Management</p>
+                    <div className="sm:col-span-2 bg-zinc-50 dark:bg-zinc-950/50 border-l border-zinc-100 dark:border-zinc-800 flex items-center">
+                      <div className="p-5 flex flex-col justify-center w-full">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-3">Management</p>
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-900 dark:text-white shadow-sm border border-zinc-100 dark:border-zinc-800">
-                              <FontAwesomeIcon icon={faUser} className="h-2.5 w-2.5" />
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                              <FontAwesomeIcon icon={faUser} className="h-3 w-3" />
                             </div>
-                            <span className="font-black text-[10px]">{landlord.displayName}</span>
+                            <span className="font-bold text-xs text-zinc-900 dark:text-white">{landlord.displayName}</span>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-lg bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-900 dark:text-white shadow-sm border border-zinc-100 dark:border-zinc-800">
-                              <FontAwesomeIcon icon={faPhone} className="h-2.5 w-2.5" />
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
+                              <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
                             </div>
-                            <span className="font-bold text-[10px]">{landlord.phone || "No phone set"}</span>
+                            <span className="font-bold text-xs text-zinc-900 dark:text-white">{landlord.phone || "No phone set"}</span>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </Card>
+                </div>
               </>
             ) : (
-              <Card className="p-12 border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 bg-white flex flex-col items-center justify-center text-center rounded-3xl mb-8">
-                <div className="h-16 w-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-200 mb-4 border border-zinc-100 dark:border-zinc-800">
+              <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-center rounded-3xl p-12 mb-8 shadow-sm">
+                <div className="h-16 w-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-300 dark:text-zinc-600 mb-4 border border-zinc-100 dark:border-zinc-800">
                   <FontAwesomeIcon icon={faExclamationCircle} className="h-8 w-8" />
                 </div>
                 <h3 className="text-lg font-black text-zinc-900 dark:text-white mb-1">Pending Assignment</h3>
-                <p className="text-zinc-500 dark:text-zinc-400 max-w-sm font-medium text-sm">Your account is not yet linked to a property.</p>
-              </Card>
+                <p className="text-zinc-500 font-medium text-sm">Your account is not yet linked to a property.</p>
+              </div>
             )}
           </div>
         )}
 
         {currentTab === 'finances' && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base font-black">Payment History</CardTitle>
-                  <CardDescription className="text-xs font-medium text-zinc-500">Receipts are available for cleared rent payments.</CardDescription>
-                </div>
-                <FontAwesomeIcon icon={faReceipt} className="h-5 w-5 text-emerald-500" />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Payment History</h2>
+                <p className="text-xs font-medium text-zinc-500">Receipts are available for cleared rent payments.</p>
               </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              {orderedPayments.length > 0 ? (
-                <div className="space-y-3">
-                  {orderedPayments.map(payment => (
-                    <div key={payment.id} className="flex flex-col gap-4 rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-black text-zinc-900 dark:text-white">{formatMoney(payment.amount)}</p>
-                          {paymentStatusBadge(payment)}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-black uppercase tracking-widest text-zinc-400">
-                          <span>Due {formatDate(payment.dueDate)}</span>
-                          <span>{payment.paidAt ? `Paid ${formatDate(payment.paidAt)}` : 'Awaiting payment'}</span>
-                        </div>
+              <FontAwesomeIcon icon={faReceipt} className="h-5 w-5 text-emerald-500" />
+            </div>
+
+            {orderedPayments.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {orderedPayments.map(payment => (
+                  <div key={payment.id} className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-base font-black text-zinc-900 dark:text-white">{formatMoney(payment.amount)}</p>
+                        {paymentStatusBadge(payment)}
                       </div>
+                      <div className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        <span>Due {formatDate(payment.dueDate)}</span>
+                        <span>{payment.paidAt ? `Paid ${formatDate(payment.paidAt)}` : 'Awaiting payment'}</span>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                       {payment.status === 'paid' ? (
                         <a
                           href={getReceiptDownloadUrl(payment)}
                           download={getReceiptFileName(payment)}
                           target={payment.receiptUrl ? '_blank' : undefined}
                           rel={payment.receiptUrl ? 'noreferrer' : undefined}
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 text-[10px] font-black uppercase tracking-widest text-white hover:bg-zinc-800"
+                          className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 text-xs font-bold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
                         >
                           <FontAwesomeIcon icon={payment.receiptUrl ? faExternalLinkAlt : faDownload} className="h-3 w-3" />
                           Receipt
                         </a>
                       ) : (
                         <Button
-                          variant="outline"
-                          className="h-10 rounded-xl font-black uppercase tracking-widest text-[10px] border-zinc-200 dark:border-zinc-700"
+                          className="w-full h-10 rounded-xl font-black uppercase tracking-widest text-[10px] bg-zinc-900 text-white dark:bg-white dark:text-black"
                           onClick={() => setActiveTab('dashboard')}
                         >
                           Pay Now
                         </Button>
                       )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-300">
-                  <FontAwesomeIcon icon={faHistory} className="h-10 w-10 opacity-20 mb-3" />
-                  <p className="font-black text-[9px] uppercase tracking-[0.2em]">No Payments</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
+                <FontAwesomeIcon icon={faHistory} className="h-8 w-8 opacity-50 mb-3" />
+                <p className="font-bold text-xs">No Payments Found</p>
+              </div>
+            )}
+          </div>
         )}
 
         {currentTab === 'maintenance' && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle className="text-base font-black">Maintenance History</CardTitle>
-                  <CardDescription className="text-xs font-medium text-zinc-500">Track every ticket sent to management.</CardDescription>
-                </div>
-                <Button className="h-10 rounded-xl bg-zinc-950 px-4 text-white font-black uppercase tracking-widest text-[10px]" onClick={() => setIsReportOpen(true)}>
-                  <FontAwesomeIcon icon={faPlus} className="mr-2 h-3 w-3" />
-                  Send Request
-                </Button>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Maintenance History</h2>
+                <p className="text-xs font-medium text-zinc-500">Track every ticket sent to management.</p>
               </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              {requests.length > 0 ? (
-                <div className="space-y-3">
-                  {[...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(req => (
-                    <div key={req.id} className="rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-sm text-zinc-900 dark:text-white">{req.title}</p>
-                          <p className="mt-1 text-xs font-medium leading-relaxed text-zinc-500">{req.description}</p>
-                        </div>
-                        <Badge variant="outline" className={`rounded-lg border-none px-2 py-1 font-black text-[8px] uppercase tracking-widest ${
-                          req.status === 'resolved' ? 'bg-emerald-500/10 text-emerald-600' :
-                          req.status === 'in-progress' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'
+              <Button className="h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-black font-black text-xs px-4" onClick={() => setIsReportOpen(true)}>
+                <FontAwesomeIcon icon={faPlus} className="mr-2" /> Request
+              </Button>
+            </div>
+
+            {requests.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(req => (
+                  <div key={req.id} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="font-black text-sm text-zinc-900 dark:text-white">{req.title}</p>
+                        <Badge className={`rounded-lg border-none px-2 py-1 font-black text-[8px] uppercase tracking-widest ${
+                          req.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' :
+                          req.status === 'in-progress' ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
                         }`}>
                           {req.status}
                         </Badge>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[9px] font-black uppercase tracking-widest text-zinc-400">
-                        <span>{formatDate(req.createdAt)}</span>
-                        <span className="h-1 w-1 rounded-full bg-zinc-300" />
-                        <span>{req.priority} priority</span>
-                      </div>
+                      <p className="text-xs font-medium text-zinc-500 line-clamp-2">{req.description}</p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-300">
-                  <FontAwesomeIcon icon={faFileAlt} className="h-10 w-10 opacity-20 mb-3" />
-                  <p className="font-black text-[9px] uppercase tracking-[0.2em]">No Maintenance History</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                      <span className="text-[10px] font-bold text-zinc-400">{formatDate(req.createdAt)}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{req.priority}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
+                <FontAwesomeIcon icon={faFileAlt} className="h-8 w-8 opacity-50 mb-3" />
+                <p className="font-bold text-xs">No Maintenance History</p>
+              </div>
+            )}
+          </div>
         )}
 
         {currentTab === 'notices' && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-black">In-App Notifications</CardTitle>
-                  <CardDescription className="text-xs font-medium text-zinc-500">Rent clearance and upcoming payment notices.</CardDescription>
-                </div>
-                <FontAwesomeIcon icon={faBell} className="text-purple-500 h-5 w-5" />
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Notifications</h2>
+                <p className="text-xs font-medium text-zinc-500">Rent clearance and upcoming payment notices.</p>
               </div>
-            </CardHeader>
-            <CardContent className="p-5 pt-0">
-              {noticeItems.length > 0 ? (
-                <div className="space-y-3">
-                  {noticeItems.map(note => (
-                    <button
-                      key={note.id}
-                      className={`w-full rounded-2xl border p-4 text-left transition-all hover:bg-zinc-50/70 dark:hover:bg-zinc-800/70 ${note.read ? 'bg-white dark:bg-zinc-900 border-zinc-50 dark:border-zinc-800' : 'bg-blue-50/30 dark:bg-blue-900/10 border-blue-100/50 dark:border-blue-900/20 shadow-sm'}`}
-                      onClick={() => note.stored && !note.read && markNotificationRead(note.id)}
-                    >
-                      <div className="flex justify-between items-start gap-3 mb-1.5">
-                        <h4 className={`text-xs font-black uppercase tracking-tight ${note.read ? 'text-zinc-900 dark:text-white' : 'text-blue-700 dark:text-blue-400'}`}>{note.title}</h4>
-                        {!note.read && <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse shrink-0" />}
+              <FontAwesomeIcon icon={faBell} className="text-purple-500 h-5 w-5" />
+            </div>
+
+            {noticeItems.length > 0 ? (
+              <div className="space-y-3">
+                {noticeItems.map(note => (
+                  <button
+                    key={note.id}
+                    className={`w-full flex items-start gap-4 p-4 rounded-2xl border transition-all text-left ${note.read ? 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800' : 'bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 shadow-sm'}`}
+                    onClick={() => note.stored && !note.read && markNotificationRead(note.id)}
+                  >
+                    <div className="h-10 w-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faBell} />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-center mb-1">
+                        <h4 className={`text-sm tracking-tight ${note.read ? 'font-bold text-zinc-700 dark:text-zinc-300' : 'font-black text-zinc-900 dark:text-white'}`}>{note.title}</h4>
+                        {!note.read && <span className="h-2 w-2 rounded-full bg-zinc-900 dark:bg-white" />}
                       </div>
-                      <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 leading-relaxed">{note.message}</p>
-                      <div className="mt-2.5 flex items-center gap-1.5 text-[8px] font-black text-zinc-300 uppercase tracking-widest">
-                        <FontAwesomeIcon icon={faClock} className="h-2 w-2" />
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 leading-relaxed">{note.message}</p>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-2 block">
                         {formatDate(note.createdAt)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-300">
-                  <FontAwesomeIcon icon={faBell} className="h-10 w-10 opacity-20 mb-3" />
-                  <p className="font-black text-[9px] uppercase tracking-[0.2em]">No Rent Notices</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
+                <FontAwesomeIcon icon={faBell} className="h-8 w-8 opacity-50 mb-3" />
+                <p className="font-bold text-xs">No Rent Notices</p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
