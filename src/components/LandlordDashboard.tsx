@@ -1494,35 +1494,75 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'properties' && (
-          <div className="mt-4 space-y-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className="text-xl font-black text-zinc-900">Portfolio Index</h3>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                <div className="relative">
-                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                  <Input placeholder="Search property or unit..." className="h-8 pl-8 text-[10px] font-bold rounded-lg border-zinc-200" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Building:</span>
-                  <select className="btn-ghost py-1 h-8 text-[10px] font-black uppercase tracking-widest max-w-[150px] truncate" value={buildingFilter} onChange={(e) => { setBuildingFilter(e.target.value); setPropertyPage(1); }}>
-                    <option value="all">All Buildings</option>
-                    {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    <option value="standalone">Standalone Assets</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Status Index:</span>
-                  <select className="btn-ghost py-1 h-8 text-[10px] font-black uppercase tracking-widest" value={propertyStatusFilter} onChange={(e) => { setPropertyStatusFilter(e.target.value); setPropertyPage(1); }}>
-                    <option value="all">Global view</option>
-                    <option value="available">Available</option>
-                    <option value="rented">Rented</option>
-                    <option value="booked">Booked</option>
-                  </select>
-                </div>
+          <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 px-6">
+            {/* Header section */}
+            <div>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Units</h2>
+              <div className="text-sm text-zinc-500">
+                {buildings.length} property · {properties.length} unit(s) · {properties.length > 0 ? Math.round((properties.filter(p => p.status === 'rented').length / properties.length) * 100) : 0}% occupied
               </div>
             </div>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Rented</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{properties.filter(p => p.status === 'rented').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Vacant</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{properties.filter(p => p.status === 'available').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Monthly</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">
+                  {(() => {
+                    const inc = properties.filter(p => p.status === 'rented').reduce((acc, p) => acc + p.price, 0);
+                    return inc >= 1000 ? `${Math.floor(inc/1000)}k` : inc;
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Search and Add Button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <Input placeholder="Search units" className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
+              </div>
+              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shrink-0 font-bold shadow-sm">
+                <FontAwesomeIcon icon={faPlus} className="mr-2" />
+                {properties.length === 0 ? 'Add property' : 'Add unit'}
+              </Button>
+            </div>
+
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => (
+                <button 
+                  key={f}
+                  onClick={() => {
+                     if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
+                     else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
+                     else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
+                     else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
+                     setPropertyPage(1);
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                    (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
+                    (f === 'Rented' && propertyStatusFilter === 'rented') ||
+                    (f === 'Vacant' && propertyStatusFilter === 'available') ||
+                    (buildings.find(b => b.id === buildingFilter)?.name === f)
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
+                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
             
-            <div className="space-y-6">
+            <div className="space-y-8">
               {(() => {
                 const groupedMap = new Map<string, any[]>();
                 buildings.forEach(b => groupedMap.set(b.id, []));
@@ -1536,31 +1576,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                   const bName = bId === 'standalone' ? 'Standalone Assets' : buildings.find(b => b.id === bId)?.name || 'Unknown Building';
                   if (bId === 'standalone' && props.length === 0) return null;
                   if (props.length === 0 && propertySearch && !bName.toLowerCase().includes(propertySearch.toLowerCase())) return null;
+                  if (props.length === 0) return null;
 
                   return (
-                    <details key={bId} className="group border border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm" open>
-                      <summary className="flex items-center justify-between p-4 cursor-pointer select-none font-black text-sm uppercase tracking-widest text-zinc-800 dark:text-zinc-200 list-none [&::-webkit-details-marker]:hidden border-b border-transparent group-open:border-zinc-100 dark:group-open:border-zinc-800 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <FontAwesomeIcon icon={faBuilding} className="text-zinc-400" />
-                          {bName} <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full text-[9px]">{props.length}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          {bId !== 'standalone' && (
-                            <div className="flex items-center gap-2" onClick={e => e.preventDefault()}>
-                              <button onClick={() => { setEditBuildingForm({ id: bId, name: bName, address: buildings.find(b => b.id === bId)?.address || '' }); setIsEditBuildingOpen(true); }} className="text-zinc-400 hover:text-blue-500 transition-colors p-1" title="Edit Asset">
-                                <FontAwesomeIcon icon={faEdit} className="h-3 w-3" />
-                              </button>
-                              <button onClick={() => handleDeleteBuilding(bId)} className="text-zinc-400 hover:text-rose-500 transition-colors p-1" title="Delete Asset">
-                                <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                          <FontAwesomeIcon icon={faChevronDown} className="h-3 w-3 text-zinc-400 group-open:rotate-180 transition-transform" />
-                        </div>
-                      </summary>
-                      {props.length > 0 ? (
-                        <div className="p-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 bg-zinc-50/50 dark:bg-zinc-950/50 rounded-b-2xl">
-                          {props.map(property => (
+                    <div key={bId} className="space-y-3">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-bold text-zinc-500 px-1">
+                        <div>{bName}</div>
+                        <div>{props.length} unit{props.length !== 1 ? 's' : ''}</div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {props.map(property => {
+                          const tenant = tenants.find(t => t.assignedProperties?.some((ap: any) => ap.id === property.id));
+                          return (
                             <PropertyCard 
                               key={property.id} 
                               property={property} 
@@ -1572,15 +1599,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                                 setIsManageAccessOpen(true);
                               }}
                               buildingName={bName !== 'Standalone Assets' ? bName : undefined}
+                              tenantName={tenant?.displayName}
                             />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 sm:p-8 text-center text-zinc-500 bg-zinc-50/50 dark:bg-zinc-950/50 rounded-b-2xl">
-                          <p className="text-sm font-semibold">No units found in this asset.</p>
-                        </div>
-                      )}
-                    </details>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 });
               })()}
@@ -2780,33 +2804,78 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   );
 }
 
-function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string }) {
+function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName, tenantName, onViewDetails }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string, tenantName?: string, onViewDetails?: (p: Property) => void }) {
   return (
-    <Card className="overflow-hidden border border-zinc-200/50 dark:border-zinc-800/50 shadow-sm dark:bg-zinc-900/50 cursor-pointer transition-all hover:shadow-md group rounded-2xl flex flex-col">
-      <div className="flex flex-row p-3 gap-3 items-center">
-        <div className="h-20 w-24 shrink-0 rounded-xl bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-          <img src={property.images[0] || `https://picsum.photos/seed/${property.id}/400/300`} alt={property.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-          <div className="absolute top-1.5 left-1.5 flex flex-col gap-1 items-start">
-            <Badge className={`shadow-sm border-none px-1.5 py-0 font-black text-[7px] uppercase tracking-widest ${property.status === 'available' ? 'bg-emerald-500 text-white' : property.status === 'rented' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-white'}`}>{property.status}</Badge>
+    <div className="bg-[#1e1e1e] dark:bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-4 text-zinc-100 transition-all hover:border-zinc-700">
+      {/* Header Row */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <h3 className="text-base font-bold text-white">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              property.status === 'rented' ? 'bg-green-900/30 text-green-500' :
+              property.status === 'available' ? 'bg-zinc-800 text-zinc-400' :
+              'bg-amber-900/30 text-amber-500'
+            }`}>
+              {property.status === 'available' ? 'Vacant' : property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+            <FontAwesomeIcon icon={faBuilding} className="w-3" />
+            <span>{property.location}</span>
           </div>
         </div>
-        <div className="flex flex-col flex-1 min-w-0 py-0.5">
-          <div className="flex items-center justify-between mb-1">
-            <Badge variant="outline" className="border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 font-bold text-[8px] uppercase px-1.5 py-0">{property.type}</Badge>
-            {property.unitNumber && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest truncate">U-{property.unitNumber}</span>}
-          </div>
-          <CardTitle className="text-sm font-black text-zinc-900 dark:text-white line-clamp-1">{property.title}</CardTitle>
-          <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-bold mt-0.5 truncate"><FontAwesomeIcon icon={faMapMarkerAlt} className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{property.location}</span></div>
-          <p className="text-sm font-black text-zinc-900 dark:text-white mt-1.5 tabular-nums">KSh {property.price.toLocaleString()}</p>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger render={
+            <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+              <FontAwesomeIcon icon={faEllipsisV} />
+            </button>
+          } />
+          <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-zinc-800 bg-zinc-900 shadow-xl">
+            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800" onClick={() => onEdit(property)}>
+              <FontAwesomeIcon icon={faEdit} className="mr-2 text-zinc-400 w-4 text-center" /> Edit Unit
+            </DropdownMenuItem>
+            {profile.uid === property.landlordId && (
+              <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-blue-400 hover:bg-blue-900/20" onClick={() => onManageAccess(property)}>
+                <FontAwesomeIcon icon={faUsers} className="mr-2 text-blue-400 w-4 text-center" /> Manage Tenant
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-900/20" onClick={() => onDelete(property.id)}>
+              <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Unit
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Facts Strip */}
+      <div className="grid grid-cols-3 gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Rent</div>
+          <div className="text-sm font-bold text-white">KSh {property.price.toLocaleString()}<span className="text-[10px] text-zinc-400 font-normal">/mo</span></div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tenant</div>
+          <div className="text-sm font-bold text-white truncate">{tenantName || <span className="text-zinc-600 italic">Vacant</span>}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Type</div>
+          <div className="text-sm font-bold text-white capitalize">{property.type}</div>
         </div>
       </div>
-      <CardFooter className="flex gap-1.5 px-3 pb-3 pt-0 mt-0">
-        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1.5" /> Edit</Button>
-        {profile.uid === property.landlordId && (
-          <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Access</Button>
-        )}
-        <Button variant="ghost" size="sm" className="flex-none w-8 h-8 p-0 flex items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => onDelete(property.id)} title="Delete Property"><FontAwesomeIcon icon={faTrash} /></Button>
-      </CardFooter>
-    </Card>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-zinc-400">
+          {property.status === 'rented' ? 'Next payment in 12 days' : 'Ready for occupancy'}
+        </div>
+        <button 
+          onClick={() => onViewDetails?.(property)}
+          className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+        >
+          View details <FontAwesomeIcon icon={faChevronRight} className="w-2" />
+        </button>
+      </div>
+    </div>
   );
 }
