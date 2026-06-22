@@ -162,6 +162,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const [maintenancePage, setMaintenancePage] = useState(1);
   const [paymentPage, setPaymentPage] = useState(1);
   const [tenantSearch, setTenantSearch] = useState('');
+  const [tenantFilter, setTenantFilter] = useState<'All' | 'Active' | 'Invited' | 'Overdue'>('All');
   const [tenantPage, setTenantPage] = useState(1);
   const [selectedTenantEmails, setSelectedTenantEmails] = useState<string[]>([]);
   const PROPERTIES_PER_PAGE = 12;
@@ -1246,12 +1247,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     const list: any[] = [];
     invitations.forEach(inv => {
       const assigned = properties.filter(p => p.tenantId?.toLowerCase() === inv.email.toLowerCase()).map(p => ({ id: p.id, title: p.title, unitNumber: p.unitNumber }));
-      list.push({ email: inv.email, displayName: inv.displayName || '', phone: inv.phone || '', status: assigned.length > 0 ? 'active' : 'invited', assignedProperties: assigned });
+      const hasOverdue = payments.some(p => p.status === 'overdue' && assigned.some(prop => prop.id === p.propertyId));
+      list.push({ email: inv.email, displayName: inv.displayName || '', phone: inv.phone || '', status: hasOverdue ? 'overdue' : assigned.length > 0 ? 'active' : 'invited', assignedProperties: assigned });
     });
     return list;
   })();
 
   const filteredTenants = tenantList.filter(t => {
+    if (tenantFilter !== 'All' && t.status.toLowerCase() !== tenantFilter.toLowerCase()) return false;
     const search = tenantSearch.toLowerCase();
     return (
       t.displayName.toLowerCase().includes(search) ||
@@ -1269,82 +1272,79 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   );
 
   return (
-    <div className="db min-h-screen pb-24 animate-in fade-in duration-700">
-      <div className="hero">
-        <div className="hero-meta">
-          <span className="lvl-badge">Asset Portfolio</span>
-          <div className="status-dot">
-            <span className="status-pulse"></span>
-            Owner Verified
-          </div>
-        </div>
-        <div className="hero-row">
-          <div>
-            <h1 className="hero-title">Command Center</h1>
-            <div className="flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-zinc-400 mt-2 font-bold">
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                <span>{profile.phone || 'No phone set'}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faEnvelope} className="h-3 w-3" />
-                <span>{profile.email}</span>
-              </div>
-              <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900" onClick={() => setIsProfileOpen(true)}>
-                Secure Profile
-              </Button>
+    <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
+      <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
+        <div>
+          <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
+          <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight capitalize">
+            {activeTab === 'dashboard' || !activeTab ? 'Overview' : 
+             activeTab === 'properties' ? 'Units' : 
+             activeTab === 'finances' ? 'Finance' : 
+             activeTab === 'maintenance' ? 'Repairs' : 
+             activeTab === 'automations' ? 'Notifications' : 
+             activeTab}
+          </h1>
+          {activeTab === 'tenants' && (
+            <div className="text-zinc-500 font-medium text-sm mt-1">
+              {tenantList.filter(t => t.status === 'active').length} active · {tenantList.filter(t => t.status === 'invited').length} invited · {properties.filter(p => p.status === 'available').length} vacant units
             </div>
-          </div>
-          <div className="hero-actions flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                  Create New
-                </button>
-              } />
-              <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
-                <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">New Asset</div>
-                    <div className="text-[10px] text-zinc-500">List a single property</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Bulk Add Units</div>
-                    <div className="text-[10px] text-zinc-500">Create multiple units</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-100 mx-2" />
-                <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Add Tenant</div>
-                    <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Add Building</div>
-                    <div className="text-[10px] text-zinc-500">Group your units</div>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          )}
+          {activeTab === 'properties' && (
+            <div className="text-zinc-500 font-medium text-sm mt-1">
+              {properties.length} total units · {properties.filter(p => p.status === 'available').length} vacant
+            </div>
+          )}
         </div>
+        
+        {activeTab !== 'tenants' && activeTab !== 'settings' && (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={
+              <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
+                <span className="hidden sm:inline">Create New</span>
+              </button>
+            } />
+            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+              <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">New Asset</div>
+                  <div className="text-[10px] text-zinc-500">List a single property</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Bulk Add Units</div>
+                  <div className="text-[10px] text-zinc-500">Create multiple units</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800 mx-2" />
+              <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Add Tenant</div>
+                  <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-xs text-zinc-900 dark:text-white">Add Building</div>
+                  <div className="text-[10px] text-zinc-500">Group your units</div>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <div className="px-6 mt-6">
@@ -1494,35 +1494,75 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'properties' && (
-          <div className="mt-4 space-y-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <h3 className="text-xl font-black text-zinc-900">Portfolio Index</h3>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                <div className="relative">
-                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                  <Input placeholder="Search property or unit..." className="h-8 pl-8 text-[10px] font-bold rounded-lg border-zinc-200" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Building:</span>
-                  <select className="btn-ghost py-1 h-8 text-[10px] font-black uppercase tracking-widest max-w-[150px] truncate" value={buildingFilter} onChange={(e) => { setBuildingFilter(e.target.value); setPropertyPage(1); }}>
-                    <option value="all">All Buildings</option>
-                    {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    <option value="standalone">Standalone Assets</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Status Index:</span>
-                  <select className="btn-ghost py-1 h-8 text-[10px] font-black uppercase tracking-widest" value={propertyStatusFilter} onChange={(e) => { setPropertyStatusFilter(e.target.value); setPropertyPage(1); }}>
-                    <option value="all">Global view</option>
-                    <option value="available">Available</option>
-                    <option value="rented">Rented</option>
-                    <option value="booked">Booked</option>
-                  </select>
-                </div>
+          <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 px-6">
+            {/* Header section */}
+            <div>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Units</h2>
+              <div className="text-sm text-zinc-500">
+                {buildings.length} property · {properties.length} unit(s) · {properties.length > 0 ? Math.round((properties.filter(p => p.status === 'rented').length / properties.length) * 100) : 0}% occupied
               </div>
             </div>
+
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Rented</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{properties.filter(p => p.status === 'rented').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Vacant</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{properties.filter(p => p.status === 'available').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Monthly</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">
+                  {(() => {
+                    const inc = properties.filter(p => p.status === 'rented').reduce((acc, p) => acc + p.price, 0);
+                    return inc >= 1000 ? `${Math.floor(inc/1000)}k` : inc;
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Search and Add Button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <Input placeholder="Search units" className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
+              </div>
+              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shrink-0 font-bold shadow-sm">
+                <FontAwesomeIcon icon={faPlus} className="mr-2" />
+                {properties.length === 0 ? 'Add property' : 'Add unit'}
+              </Button>
+            </div>
+
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => (
+                <button 
+                  key={f}
+                  onClick={() => {
+                     if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
+                     else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
+                     else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
+                     else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
+                     setPropertyPage(1);
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                    (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
+                    (f === 'Rented' && propertyStatusFilter === 'rented') ||
+                    (f === 'Vacant' && propertyStatusFilter === 'available') ||
+                    (buildings.find(b => b.id === buildingFilter)?.name === f)
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
+                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
             
-            <div className="space-y-6">
+            <div className="space-y-8">
               {(() => {
                 const groupedMap = new Map<string, any[]>();
                 buildings.forEach(b => groupedMap.set(b.id, []));
@@ -1536,31 +1576,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                   const bName = bId === 'standalone' ? 'Standalone Assets' : buildings.find(b => b.id === bId)?.name || 'Unknown Building';
                   if (bId === 'standalone' && props.length === 0) return null;
                   if (props.length === 0 && propertySearch && !bName.toLowerCase().includes(propertySearch.toLowerCase())) return null;
+                  if (props.length === 0) return null;
 
                   return (
-                    <details key={bId} className="group border border-zinc-200 dark:border-zinc-800 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm" open>
-                      <summary className="flex items-center justify-between p-4 cursor-pointer select-none font-black text-sm uppercase tracking-widest text-zinc-800 dark:text-zinc-200 list-none [&::-webkit-details-marker]:hidden border-b border-transparent group-open:border-zinc-100 dark:group-open:border-zinc-800 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <FontAwesomeIcon icon={faBuilding} className="text-zinc-400" />
-                          {bName} <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 px-2 py-0.5 rounded-full text-[9px]">{props.length}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          {bId !== 'standalone' && (
-                            <div className="flex items-center gap-2" onClick={e => e.preventDefault()}>
-                              <button onClick={() => { setEditBuildingForm({ id: bId, name: bName, address: buildings.find(b => b.id === bId)?.address || '' }); setIsEditBuildingOpen(true); }} className="text-zinc-400 hover:text-blue-500 transition-colors p-1" title="Edit Asset">
-                                <FontAwesomeIcon icon={faEdit} className="h-3 w-3" />
-                              </button>
-                              <button onClick={() => handleDeleteBuilding(bId)} className="text-zinc-400 hover:text-rose-500 transition-colors p-1" title="Delete Asset">
-                                <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
-                              </button>
-                            </div>
-                          )}
-                          <FontAwesomeIcon icon={faChevronDown} className="h-3 w-3 text-zinc-400 group-open:rotate-180 transition-transform" />
-                        </div>
-                      </summary>
-                      {props.length > 0 ? (
-                        <div className="p-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 bg-zinc-50/50 dark:bg-zinc-950/50 rounded-b-2xl">
-                          {props.map(property => (
+                    <div key={bId} className="space-y-3">
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-bold text-zinc-500 px-1">
+                        <div>{bName}</div>
+                        <div>{props.length} unit{props.length !== 1 ? 's' : ''}</div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {props.map(property => {
+                          const tenant = tenantList.find(t => t.assignedProperties?.some((ap: any) => ap.id === property.id));
+                          return (
                             <PropertyCard 
                               key={property.id} 
                               property={property} 
@@ -1572,15 +1599,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                                 setIsManageAccessOpen(true);
                               }}
                               buildingName={bName !== 'Standalone Assets' ? bName : undefined}
+                              tenantName={tenant?.displayName}
                             />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 sm:p-8 text-center text-zinc-500 bg-zinc-50/50 dark:bg-zinc-950/50 rounded-b-2xl">
-                          <p className="text-sm font-semibold">No units found in this asset.</p>
-                        </div>
-                      )}
-                    </details>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 });
               })()}
@@ -1925,130 +1949,123 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'tenants' && (
-          <div className="mt-4">
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-              <CardHeader className="p-4 sm:p-5 border-b border-zinc-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-base font-black">Tenant Node Registry</CardTitle>
-                  <CardDescription className="text-zinc-500 text-xs font-medium">Registry of all invited or active portfolio tenants.</CardDescription>
-                </div>
-                <div className="flex items-center gap-3 w-full sm:max-w-md shrink-0 justify-end">
-                  <div className="relative w-full sm:max-w-xs">
-                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                    <Input 
-                      placeholder="Search tenants..." 
-                      className="h-8 pl-8 text-[10px] font-bold rounded-lg border-zinc-200" 
-                      value={tenantSearch} 
-                      onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} 
-                    />
-                  </div>
-                  <button className="btn-primary text-xs shrink-0" onClick={() => setIsCreateTenantOpen(true)}>
-                    <FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Invite
-                  </button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {selectedTenantEmails.length > 0 && (
-                  <div className="flex items-center gap-4 bg-zinc-100 dark:bg-zinc-800 p-4 rounded-xl mx-4 mt-4 mb-4">
-                    <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">{selectedTenantEmails.length} selected</span>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={handleBulkExportTenants} className="h-8 text-[10px] font-black uppercase tracking-widest">Export</Button>
-                      <Button size="sm" variant="outline" onClick={handleBulkDeleteTenants} className="h-8 text-[10px] font-black uppercase tracking-widest text-rose-600 border-rose-200">Delete</Button>
-                    </div>
-                  </div>
-                )}
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 border-none">
-                      <TableHead className="w-12 px-4"><Checkbox checked={paginatedTenants.length > 0 && selectedTenantEmails.length === paginatedTenants.length} onCheckedChange={toggleAllTenants} /></TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Entity</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Unit</TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedTenants.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4}>
-                          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-                            <div className="h-16 w-16 rounded-[1.5rem] bg-purple-50 flex items-center justify-center">
-                              <FontAwesomeIcon icon={faUsers} className="h-8 w-8 text-purple-400" />
-                            </div>
-                            <div className="space-y-1">
-                              <h3 className="text-base font-black text-zinc-900">No tenants yet</h3>
-                              <p className="text-xs font-medium text-zinc-500 max-w-xs mx-auto">
-                                Invite tenants via email. Once they sign up, assign them to units to start collecting rent.
-                              </p>
-                            </div>
-                            <button className="btn-primary text-[10px] mt-2" onClick={() => setIsCreateTenantOpen(true)}>
-                              <FontAwesomeIcon icon={faUsers} className="mr-2 h-3.5 w-3.5" /> Invite Tenant
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {paginatedTenants.map((tenant) => (
-                      <TableRow key={tenant.email} className={`border-zinc-50 dark:border-zinc-800 group ${selectedTenantEmails.includes(tenant.email) ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}>
-                        <TableCell className="px-4"><Checkbox checked={selectedTenantEmails.includes(tenant.email)} onCheckedChange={() => toggleTenantSelection(tenant.email)} /></TableCell>
-                        <TableCell className="px-4 py-3"><div className="font-bold text-sm">{tenant.displayName}</div><div className="text-[10px] text-zinc-400">{tenant.email}</div></TableCell>
-                        <TableCell>{tenant.assignedProperties.map((p: any) => <Badge key={p.id} className="bg-blue-500/10 text-blue-600 border-none text-[8px]">{p.title}</Badge>)}</TableCell>
-                        <TableCell className="px-4 py-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faEllipsisV} /></Button>} />
-                            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}><FontAwesomeIcon icon={faPlus} className="mr-3 text-blue-500" /> Assign Asset</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleUnassignTenant(tenant.email)}><FontAwesomeIcon icon={faMinus} className="mr-3 text-amber-500" /> Unassign Asset</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" onClick={() => handleDeleteTenant(tenant.email)}><FontAwesomeIcon icon={faTrash} className="mr-3 text-rose-500" /> Purge</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <div className="px-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* 3 Metric Tiles */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Active</span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'active').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Invited</span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'invited').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Overdue</span>
+                <span className="text-xl font-black text-rose-500 dark:text-rose-400">{tenantList.filter(t => t.status === 'overdue').length}</span>
+              </div>
+            </div>
 
-                {totalTenantPages > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-2">
-                      Page {tenantPage} of {totalTenantPages}
-                    </span>
-                    <div className="flex items-center gap-2 pr-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={tenantPage === 1}
-                        onClick={() => setTenantPage(p => p - 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {[...Array(totalTenantPages)].map((_, i) => (
-                          <Button
-                            key={i}
-                            variant={tenantPage === i + 1 ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setTenantPage(i + 1)}
-                            className={`h-8 w-8 rounded-lg font-black text-[9px] ${tenantPage === i + 1 ? 'bg-zinc-950 text-white' : 'text-zinc-500'}`}
-                          >
-                            {i + 1}
-                          </Button>
-                        ))}
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={tenantPage === totalTenantPages}
-                        onClick={() => setTenantPage(p => p + 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
-                      </Button>
-                    </div>
+            {/* Search + Invite + Filters */}
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                  <Input 
+                    placeholder="Search tenants" 
+                    className="h-10 pl-8 bg-transparent border-zinc-200 dark:border-zinc-700 rounded-xl text-sm font-medium" 
+                    value={tenantSearch} 
+                    onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} 
+                  />
+                </div>
+                <Button className="h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 font-bold px-4" onClick={() => setIsCreateTenantOpen(true)}>
+                  <FontAwesomeIcon icon={faPlus} className="mr-2" /> Invite
+                </Button>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {['All', 'Active', 'Invited', 'Overdue'].map(f => (
+                  <button 
+                    key={f}
+                    onClick={() => { setTenantFilter(f as any); setTenantPage(1); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${
+                      tenantFilter === f 
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 border-transparent' 
+                        : 'bg-transparent text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tenant Cards */}
+            <div className="flex flex-col gap-3">
+              {paginatedTenants.length === 0 ? (
+                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
+                  <div className="h-10 w-10 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faUsers} className="h-6 w-6 text-zinc-400" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <p className="text-zinc-500 text-sm font-medium">No {tenantFilter !== 'All' ? tenantFilter.toLowerCase() : 'invited'} tenants yet. Tap <span className="font-bold text-zinc-900 dark:text-white">Invite</span> to add one.</p>
+                </div>
+              ) : (
+                paginatedTenants.map((tenant) => (
+                  <div key={tenant.email} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/50 rounded-2xl p-4 flex items-center gap-4 shadow-sm relative group overflow-hidden">
+                    <div className="h-10 w-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800/30">
+                      <span className="font-black text-sm">{tenant.displayName.charAt(0).toUpperCase() || 'U'}</span>
+                    </div>
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{tenant.displayName || 'No Name'}</span>
+                        {tenant.status === 'active' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Active</Badge>}
+                        {tenant.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
+                        {tenant.status === 'invited' && <Badge className="bg-zinc-50 text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Invited</Badge>}
+                      </div>
+                      <div className="text-xs text-zinc-500 truncate mb-1.5">{tenant.email}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {tenant.assignedProperties.length > 0 ? tenant.assignedProperties.map((p: any) => (
+                          <div key={p.id} className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-md px-2 py-1 border border-zinc-200 dark:border-zinc-700">
+                            <FontAwesomeIcon icon={faBuilding} className="h-2.5 w-2.5 text-zinc-400" />
+                            <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{buildings.find(b => b.id === properties.find(prop => prop.id === p.id)?.buildingId)?.name || 'Standalone Asset'} · {p.unitNumber || 'Unit'}</span>
+                          </div>
+                        )) : (
+                          <span className="text-[10px] font-medium text-zinc-400 italic">No assigned units</span>
+                        )}
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+                          <FontAwesomeIcon icon={faEllipsisV} />
+                        </button>
+                      } />
+                      <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}>
+                          <FontAwesomeIcon icon={faPlus} className="mr-2 text-indigo-500 w-4 text-center" /> Assign Asset
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => handleUnassignTenant(tenant.email)}>
+                          <FontAwesomeIcon icon={faMinus} className="mr-2 text-amber-500 w-4 text-center" /> Unassign Asset
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => handleDeleteTenant(tenant.email)}>
+                          <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Tenant
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Pagination */}
+            {totalTenantPages > 1 && (
+              <div className="flex items-center justify-between mt-6 px-2">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Page {tenantPage} of {totalTenantPages}</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setTenantPage(p => Math.max(1, p - 1))} disabled={tenantPage === 1} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setTenantPage(p => Math.min(totalTenantPages, p + 1))} disabled={tenantPage === totalTenantPages} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" /></Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2787,32 +2804,78 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   );
 }
 
-function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string }) {
+function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName, tenantName, onViewDetails }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string, tenantName?: string, onViewDetails?: (p: Property) => void }) {
   return (
-    <Card className="overflow-hidden border-none shadow-sm dark:bg-zinc-900/50 cursor-pointer transition-all hover:shadow-xl hover:-translate-y-1 group rounded-2xl">
-      <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
-        <img src={property.images[0] || `https://picsum.photos/seed/${property.id}/800/600`} alt={property.title} className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110" referrerPolicy="no-referrer" />
-        <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
-          <Badge className={`shadow-lg border-none px-2 py-0.5 font-black text-[8px] uppercase tracking-widest ${property.status === 'available' ? 'bg-emerald-500 text-white' : property.status === 'rented' ? 'bg-blue-500 text-white' : 'bg-amber-500 text-white'}`}>{property.status}</Badge>
-          {buildingName && <Badge className="bg-zinc-950/80 text-white border-none px-2 py-0.5 font-black text-[7px] uppercase tracking-widest backdrop-blur-sm">{buildingName}</Badge>}
+    <div className="bg-[#1e1e1e] dark:bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-4 text-zinc-100 transition-all hover:border-zinc-700">
+      {/* Header Row */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <h3 className="text-base font-bold text-white">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              property.status === 'rented' ? 'bg-green-900/30 text-green-500' :
+              property.status === 'available' ? 'bg-zinc-800 text-zinc-400' :
+              'bg-amber-900/30 text-amber-500'
+            }`}>
+              {property.status === 'available' ? 'Vacant' : property.status.charAt(0).toUpperCase() + property.status.slice(1)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+            <FontAwesomeIcon icon={faBuilding} className="w-3" />
+            <span>{property.location}</span>
+          </div>
+        </div>
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger render={
+            <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+              <FontAwesomeIcon icon={faEllipsisV} />
+            </button>
+          } />
+          <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-zinc-800 bg-zinc-900 shadow-xl">
+            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800" onClick={() => onEdit(property)}>
+              <FontAwesomeIcon icon={faEdit} className="mr-2 text-zinc-400 w-4 text-center" /> Edit Unit
+            </DropdownMenuItem>
+            {profile.uid === property.landlordId && (
+              <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-blue-400 hover:bg-blue-900/20" onClick={() => onManageAccess(property)}>
+                <FontAwesomeIcon icon={faUsers} className="mr-2 text-blue-400 w-4 text-center" /> Manage Tenant
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-900/20" onClick={() => onDelete(property.id)}>
+              <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Unit
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Facts Strip */}
+      <div className="grid grid-cols-3 gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Rent</div>
+          <div className="text-sm font-bold text-white">KSh {property.price.toLocaleString()}<span className="text-[10px] text-zinc-400 font-normal">/mo</span></div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tenant</div>
+          <div className="text-sm font-bold text-white truncate">{tenantName || <span className="text-zinc-600 italic">Vacant</span>}</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Type</div>
+          <div className="text-sm font-bold text-white capitalize">{property.type}</div>
         </div>
       </div>
-      <CardHeader className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-1">
-          <Badge variant="outline" className="border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 font-bold text-[8px] uppercase">{property.type}</Badge>
-          {property.unitNumber && <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">U-{property.unitNumber}</span>}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-zinc-400">
+          {property.status === 'rented' ? 'Next payment in 12 days' : 'Ready for occupancy'}
         </div>
-        <CardTitle className="text-sm font-black text-zinc-900 dark:text-white line-clamp-1">{property.title}</CardTitle>
-        <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 font-bold mt-0.5"><FontAwesomeIcon icon={faMapMarkerAlt} className="h-2.5 w-2.5" />{property.location}</div>
-      </CardHeader>
-      <CardContent className="px-4 py-0"><p className="text-lg font-black text-zinc-900 dark:text-white tabular-nums">KSh {property.price.toLocaleString()}</p></CardContent>
-      <CardFooter className="flex gap-2 p-4 mt-2">
-        <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1.5" /> Edit</Button>
-        {profile.uid === property.landlordId && (
-          <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Access</Button>
-        )}
-        <Button variant="ghost" size="sm" className="flex-1 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1.5" /> Del</Button>
-      </CardFooter>
-    </Card>
+        <button 
+          onClick={() => onViewDetails?.(property)}
+          className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+        >
+          View details <FontAwesomeIcon icon={faChevronRight} className="w-2" />
+        </button>
+      </div>
+    </div>
   );
 }

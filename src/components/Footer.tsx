@@ -2,7 +2,7 @@ import { tenantConfig } from '../config/tenant';
 
 export default function Footer() {
   return (
-    <footer className="py-16 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900">
+    <footer className="hidden sm:block py-16 bg-white dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900">
       <div className="container mx-auto px-4 text-center">
         <div className="flex items-center justify-center gap-3 mb-6 group cursor-pointer">
           <div className="flex h-10 w-10 items-center justify-center transition-transform hover:scale-110 active:scale-95 group cursor-pointer">
