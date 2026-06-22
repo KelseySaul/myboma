@@ -1586,7 +1586,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {props.map(property => {
-                          const tenant = tenants.find(t => t.assignedProperties?.some((ap: any) => ap.id === property.id));
+                          const tenant = tenantList.find(t => t.assignedProperties?.some((ap: any) => ap.id === property.id));
                           return (
                             <PropertyCard 
                               key={property.id} 
