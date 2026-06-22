@@ -258,17 +258,30 @@ body {
 }
 
 /* ---------- Top Navigation Bar ---------- */
-.topbar {
-  font-family: 'DM Sans', sans-serif;
-  background: #ffffff;
-  border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
-  box-sizing: border-box;
-  padding: var(--sat) max(16px, var(--sal)) 0 max(16px, var(--sar));
-  height: var(--topbar-height);
-  min-height: var(--topbar-height);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+@media (min-width: 640px) {
+  .topbar {
+    font-family: 'DM Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    padding: var(--sat) max(16px, var(--sal)) 0 max(16px, var(--sar));
+    height: var(--topbar-height);
+    min-height: var(--topbar-height);
+  }
+}
+
+@media (min-width: 640px) {
+  .topbar {
+    background: #ffffff;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    padding: var(--sat) max(16px, var(--sal)) 0 max(16px, var(--sar));
+    height: var(--topbar-height);
+    min-height: var(--topbar-height);
+  }
 }
 
 /* Navbar sits below impersonation banner — banner already clears the notch */
@@ -288,8 +301,16 @@ body {
   padding-top: var(--app-header-offset-impersonating);
 }
 
+@media (max-width: 639px) {
+  .app-shell {
+    padding-top: calc(var(--sat) + 8px);
+  }
+  .app-shell-impersonating {
+    padding-top: calc(var(--sat) + 8px + var(--impersonation-inner));
+  }
+}
+
 .brand {
-  display: flex;
   align-items: center;
   gap: 10px;
 }
