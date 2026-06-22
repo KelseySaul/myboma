@@ -36,6 +36,8 @@ import {
   type BillingPeriod,
 } from '../lib/landlordSubscription';
 import {joinWaitlist, unsubscribeFromWaitlist} from '../lib/waitlist';
+import { Capacitor } from '@capacitor/core';
+import { tenantConfig } from '../config/tenant';
 
 // Move PWA prompt to module level so it persists across renders
 let _pwaPromptEvent: any = null;
@@ -46,7 +48,9 @@ interface LandingPageProps {
 }
 
 export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPageProps) {
+  const isNative = Capacitor.isNativePlatform();
   const [propertyFilter, setPropertyFilter] = useState('all');
+  const [mobileSearchTerm, setMobileSearchTerm] = useState('');
   const [pwaPrompt, setPwaPrompt] = useState<any>(null);
   const [pwaVisible, setPwaVisible] = useState(false);
   const pwaTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,7 +82,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     setPwaVisible(false);
     setPwaPrompt(null);
     if (outcome === 'accepted') {
-      toast.success('MyBoma is installing on your device.');
+      toast.success(`${tenantConfig.appName} is installing on your device.`);
     }
   };
 
@@ -88,7 +92,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       ('standalone' in window.navigator && Boolean((window.navigator as Navigator & {standalone?: boolean}).standalone));
 
     if (isStandalone) {
-      toast.info('MyBoma is already installed on this device.');
+      toast.info(`${tenantConfig.appName} is already installed on this device.`);
       return;
     }
 
@@ -98,7 +102,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     }
 
     toast.info(
-      "Install MyBoma from your browser menu. On iPhone, tap Share then 'Add to Home Screen'. On Android or desktop, choose 'Install App' or 'Add to Home Screen'.",
+      `Install ${tenantConfig.appName} from your browser menu. On iPhone, tap Share then 'Add to Home Screen'. On Android or desktop, choose 'Install App' or 'Add to Home Screen'.`,
       {duration: 7000},
     );
   };
@@ -145,7 +149,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     url.searchParams.delete('unsubscribe');
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
     void unsubscribeFromWaitlist({token: unsubscribeToken})
-      .then(() => toast.success('You have been unsubscribed from MyBoma emails.'))
+      .then(() => toast.success(`You have been unsubscribed from ${tenantConfig.appName} emails.`))
       .catch((error: Error) => toast.error(error.message));
   }, []);
 
@@ -182,7 +186,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       await joinWaitlist(waitlistEmail.trim().toLowerCase());
       setWaitlistJoined(true);
       setWaitlistEmail('');
-      toast.success('You are on the MyBoma waitlist.');
+      toast.success(`You are on the ${tenantConfig.appName} waitlist.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not join the waitlist.');
     } finally {
@@ -196,7 +200,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     try {
       await unsubscribeFromWaitlist({email: unsubscribeEmail.trim().toLowerCase()});
       setUnsubscribeEmail('');
-      toast.success('You have been unsubscribed from MyBoma emails.');
+      toast.success(`You have been unsubscribed from ${tenantConfig.appName} emails.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not process your unsubscribe request.');
     } finally {
@@ -354,60 +358,65 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   return (
     <div className="flex flex-col min-h-screen bg-white transition-colors duration-300 selection:bg-indigo-100 overflow-x-hidden">
       {/* Sleek Premium Welcome Hero */}
-      <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
-        {/* Advanced Glassmorphism Overlay */}
-        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
-        
-        {/* Animated Mesh Gradient Blobs */}
-        <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+      {!isNative && (
+        <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
+          {/* Advanced Glassmorphism Overlay */}
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
+          
+          {/* Animated Mesh Gradient Blobs */}
+          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
+          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
 
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
-            <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
-              Property management, simplified
-            </p>
-            <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-              One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
-            </h1>
-            <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
-              Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
-            </p>
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
+              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
+                Property management, simplified
+              </p>
+              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+                One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
+              </h1>
+              <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
+                Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
+              </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <a
-                  href="/myboma.apk"
-                  download="myboma.apk"
-                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href={tenantConfig.appLinks.android}
+                    download="app.apk"
+                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
+                    Download APK
+                  </a>
+                  <a
+                    href={tenantConfig.appLinks.ios}
+                    download="app.ipa"
+                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
+                  >
+                    <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
+                    Download iOS App
+                  </a>
+                </div>
+                <button
+                  onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
+                  className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
                 >
-                  <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
-                  Download APK
-                </a>
-                <a
-                  href="/myboma.ipa"
-                  download="myboma.ipa"
-                  className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-                >
-                  <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
-                  Download iOS App
-                </a>
+                  <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
+                  Explore Features
+                </button>
               </div>
-              <button
-                onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
-                className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-              >
-                <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
-                Explore Features
-              </button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* ── NATIVE MOBILE HERO ───────────────────────────────────── */}
+      {/* Removed per white labeling restructuring. The properties grid is now the absolute top element. */}
 
       {/* Immediate Property Discovery Grid */}
-      <section className="container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1">
+      <section className={isNative ? "container mx-auto px-2 sm:px-4 py-4 pt-safe" : "container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1"}>
         <HunterDashboard
           profile={null}
           onLoginRequired={() => setIsAuthOpen(true)}
@@ -417,8 +426,10 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         />
       </section>
 
-      {/* Social Proof Section */}
-      <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
+      {!isNative && (
+        <>
+          {/* Social Proof Section */}
+          <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
         <div className="container mx-auto px-4">
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 md:gap-20">
              <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
@@ -525,7 +536,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_0.9fr] md:items-center">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">Early access</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Be first to know when MyBoma opens.</h2>
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Be first to know when {tenantConfig.appName} opens.</h2>
             <p className="mt-4 max-w-xl text-sm font-medium leading-6 text-zinc-300 sm:text-base">
               Join the waitlist for launch updates and important product news. No clutter. Unsubscribe in one step whenever you want.
             </p>
@@ -533,7 +544,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:p-6">
             {waitlistJoined ? (
               <div className="rounded-2xl bg-emerald-400/10 p-4 text-sm font-bold text-emerald-200">
-                You are on the list. Watch your inbox for MyBoma updates.
+                You are on the list. Watch your inbox for {tenantConfig.appName} updates.
               </div>
             ) : (
               <form className="space-y-3" onSubmit={handleWaitlistSubmit}>
@@ -582,14 +593,16 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </div>
       </section>
 
-      <LandlordPricingSection
-        onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
-          setLandlordSignup((prev) => ({ ...prev, tier, billing }));
-          setSelectedRole('landlord');
-          setAuthMode('signup');
-          setIsAuthOpen(true);
-        }}
-      />
+          <LandlordPricingSection
+            onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
+              setLandlordSignup((prev) => ({ ...prev, tier, billing }));
+              setSelectedRole('landlord');
+              setAuthMode('signup');
+              setIsAuthOpen(true);
+            }}
+          />
+        </>
+      )}
 
       {/* Auth Modal */}
       {isAuthOpen && (
@@ -597,10 +610,10 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
           <DialogContent className={`${selectedRole === 'landlord' && authMode === 'signup' ? 'sm:max-w-[480px]' : 'sm:max-w-[400px]'} w-[calc(100vw-2rem)] rounded-[2rem] p-0 border-none shadow-2xl max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem))] flex flex-col overflow-hidden mt-[var(--sat)]`}>
             <div className="bg-gradient-to-br from-zinc-900 to-black p-6 text-center text-white relative shrink-0">
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center transition-transform hover:rotate-12">
-                <img src="/bomalog.webp" alt="myboma" className="h-10 w-10 object-contain rounded-xl bg-white p-1" width="40" height="40" />
+                <img src={tenantConfig.logoUrl} alt={tenantConfig.appName} className="h-10 w-10 object-contain rounded-xl bg-white p-1" width="40" height="40" />
               </div>
               <DialogTitle className="text-2xl font-black">
-                {authMode === 'login' ? 'Welcome Home' : 'Join myboma'}
+                {authMode === 'login' ? 'Welcome Home' : `Join ${tenantConfig.appName}`}
               </DialogTitle>
               <DialogDescription className="text-zinc-500 mt-1 text-xs font-bold uppercase tracking-widest">
                 {authMode === 'login' 

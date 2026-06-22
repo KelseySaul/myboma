@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { UserProfile } from '../App';
 import { createPesapalRentCheckout, createStripeRentCheckout, initiateMpesaRentPayment } from '../lib/api';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import {
   matchesTenant,
   normalizeRentPayment,
@@ -342,24 +344,32 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       if (method === 'pesapal') {
         const { checkoutUrl } = await createPesapalRentCheckout({
           rentPaymentId: paymentId,
-          successUrl: `${window.location.origin}/?rent_payment=success&provider=pesapal`,
-          cancelUrl: `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
+          successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=success&provider=pesapal` : `${window.location.origin}/?rent_payment=success&provider=pesapal`,
+          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=cancelled&provider=pesapal` : `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
         });
 
         if (!checkoutUrl) throw new Error('Pesapal did not return a checkout URL.');
-        window.location.assign(checkoutUrl);
+        if (Capacitor.isNativePlatform()) {
+          await Browser.open({ url: checkoutUrl });
+        } else {
+          window.location.assign(checkoutUrl);
+        }
         return;
       }
 
       if (method === 'stripe') {
         const { checkoutUrl } = await createStripeRentCheckout({
           rentPaymentId: paymentId,
-          successUrl: `${window.location.origin}/?rent_payment=success`,
-          cancelUrl: `${window.location.origin}/?rent_payment=cancelled`,
+          successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=success` : `${window.location.origin}/?rent_payment=success`,
+          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=cancelled` : `${window.location.origin}/?rent_payment=cancelled`,
         });
 
         if (!checkoutUrl) throw new Error('Stripe did not return a checkout URL.');
-        window.location.assign(checkoutUrl);
+        if (Capacitor.isNativePlatform()) {
+          await Browser.open({ url: checkoutUrl });
+        } else {
+          window.location.assign(checkoutUrl);
+        }
         return;
       }
 
