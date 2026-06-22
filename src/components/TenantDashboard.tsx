@@ -660,7 +660,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
   };
 
   return (
-    <div className="db min-h-screen pb-24 sm:pb-12 animate-in fade-in duration-700">
+    <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
       <div className="hero">
         <div className="hero-row">
           <div>

@@ -1272,7 +1272,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   );
 
   return (
-    <div className="db min-h-screen pb-24 animate-in fade-in duration-700">
+    <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
       <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
         <div>
           <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
