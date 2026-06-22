@@ -1275,7 +1275,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   return (
     <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
-      <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
+      <div className="pt-2 sm:pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
         <div>
           <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
           <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight capitalize">
@@ -1756,11 +1756,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                         </div>
                       </div>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
+                        <DropdownMenuTrigger render={
                           <button className="h-8 w-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors shrink-0 ml-2">
                             <FontAwesomeIcon icon={faEllipsisV} className="h-3 w-3" />
                           </button>
-                        </DropdownMenuTrigger>
+                        } />
                         <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
                           <DropdownMenuItem onClick={() => updateRequestStatus(req.id, 'pending')} className="cursor-pointer rounded-xl p-2.5 text-xs font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800">
                             <div className="h-2 w-2 rounded-full bg-amber-500 mr-2" /> Mark Pending
