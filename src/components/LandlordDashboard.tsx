@@ -162,6 +162,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const [maintenancePage, setMaintenancePage] = useState(1);
   const [paymentPage, setPaymentPage] = useState(1);
   const [tenantSearch, setTenantSearch] = useState('');
+  const [tenantFilter, setTenantFilter] = useState<'All' | 'Active' | 'Invited' | 'Overdue'>('All');
   const [tenantPage, setTenantPage] = useState(1);
   const [selectedTenantEmails, setSelectedTenantEmails] = useState<string[]>([]);
   const PROPERTIES_PER_PAGE = 12;
@@ -1246,12 +1247,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     const list: any[] = [];
     invitations.forEach(inv => {
       const assigned = properties.filter(p => p.tenantId?.toLowerCase() === inv.email.toLowerCase()).map(p => ({ id: p.id, title: p.title, unitNumber: p.unitNumber }));
-      list.push({ email: inv.email, displayName: inv.displayName || '', phone: inv.phone || '', status: assigned.length > 0 ? 'active' : 'invited', assignedProperties: assigned });
+      const hasOverdue = payments.some(p => p.status === 'overdue' && assigned.some(prop => prop.id === p.propertyId));
+      list.push({ email: inv.email, displayName: inv.displayName || '', phone: inv.phone || '', status: hasOverdue ? 'overdue' : assigned.length > 0 ? 'active' : 'invited', assignedProperties: assigned });
     });
     return list;
   })();
 
   const filteredTenants = tenantList.filter(t => {
+    if (tenantFilter !== 'All' && t.status.toLowerCase() !== tenantFilter.toLowerCase()) return false;
     const search = tenantSearch.toLowerCase();
     return (
       t.displayName.toLowerCase().includes(search) ||
@@ -1270,82 +1273,92 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   return (
     <div className="db min-h-screen pb-24 animate-in fade-in duration-700">
-      <div className="hero">
-        <div className="hero-meta">
-          <span className="lvl-badge">Asset Portfolio</span>
-          <div className="status-dot">
-            <span className="status-pulse"></span>
-            Owner Verified
+      {activeTab === 'tenants' ? (
+        <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2">
+          <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
+          <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight">Tenants</h1>
+          <div className="text-zinc-500 font-medium text-sm mt-1">
+            {tenantList.filter(t => t.status === 'active').length} active · {tenantList.filter(t => t.status === 'invited').length} invited · {properties.filter(p => p.status === 'available').length} vacant units
           </div>
         </div>
-        <div className="hero-row">
-          <div>
-            <h1 className="hero-title">Command Center</h1>
-            <div className="flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-zinc-400 mt-2 font-bold">
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                <span>{profile.phone || 'No phone set'}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faEnvelope} className="h-3 w-3" />
-                <span>{profile.email}</span>
-              </div>
-              <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900" onClick={() => setIsProfileOpen(true)}>
-                Secure Profile
-              </Button>
+      ) : (
+        <div className="hero">
+          <div className="hero-meta">
+            <span className="lvl-badge">Asset Portfolio</span>
+            <div className="status-dot">
+              <span className="status-pulse"></span>
+              Owner Verified
             </div>
           </div>
-          <div className="hero-actions flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger render={
-                <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                  Create New
-                </button>
-              } />
-              <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
-                <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">New Asset</div>
-                    <div className="text-[10px] text-zinc-500">List a single property</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Bulk Add Units</div>
-                    <div className="text-[10px] text-zinc-500">Create multiple units</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-100 mx-2" />
-                <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Add Tenant</div>
-                    <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
-                  </div>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
-                  <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs text-zinc-900">Add Building</div>
-                    <div className="text-[10px] text-zinc-500">Group your units</div>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="hero-row">
+            <div>
+              <h1 className="hero-title">Command Center</h1>
+              <div className="flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-zinc-400 mt-2 font-bold">
+                <div className="flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
+                  <span>{profile.phone || 'No phone set'}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <FontAwesomeIcon icon={faEnvelope} className="h-3 w-3" />
+                  <span>{profile.email}</span>
+                </div>
+                <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900" onClick={() => setIsProfileOpen(true)}>
+                  Secure Profile
+                </Button>
+              </div>
+            </div>
+            <div className="hero-actions flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <button className="btn-primary text-[11px] font-bold tracking-wider px-5 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                    <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
+                    Create New
+                  </button>
+                } />
+                <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 shadow-xl bg-white">
+                  <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">New Asset</div>
+                      <div className="text-[10px] text-zinc-500">List a single property</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">Bulk Add Units</div>
+                      <div className="text-[10px] text-zinc-500">Create multiple units</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-zinc-100 mx-2" />
+                  <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                    <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">Add Tenant</div>
+                      <div className="text-[10px] text-zinc-500">Invite a new tenant</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50">
+                    <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faBuilding} className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">Add Building</div>
+                      <div className="text-[10px] text-zinc-500">Group your units</div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="px-6 mt-6">
         {/* ── Dashboard Overview ─────────────────────── */}
@@ -1925,130 +1938,123 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'tenants' && (
-          <div className="mt-4">
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-              <CardHeader className="p-4 sm:p-5 border-b border-zinc-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-base font-black">Tenant Node Registry</CardTitle>
-                  <CardDescription className="text-zinc-500 text-xs font-medium">Registry of all invited or active portfolio tenants.</CardDescription>
-                </div>
-                <div className="flex items-center gap-3 w-full sm:max-w-md shrink-0 justify-end">
-                  <div className="relative w-full sm:max-w-xs">
-                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                    <Input 
-                      placeholder="Search tenants..." 
-                      className="h-8 pl-8 text-[10px] font-bold rounded-lg border-zinc-200" 
-                      value={tenantSearch} 
-                      onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} 
-                    />
-                  </div>
-                  <button className="btn-primary text-xs shrink-0" onClick={() => setIsCreateTenantOpen(true)}>
-                    <FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Invite
-                  </button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                {selectedTenantEmails.length > 0 && (
-                  <div className="flex items-center gap-4 bg-zinc-100 dark:bg-zinc-800 p-4 rounded-xl mx-4 mt-4 mb-4">
-                    <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">{selectedTenantEmails.length} selected</span>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={handleBulkExportTenants} className="h-8 text-[10px] font-black uppercase tracking-widest">Export</Button>
-                      <Button size="sm" variant="outline" onClick={handleBulkDeleteTenants} className="h-8 text-[10px] font-black uppercase tracking-widest text-rose-600 border-rose-200">Delete</Button>
-                    </div>
-                  </div>
-                )}
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 border-none">
-                      <TableHead className="w-12 px-4"><Checkbox checked={paginatedTenants.length > 0 && selectedTenantEmails.length === paginatedTenants.length} onCheckedChange={toggleAllTenants} /></TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Entity</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Unit</TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedTenants.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4}>
-                          <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-                            <div className="h-16 w-16 rounded-[1.5rem] bg-purple-50 flex items-center justify-center">
-                              <FontAwesomeIcon icon={faUsers} className="h-8 w-8 text-purple-400" />
-                            </div>
-                            <div className="space-y-1">
-                              <h3 className="text-base font-black text-zinc-900">No tenants yet</h3>
-                              <p className="text-xs font-medium text-zinc-500 max-w-xs mx-auto">
-                                Invite tenants via email. Once they sign up, assign them to units to start collecting rent.
-                              </p>
-                            </div>
-                            <button className="btn-primary text-[10px] mt-2" onClick={() => setIsCreateTenantOpen(true)}>
-                              <FontAwesomeIcon icon={faUsers} className="mr-2 h-3.5 w-3.5" /> Invite Tenant
-                            </button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {paginatedTenants.map((tenant) => (
-                      <TableRow key={tenant.email} className={`border-zinc-50 dark:border-zinc-800 group ${selectedTenantEmails.includes(tenant.email) ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}>
-                        <TableCell className="px-4"><Checkbox checked={selectedTenantEmails.includes(tenant.email)} onCheckedChange={() => toggleTenantSelection(tenant.email)} /></TableCell>
-                        <TableCell className="px-4 py-3"><div className="font-bold text-sm">{tenant.displayName}</div><div className="text-[10px] text-zinc-400">{tenant.email}</div></TableCell>
-                        <TableCell>{tenant.assignedProperties.map((p: any) => <Badge key={p.id} className="bg-blue-500/10 text-blue-600 border-none text-[8px]">{p.title}</Badge>)}</TableCell>
-                        <TableCell className="px-4 py-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faEllipsisV} /></Button>} />
-                            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}><FontAwesomeIcon icon={faPlus} className="mr-3 text-blue-500" /> Assign Asset</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20" onClick={() => handleUnassignTenant(tenant.email)}><FontAwesomeIcon icon={faMinus} className="mr-3 text-amber-500" /> Unassign Asset</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer rounded-xl px-4 py-3 text-[10px] font-black uppercase tracking-widest text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" onClick={() => handleDeleteTenant(tenant.email)}><FontAwesomeIcon icon={faTrash} className="mr-3 text-rose-500" /> Purge</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <div className="px-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* 3 Metric Tiles */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Active</span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'active').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Invited</span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'invited').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Overdue</span>
+                <span className="text-xl font-black text-rose-500 dark:text-rose-400">{tenantList.filter(t => t.status === 'overdue').length}</span>
+              </div>
+            </div>
 
-                {totalTenantPages > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-2">
-                      Page {tenantPage} of {totalTenantPages}
-                    </span>
-                    <div className="flex items-center gap-2 pr-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={tenantPage === 1}
-                        onClick={() => setTenantPage(p => p - 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {[...Array(totalTenantPages)].map((_, i) => (
-                          <Button
-                            key={i}
-                            variant={tenantPage === i + 1 ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setTenantPage(i + 1)}
-                            className={`h-8 w-8 rounded-lg font-black text-[9px] ${tenantPage === i + 1 ? 'bg-zinc-950 text-white' : 'text-zinc-500'}`}
-                          >
-                            {i + 1}
-                          </Button>
-                        ))}
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={tenantPage === totalTenantPages}
-                        onClick={() => setTenantPage(p => p + 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
-                      </Button>
-                    </div>
+            {/* Search + Invite + Filters */}
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                  <Input 
+                    placeholder="Search tenants" 
+                    className="h-10 pl-8 bg-transparent border-zinc-200 dark:border-zinc-700 rounded-xl text-sm font-medium" 
+                    value={tenantSearch} 
+                    onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} 
+                  />
+                </div>
+                <Button className="h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 font-bold px-4" onClick={() => setIsCreateTenantOpen(true)}>
+                  <FontAwesomeIcon icon={faPlus} className="mr-2" /> Invite
+                </Button>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                {['All', 'Active', 'Invited', 'Overdue'].map(f => (
+                  <button 
+                    key={f}
+                    onClick={() => { setTenantFilter(f as any); setTenantPage(1); }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${
+                      tenantFilter === f 
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 border-transparent' 
+                        : 'bg-transparent text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tenant Cards */}
+            <div className="flex flex-col gap-3">
+              {paginatedTenants.length === 0 ? (
+                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
+                  <div className="h-10 w-10 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faUsers} className="h-6 w-6 text-zinc-400" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <p className="text-zinc-500 text-sm font-medium">No {tenantFilter !== 'All' ? tenantFilter.toLowerCase() : 'invited'} tenants yet. Tap <span className="font-bold text-zinc-900 dark:text-white">Invite</span> to add one.</p>
+                </div>
+              ) : (
+                paginatedTenants.map((tenant) => (
+                  <div key={tenant.email} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/50 rounded-2xl p-4 flex items-center gap-4 shadow-sm relative group overflow-hidden">
+                    <div className="h-10 w-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800/30">
+                      <span className="font-black text-sm">{tenant.displayName.charAt(0).toUpperCase() || 'U'}</span>
+                    </div>
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{tenant.displayName || 'No Name'}</span>
+                        {tenant.status === 'active' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Active</Badge>}
+                        {tenant.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
+                        {tenant.status === 'invited' && <Badge className="bg-zinc-50 text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Invited</Badge>}
+                      </div>
+                      <div className="text-xs text-zinc-500 truncate mb-1.5">{tenant.email}</div>
+                      <div className="flex flex-wrap gap-1">
+                        {tenant.assignedProperties.length > 0 ? tenant.assignedProperties.map((p: any) => (
+                          <div key={p.id} className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-md px-2 py-1 border border-zinc-200 dark:border-zinc-700">
+                            <FontAwesomeIcon icon={faBuilding} className="h-2.5 w-2.5 text-zinc-400" />
+                            <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{buildings.find(b => b.id === properties.find(prop => prop.id === p.id)?.buildingId)?.name || 'Standalone Asset'} · {p.unitNumber || 'Unit'}</span>
+                          </div>
+                        )) : (
+                          <span className="text-[10px] font-medium text-zinc-400 italic">No assigned units</span>
+                        )}
+                      </div>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={
+                        <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+                          <FontAwesomeIcon icon={faEllipsisV} />
+                        </button>
+                      } />
+                      <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}>
+                          <FontAwesomeIcon icon={faPlus} className="mr-2 text-indigo-500 w-4 text-center" /> Assign Asset
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => handleUnassignTenant(tenant.email)}>
+                          <FontAwesomeIcon icon={faMinus} className="mr-2 text-amber-500 w-4 text-center" /> Unassign Asset
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => handleDeleteTenant(tenant.email)}>
+                          <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Tenant
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Pagination */}
+            {totalTenantPages > 1 && (
+              <div className="flex items-center justify-between mt-6 px-2">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Page {tenantPage} of {totalTenantPages}</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setTenantPage(p => Math.max(1, p - 1))} disabled={tenantPage === 1} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setTenantPage(p => Math.min(totalTenantPages, p + 1))} disabled={tenantPage === totalTenantPages} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" /></Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
