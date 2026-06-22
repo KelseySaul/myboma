@@ -302,11 +302,8 @@ body {
 }
 
 @media (max-width: 639px) {
-  .app-shell {
-    padding-top: calc(var(--sat) + 8px);
-  }
-  .app-shell-impersonating {
-    padding-top: calc(var(--sat) + 8px + var(--impersonation-inner));
+  .app-shell:not(.app-shell-impersonating) {
+    padding-top: calc(var(--sat, 0px) + 4px);
   }
 }
 
@@ -388,9 +385,15 @@ body {
 
 /* ---------- Hero / Page Header ---------- */
 .hero {
-  padding: 24px 24px 0;
+  padding: 8px 24px 0;
   background: #ffffff;
   border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .hero {
+    padding: 24px 24px 0;
+  }
 }
 
 .hero-meta {
