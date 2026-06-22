@@ -73,17 +73,23 @@ export default function HunterDashboard({
   activeTab,
   setActiveTab,
   variant = 'default',
+  externalSearchTerm,
+  onExternalSearchChange,
 }: {
   profile: UserProfile | null;
   onLoginRequired?: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   variant?: 'default' | 'embedded';
+  externalSearchTerm?: string;
+  onExternalSearchChange?: (v: string) => void;
 }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [_internalSearchTerm, _setInternalSearchTerm] = useState('');
+  const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : _internalSearchTerm;
+  const setSearchTerm = onExternalSearchChange !== undefined ? onExternalSearchChange : _setInternalSearchTerm;
   // 'dashboard' and 'all' both show all properties
   const filterType = (activeTab === 'dashboard' || activeTab === 'all' || !activeTab) ? 'all' : activeTab;
   const setFilterType = setActiveTab;

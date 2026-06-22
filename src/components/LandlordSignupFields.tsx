@@ -24,7 +24,7 @@ interface LandlordSignupFieldsProps {
 }
 
 export const defaultLandlordSignupState = (): LandlordSignupFormState => ({
-  tier: 'growth',
+  tier: 'starter',
   billing: 'monthly',
   rentPayoutMethod: 'cash',
   mpesaSettlementPhone: '',
@@ -57,7 +57,7 @@ export default function LandlordSignupFields({
             const tier = SUBSCRIPTION_TIERS[tierId];
             const tierAmount = getSubscriptionAmount(tierId, value.billing);
             const periodLabel = value.billing === 'monthly' ? 'mo' : value.billing === 'quarterly' ? '3 mos' : 'yr';
-            const isProPlus = tierId === 'pro_plus';
+            const isProPlus = tierId === 'proplus';
             const isSelected = value.tier === tierId;
 
             let stateClasses = '';

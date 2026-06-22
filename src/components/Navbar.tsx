@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { tenantConfig } from '../config/tenant';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faShieldAlt, 
@@ -124,15 +125,15 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
       {/* Brand Container with Logo */}
       <div className="brand flex items-center gap-3">
         <img 
-          src={platformBranding?.brandLogoUrl || "/bomalog.webp"} 
-          alt={platformBranding?.name || "myboma"} 
+          src={platformBranding?.brandLogoUrl || tenantConfig.logoUrl} 
+          alt={platformBranding?.name || tenantConfig.appName} 
           className="h-8 object-contain" 
           width="32" 
           height="32" 
         />
         <div>
-          <div className="brand-name">{platformBranding?.name || 'MYBOMA'}</div>
-          <div className="brand-sub">PROPERTY OS</div>
+          <div className="brand-name">{platformBranding?.name || tenantConfig.appName.toUpperCase()}</div>
+          <div className="brand-sub">{tenantConfig.companyName.toUpperCase()}</div>
         </div>
       </div>
 

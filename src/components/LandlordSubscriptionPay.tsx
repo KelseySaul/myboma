@@ -8,6 +8,9 @@ import { faCreditCard, faMobileAlt, faSpinner, faWallet } from '@fortawesome/fre
 import { startLandlordSubscriptionCheckout } from '../lib/api';
 import type { PendingLandlordSubscription } from '../lib/landlordSubscription';
 
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+
 interface LandlordSubscriptionPayProps {
   payload: PendingLandlordSubscription;
   phone?: string;
@@ -23,12 +26,16 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
       const result = await startLandlordSubscriptionCheckout({
         ...payload,
         paymentMethod: 'pesapal',
-        successUrl: `${window.location.origin}/?subscription_payment=success`,
-        cancelUrl: `${window.location.origin}/?subscription_payment=cancelled`,
+        successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?subscription_payment=success` : `${window.location.origin}/?subscription_payment=success`,
+        cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?subscription_payment=cancelled` : `${window.location.origin}/?subscription_payment=cancelled`,
       });
 
       if (result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
+        if (Capacitor.isNativePlatform()) {
+          await Browser.open({ url: result.checkoutUrl });
+        } else {
+          window.location.href = result.checkoutUrl;
+        }
         return;
       }
       onSuccess?.();

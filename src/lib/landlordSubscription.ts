@@ -50,7 +50,7 @@ export const SUBSCRIPTION_TIERS: Record<
     tagline: 'Portfolios at scale',
     monthlyBaseKes: 10000,
     features: { maxListings: null, maintenanceHub: true, label: 'Pro Plus' },
-    highlights: ['Unlimited listings', 'Maintenance hub', 'Notifications & automations'],
+    highlights: ['Unlimited listings', 'Maintenance hub', 'Notifications & automations', 'Admin rights', 'Whitelabel customization'],
   },
 };
 
