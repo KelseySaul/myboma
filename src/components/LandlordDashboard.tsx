@@ -2801,11 +2801,11 @@ function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, bui
         </div>
       </div>
       <CardFooter className="flex gap-1.5 px-3 pb-3 pt-0 mt-0">
-        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1 sm:mr-1.5" /> Edit</Button>
+        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px]" onClick={() => onEdit(property)}><FontAwesomeIcon icon={faEdit} className="mr-1.5" /> Edit</Button>
         {profile.uid === property.landlordId && (
-          <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1 sm:mr-1.5" /> Access</Button>
+          <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold text-[10px]" onClick={() => onManageAccess(property)}><FontAwesomeIcon icon={faUsers} className="mr-1.5" /> Access</Button>
         )}
-        <Button variant="ghost" size="sm" className="flex-1 h-8 px-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 font-bold text-[10px] hover:text-rose-600" onClick={() => onDelete(property.id)}><FontAwesomeIcon icon={faTrash} className="mr-1 sm:mr-1.5" /> Del</Button>
+        <Button variant="ghost" size="sm" className="flex-none w-8 h-8 p-0 flex items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-rose-600 hover:bg-rose-50 transition-colors" onClick={() => onDelete(property.id)} title="Delete Property"><FontAwesomeIcon icon={faTrash} /></Button>
       </CardFooter>
     </Card>
   );

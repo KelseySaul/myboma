@@ -350,9 +350,19 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
         if (!checkoutUrl) throw new Error('Pesapal did not return a checkout URL.');
         if (Capacitor.isNativePlatform()) {
-          await Browser.open({ url: checkoutUrl });
+          try {
+            await Browser.open({ url: checkoutUrl, presentationStyle: 'popover' });
+          } catch (err) {
+            console.error('Browser.open failed, falling back', err);
+            // Fallback 1: system browser
+            const newWindow = window.open(checkoutUrl, '_system');
+            if (!newWindow) {
+              // Fallback 2: webview navigation
+              window.location.href = checkoutUrl;
+            }
+          }
         } else {
-          window.location.assign(checkoutUrl);
+          window.location.href = checkoutUrl;
         }
         return;
       }
