@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // Using FontAwesome instead of Lucide
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBuilding, faWallet, faChartLine, faBell, faFileExcel, faMoon, faSun, faHome, faTools, faUsers, faChevronDown, faChevronUp, faPlus, faMinus, faCheck, faTrash, faEdit, faSearch, faFilter, faDownload, faMapMarkerAlt, faPhone, faEnvelope, faUser, faUpload, faTimes, faImage, faChevronLeft, faChevronRight, faSpinner, faEllipsisV, faChartPie, faInfoCircle, faBolt, faBars, faCog, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import { faBuilding, faWallet, faChartLine, faBell, faFileExcel, faMoon, faSun, faHome, faTools, faUsers, faChevronDown, faChevronUp, faPlus, faMinus, faCheck, faTrash, faEdit, faSearch, faFilter, faDownload, faMapMarkerAlt, faPhone, faEnvelope, faUser, faUpload, faTimes, faImage, faChevronLeft, faChevronRight, faSpinner, faEllipsisV, faChartPie, faInfoCircle, faBolt, faBars, faCog, faSignOutAlt, faReceipt } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { convertToWebP } from '@/lib/image-utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -159,6 +159,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>('all');
   const [propertyPage, setPropertyPage] = useState(1);
   const [maintenanceSearch, setMaintenanceSearch] = useState('');
+  const [maintenanceFilter, setMaintenanceFilter] = useState<'All' | 'Pending' | 'In Progress' | 'Resolved'>('All');
   const [maintenancePage, setMaintenancePage] = useState(1);
   const [paymentPage, setPaymentPage] = useState(1);
   const [tenantSearch, setTenantSearch] = useState('');
@@ -504,6 +505,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   );
 
   const filteredRequests = requests.filter(req => {
+    if (maintenanceFilter !== 'All' && req.status.toLowerCase() !== maintenanceFilter.toLowerCase().replace(' ', '-')) return false;
     const prop = properties.find(p => p.id === req.propertyId);
     const search = maintenanceSearch.toLowerCase();
     return (
@@ -1273,7 +1275,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   return (
     <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
-      <div className="pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
+      <div className="pt-2 sm:pt-6 px-6 sm:px-8 mb-4 animate-in fade-in slide-in-from-bottom-2 flex justify-between items-start">
         <div>
           <div className="text-zinc-500 text-sm font-medium mb-1">Welcome back, {profile.displayName?.split(' ')[0] || 'User'}</div>
           <h1 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight capitalize">
@@ -1297,14 +1299,15 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         </div>
         
         {activeTab !== 'tenants' && activeTab !== 'settings' && (
-          <DropdownMenu>
-            <DropdownMenuTrigger render={
-              <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                <span className="hidden sm:inline">Create New</span>
-              </button>
-            } />
-            <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+          <div className="hidden sm:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger render={
+                <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                  <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
+                  <span className="hidden sm:inline">Create New</span>
+                </button>
+              } />
+              <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
               <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
                 <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
                   <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
@@ -1344,6 +1347,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         )}
       </div>
 
@@ -1495,13 +1499,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
         {activeTab === 'properties' && (
           <div className="mt-4 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500 px-6">
-            {/* Header section */}
-            <div>
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Units</h2>
-              <div className="text-sm text-zinc-500">
-                {buildings.length} property · {properties.length} unit(s) · {properties.length > 0 ? Math.round((properties.filter(p => p.status === 'rented').length / properties.length) * 100) : 0}% occupied
-              </div>
-            </div>
+            {/* Header section removed to fix duplicate titles */}
 
             {/* Metrics */}
             <div className="grid grid-cols-3 gap-3">
@@ -1685,324 +1683,386 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'maintenance' && subscriptionFeatures.maintenanceHub && (
-          <div className="mt-4">
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-              <CardHeader className="p-4 sm:p-5 border-b border-zinc-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-base font-black">Maintenance Tickets</CardTitle>
-                  <CardDescription className="font-medium text-zinc-500 text-xs">Managing technical debt across your portfolio.</CardDescription>
-                </div>
-                <div className="relative w-full sm:max-w-xs">
-                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                  <Input 
-                    placeholder="Search tickets..." 
-                    className="h-8 pl-8 text-[10px] font-bold rounded-lg border-zinc-200" 
-                    value={maintenanceSearch} 
-                    onChange={(e) => { setMaintenanceSearch(e.target.value); setMaintenancePage(1); }} 
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 border-none">
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Issue</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Severity</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Status</TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400 text-right">Update</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedRequests.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-bold text-xs uppercase tracking-widest">
-                          No maintenance tickets found
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {paginatedRequests.map((req) => (
-                      <TableRow key={req.id} className="border-zinc-50 dark:border-zinc-800">
-                        <TableCell className="px-4 py-3">
-                          <div className="font-bold text-sm text-zinc-900 dark:text-white">{req.title}</div>
-                          <div className="text-[10px] text-zinc-400 font-medium mt-0.5">{req.description}</div>
-                        </TableCell>
-                        <TableCell><Badge className={`px-2 py-0.5 font-black text-[8px] uppercase tracking-widest border-none ${req.priority === 'urgent' ? 'bg-rose-500/10 text-rose-600' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>{req.priority}</Badge></TableCell>
-                        <TableCell><Badge className="px-2 py-0.5 font-black text-[8px] uppercase tracking-widest border-none bg-blue-500/10 text-blue-600">{req.status}</Badge></TableCell>
-                        <TableCell className="px-4 py-3 text-right">
-                          <select className="btn-ghost py-1 h-8 text-[10px] font-black uppercase tracking-widest ml-auto" value={req.status} onChange={(e) => updateRequestStatus(req.id, e.target.value)}>
-                            <option value="pending">Pending</option>
-                            <option value="in-progress">Fixing</option>
-                            <option value="resolved">Clear</option>
-                          </select>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* Header section */}
+            <div>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Repairs</h2>
+              <div className="text-sm text-zinc-500">
+                {requests.length} total tickets · {requests.filter(r => r.status === 'pending').length} pending review
+              </div>
+            </div>
 
-                {totalRequestPages > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-2">
-                      Page {maintenancePage} of {totalRequestPages}
-                    </span>
-                    <div className="flex items-center gap-2 pr-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={maintenancePage === 1}
-                        onClick={() => setMaintenancePage(p => p - 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {[...Array(totalRequestPages)].map((_, i) => (
-                          <Button
-                            key={i}
-                            variant={maintenancePage === i + 1 ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setMaintenancePage(i + 1)}
-                            className={`h-8 w-8 rounded-lg font-black text-[9px] ${maintenancePage === i + 1 ? 'bg-zinc-950 text-white' : 'text-zinc-500'}`}
-                          >
-                            {i + 1}
-                          </Button>
-                        ))}
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Pending</span>
+                <span className="text-2xl font-black text-amber-500">{requests.filter(r => r.status === 'pending').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Fixing</span>
+                <span className="text-2xl font-black text-blue-500">{requests.filter(r => r.status === 'in-progress').length}</span>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Resolved</span>
+                <span className="text-2xl font-black text-emerald-500">{requests.filter(r => r.status === 'resolved').length}</span>
+              </div>
+            </div>
+
+            {/* Search and Action Button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <Input 
+                  placeholder="Search tickets..." 
+                  className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" 
+                  value={maintenanceSearch} 
+                  onChange={(e) => { setMaintenanceSearch(e.target.value); setMaintenancePage(1); }} 
+                />
+              </div>
+            </div>
+
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Pending', 'In Progress', 'Resolved'].map(f => (
+                <button 
+                  key={f}
+                  onClick={() => { setMaintenanceFilter(f as any); setMaintenancePage(1); }}
+                  className={`whitespace-nowrap px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${maintenanceFilter === f ? 'bg-zinc-900 text-white dark:bg-white dark:text-black shadow-md' : 'bg-white dark:bg-zinc-900 text-zinc-500 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'}`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            {/* Cards List */}
+            <div className="space-y-4">
+              {paginatedRequests.map((req) => {
+                const prop = properties.find(p => p.id === req.propertyId);
+                return (
+                  <div key={req.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 shadow-sm flex flex-col gap-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          req.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' :
+                          req.status === 'in-progress' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
+                        }`}>
+                          <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-black text-sm text-zinc-900 dark:text-white line-clamp-1">{req.title}</div>
+                          <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-1">
+                            {prop?.title || 'Unknown Unit'} {prop?.unitNumber ? `· ${prop.unitNumber}` : ''}
+                          </div>
+                        </div>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={maintenancePage === totalRequestPages}
-                        onClick={() => setMaintenancePage(p => p + 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={
+                          <button className="h-8 w-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center text-zinc-400 transition-colors shrink-0 ml-2">
+                            <FontAwesomeIcon icon={faEllipsisV} className="h-3 w-3" />
+                          </button>
+                        } />
+                        <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+                          <DropdownMenuItem onClick={() => updateRequestStatus(req.id, 'pending')} className="cursor-pointer rounded-xl p-2.5 text-xs font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                            <div className="h-2 w-2 rounded-full bg-amber-500 mr-2" /> Mark Pending
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateRequestStatus(req.id, 'in-progress')} className="cursor-pointer rounded-xl p-2.5 text-xs font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                            <div className="h-2 w-2 rounded-full bg-blue-500 mr-2" /> Mark In Progress
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => updateRequestStatus(req.id, 'resolved')} className="cursor-pointer rounded-xl p-2.5 text-xs font-bold hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500 mr-2" /> Mark Resolved
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3">
+                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 line-clamp-2">{req.description}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3">
+                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Priority</div>
+                        <div className={`text-xs font-black capitalize ${req.priority === 'urgent' ? 'text-rose-600' : 'text-zinc-700 dark:text-zinc-200'}`}>
+                          {req.priority}
+                        </div>
+                      </div>
+                      <div className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3">
+                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Status</div>
+                        <div className={`text-xs font-black capitalize ${
+                          req.status === 'resolved' ? 'text-emerald-600' :
+                          req.status === 'in-progress' ? 'text-blue-600' : 'text-amber-600'
+                        }`}>
+                          {req.status.replace('-', ' ')}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                );
+              })}
+
+              {paginatedRequests.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                  <div className="h-16 w-16 rounded-[2rem] bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+                    <FontAwesomeIcon icon={faCheck} className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-black text-zinc-900 dark:text-white">All caught up</h3>
+                    <p className="text-xs font-medium text-zinc-500">No maintenance tickets match your criteria.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {totalRequestPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-8 pb-8">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  disabled={maintenancePage === 1}
+                  onClick={() => setMaintenancePage(p => p - 1)}
+                  className="rounded-xl font-black uppercase tracking-widest text-[9px]"
+                >
+                  <FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev
+                </Button>
+                <div className="flex items-center gap-1">
+                  {[...Array(totalRequestPages)].map((_, i) => (
+                    <Button
+                      key={i}
+                      variant={maintenancePage === i + 1 ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setMaintenancePage(i + 1)}
+                      className={`h-8 w-8 rounded-lg font-black text-[9px] ${maintenancePage === i + 1 ? 'bg-zinc-950 text-white' : 'text-zinc-500'}`}
+                    >
+                      {i + 1}
+                    </Button>
+                  ))}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  disabled={maintenancePage === totalRequestPages}
+                  onClick={() => setMaintenancePage(p => p + 1)}
+                  className="rounded-xl font-black uppercase tracking-widest text-[9px]"
+                >
+                  Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'finances' && (
-          <div className="mt-4 space-y-4">
-            <div className="flex flex-col md:flex-row gap-4 justify-between">
-              <div className="flex flex-1 gap-4">
-                <div className="relative flex-1 max-w-sm group">
-                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                  <Input placeholder="Search ledger..." className="h-10 pl-9 rounded-xl font-bold text-xs" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
-                </div>
-                <select className="btn-ghost py-1 h-10 text-[10px] font-black uppercase tracking-widest" value={paymentStatusFilter} onChange={(e) => { setPaymentStatusFilter(e.target.value); setPaymentPage(1); }}>
-                  <option value="all">Global Status</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="overdue">Overdue</option>
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={downloadExcel} className="h-10 rounded-xl font-black text-[10px] uppercase tracking-widest border-zinc-200"><FontAwesomeIcon icon={faFileExcel} className="mr-2" /> Export</Button>
-                <Button variant="outline" onClick={() => setIsExpenseOpen(true)} className="h-10 rounded-xl font-black text-[10px] uppercase tracking-widest border-zinc-200"><FontAwesomeIcon icon={faChartPie} className="mr-2" /> Expense</Button>
+          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* Header section */}
+            <div>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Finances</h2>
+              <div className="text-sm text-zinc-500">
+                {formatStatKes(netIncome)} net performance · {payments.length} total transaction(s)
               </div>
             </div>
 
-            <div className="stats-grid !p-0">
-              <div className="stat-card cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors" onClick={() => setIsAnticipatedOpen(true)}>
-                <div className="stat-top"><span className="stat-label">Expected Rent</span><div className="stat-icon si-blue"><FontAwesomeIcon icon={faChartLine} /></div></div>
-                <div className="stat-num">{formatStatKes(anticipatedRentTotal)}</div>
-                <div className="stat-desc">Monthly projected revenue</div>
-                <div className="stat-bar bar-blue"></div>
+            {/* Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors" onClick={() => setIsAnticipatedOpen(true)}>
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Expected Rent <FontAwesomeIcon icon={faChartLine} className="text-blue-500" /></span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(anticipatedRentTotal)}</span>
               </div>
-              <div className="stat-card">
-                <div className="stat-top"><span className="stat-label">Rent Collected</span><div className="stat-icon si-teal"><FontAwesomeIcon icon={faWallet} /></div></div>
-                <div className="stat-num">{formatStatKes(paidRentTotal)}</div>
-                <div className="stat-desc">KES {paidRentTotal.toLocaleString('en-KE')} collected</div>
-                <div className="stat-bar bar-teal"></div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Collected <FontAwesomeIcon icon={faWallet} className="text-emerald-500" /></span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(paidRentTotal)}</span>
               </div>
-              <div className="stat-card">
-                <div className="stat-top"><span className="stat-label">Operating Costs</span><div className="stat-icon si-amber"><FontAwesomeIcon icon={faChartPie} /></div></div>
-                <div className="stat-num">{(expenseTotal / 1000).toFixed(1)}k</div>
-                <div className="stat-desc">Expenses recorded</div>
-                <div className="stat-bar bar-amber"></div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Operating Costs <FontAwesomeIcon icon={faChartPie} className="text-amber-500" /></span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{(expenseTotal / 1000).toFixed(1)}k</span>
               </div>
-              <div className="stat-card">
-                <div className="stat-top"><span className="stat-label">Net Performance</span><div className="stat-icon si-red"><FontAwesomeIcon icon={faChartLine} /></div></div>
-                <div className="stat-num">{(netIncome / 1000).toFixed(1)}k</div>
-                <div className="stat-desc">Receivable: {receivablesTotal.toLocaleString()}</div>
-                <div className="stat-bar bar-red"></div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Net Performance <FontAwesomeIcon icon={faChartLine} className="text-rose-500" /></span>
+                <span className="text-xl font-black text-zinc-900 dark:text-white">{(netIncome / 1000).toFixed(1)}k</span>
               </div>
             </div>
 
-            <div className="panels !p-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <OccupancyDonutChart data={{ available: availableCount, rented: rentedCount, booked: bookedCount }} />
               <RentCollectionBarChart data={{ collected: paidRentTotal, pending: pendingRentTotal, overdue: overdueRentTotal }} />
             </div>
 
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-              <CardHeader className="p-4 sm:p-5 border-b border-zinc-50 dark:border-zinc-800"><CardTitle className="text-base font-black">Ledger Transactions</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 border-none">
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Asset</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Tenant</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Due Date</TableHead>
-                      <TableHead className="py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400">Amount</TableHead>
-                      <TableHead className="px-4 py-3 font-black text-[10px] uppercase tracking-widest text-zinc-400 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedPayments.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-bold text-xs uppercase tracking-widest">
-                          {payments.length === 0
-                            ? 'No rent invoices yet — assign a tenant to a unit to auto-generate'
-                            : 'No transactions match your search or filter'}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {paginatedPayments.map((payment) => {
-                      const prop = properties.find(p => p.id === payment.propertyId);
-                      return (
-                        <TableRow key={payment.id} className="border-zinc-50 dark:border-zinc-800">
-                          <TableCell className="px-4 py-3">
-                            <div className="font-bold text-sm text-zinc-900 dark:text-white">{prop?.title || 'Unknown Asset'}</div>
-                            <div className="text-[10px] text-zinc-400 font-medium">{prop?.unitNumber ? `Unit ${prop.unitNumber}` : prop?.location}</div>
-                          </TableCell>
-                          <TableCell className="text-xs text-zinc-500">{payment.tenantId}</TableCell>
-                          <TableCell>
-                            <div className={`text-[10px] font-black uppercase tracking-widest ${payment.status === 'paid' ? 'text-emerald-500' : payment.status === 'overdue' ? 'text-rose-500' : 'text-zinc-400'}`}>
-                              {payment.status === 'paid' ? 'Completed' : payment.dueDate || 'No Date'}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm font-black tabular-nums">KES {Number(payment.amount).toLocaleString()}</TableCell>
-                          <TableCell className="px-4 py-3 text-right">
-                            {payment.status !== 'paid' ? (
-                              <div className="flex flex-col gap-1 sm:flex-row justify-end">
-                                <Button 
-                                  variant="outline"
-                                  className="h-7 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest bg-white hover:bg-zinc-100 text-zinc-600 border-zinc-200"
-                                  onClick={() => sendRentReminder(payment)}
-                                >
-                                  Remind
-                                </Button>
-                                <Button 
-                                  className="h-7 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest bg-emerald-600 hover:bg-emerald-700 text-white border-none"
-                                  onClick={() => handleMarkAsPaid(payment.id)}
-                                >
-                                  Mark Paid
-                                </Button>
-                              </div>
-                            ) : (
-                              <Badge className="bg-emerald-500/10 text-emerald-600 border-none text-[8px] font-black uppercase">Cleared</Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+            {/* Search and Action Buttons */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <Input placeholder="Search ledger..." className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
+              </div>
+              <Button variant="outline" onClick={downloadExcel} className="h-12 px-4 rounded-xl font-bold bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm shrink-0"><FontAwesomeIcon icon={faFileExcel} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Export</span><span className="hidden sm:inline">Export</span></Button>
+              <Button onClick={() => setIsExpenseOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 font-bold shadow-sm shrink-0"><FontAwesomeIcon icon={faChartPie} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Expense</span><span className="hidden sm:inline">Expense</span></Button>
+            </div>
 
-                {totalPaymentPages > 1 && (
-                  <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-2">
-                      Page {paymentPage} of {totalPaymentPages}
-                    </span>
-                    <div className="flex items-center gap-2 pr-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={paymentPage === 1}
-                        onClick={() => setPaymentPage(p => p - 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {[...Array(totalPaymentPages)].map((_, i) => (
-                          <Button
-                            key={i}
-                            variant={paymentPage === i + 1 ? 'default' : 'ghost'}
-                            size="sm"
-                            onClick={() => setPaymentPage(i + 1)}
-                            className={`h-8 w-8 rounded-lg font-black text-[9px] ${paymentPage === i + 1 ? 'bg-zinc-950 text-white' : 'text-zinc-500'}`}
-                          >
-                            {i + 1}
-                          </Button>
-                        ))}
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        disabled={paymentPage === totalPaymentPages}
-                        onClick={() => setPaymentPage(p => p + 1)}
-                        className="rounded-xl font-black uppercase tracking-widest text-[9px] h-8"
-                      >
-                        Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" />
-                      </Button>
-                    </div>
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
+                <button 
+                  key={f}
+                  onClick={() => { setPaymentStatusFilter(f.toLowerCase()); setPaymentPage(1); }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                    (f.toLowerCase() === paymentStatusFilter)
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
+                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+
+            {/* Ledger Cards */}
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Ledger Transactions</h3>
+              {paginatedPayments.length === 0 ? (
+                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
+                  <div className="h-10 w-10 flex items-center justify-center">
+                    <FontAwesomeIcon icon={faReceipt} className="h-6 w-6 text-zinc-400" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  <p className="text-zinc-500 text-sm font-medium">No {paymentStatusFilter !== 'all' ? paymentStatusFilter : ''} transactions match your criteria.</p>
+                </div>
+              ) : (
+                paginatedPayments.map((payment) => {
+                  const prop = properties.find(p => p.id === payment.propertyId);
+                  const tenant = tenantList.find(t => t.email === payment.tenantId);
+                  return (
+                    <div key={payment.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 shadow-sm group">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700">
+                            <FontAwesomeIcon icon={faReceipt} className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{prop?.title || 'Unknown Asset'}</span>
+                              {payment.status === 'paid' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Paid</Badge>}
+                              {payment.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
+                              {payment.status === 'pending' && <Badge className="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border-amber-100 dark:border-amber-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Pending</Badge>}
+                            </div>
+                            <div className="text-xs text-zinc-500 truncate">{prop?.unitNumber ? `Unit ${prop.unitNumber}` : prop?.location || 'N/A'}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-sm font-black text-zinc-900 dark:text-white tabular-nums">KES {Number(payment.amount).toLocaleString()}</div>
+                            <div className="text-[10px] font-medium text-zinc-400">{payment.dueDate || 'No Date'}</div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors -mr-2">
+                                <FontAwesomeIcon icon={faEllipsisV} />
+                              </button>
+                            } />
+                            <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+                              {payment.status !== 'paid' && (
+                                <>
+                                  <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => sendRentReminder(payment)}>
+                                    <FontAwesomeIcon icon={faBell} className="mr-2 text-zinc-400 w-4 text-center" /> Remind Tenant
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10" onClick={() => handleMarkAsPaid(payment.id)}>
+                                    <FontAwesomeIcon icon={faCheck} className="mr-2 text-emerald-500 w-4 text-center" /> Mark as Paid
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {payment.status === 'paid' && (
+                                <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => {}}>
+                                  <FontAwesomeIcon icon={faDownload} className="mr-2 text-zinc-400 w-4 text-center" /> Download Receipt
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/50 mt-1">
+                        <div>
+                          <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Tenant Name</div>
+                          <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">{tenant?.displayName || payment.tenantId || 'Unknown'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Transaction Type</div>
+                          <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">Rent Collection</div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            
+            {/* Pagination */}
+            {totalPaymentPages > 1 && (
+              <div className="flex items-center justify-between pt-4 px-2">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Page {paymentPage} of {totalPaymentPages}</span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setPaymentPage(p => Math.max(1, p - 1))} disabled={paymentPage === 1} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setPaymentPage(p => Math.min(totalPaymentPages, p + 1))} disabled={paymentPage === totalPaymentPages} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Next <FontAwesomeIcon icon={faChevronRight} className="ml-2" /></Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'tenants' && (
-          <div className="px-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* 3 Metric Tiles */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Active</span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'active').length}</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Invited</span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'invited').length}</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Overdue</span>
-                <span className="text-xl font-black text-rose-500 dark:text-rose-400">{tenantList.filter(t => t.status === 'overdue').length}</span>
+          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* Header section */}
+            <div>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Tenants</h2>
+              <div className="text-sm text-zinc-500">
+                {tenantList.length} total tenant(s) · {tenantList.length > 0 ? Math.round((tenantList.filter(t => t.status === 'active').length / tenantList.length) * 100) : 0}% active
               </div>
             </div>
 
-            {/* Search + Invite + Filters */}
-            <div className="flex flex-col gap-4 mb-4">
-              <div className="flex gap-3">
-                <div className="relative flex-1">
-                  <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                  <Input 
-                    placeholder="Search tenants" 
-                    className="h-10 pl-8 bg-transparent border-zinc-200 dark:border-zinc-700 rounded-xl text-sm font-medium" 
-                    value={tenantSearch} 
-                    onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} 
-                  />
-                </div>
-                <Button className="h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 font-bold px-4" onClick={() => setIsCreateTenantOpen(true)}>
-                  <FontAwesomeIcon icon={faPlus} className="mr-2" /> Invite
-                </Button>
+            {/* 3 Metric Tiles */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Active</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'active').length}</span>
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {['All', 'Active', 'Invited', 'Overdue'].map(f => (
-                  <button 
-                    key={f}
-                    onClick={() => { setTenantFilter(f as any); setTenantPage(1); }}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border ${
-                      tenantFilter === f 
-                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 border-transparent' 
-                        : 'bg-transparent text-zinc-500 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Invited</span>
+                <span className="text-2xl font-black text-zinc-900 dark:text-white">{tenantList.filter(t => t.status === 'invited').length}</span>
               </div>
+              <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Overdue</span>
+                <span className="text-2xl font-black text-rose-500 dark:text-rose-400">{tenantList.filter(t => t.status === 'overdue').length}</span>
+              </div>
+            </div>
+
+            {/* Search and Add Button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <Input placeholder="Search tenants" className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={tenantSearch} onChange={(e) => { setTenantSearch(e.target.value); setTenantPage(1); }} />
+              </div>
+              <Button onClick={() => setIsCreateTenantOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shrink-0 font-bold shadow-sm">
+                <FontAwesomeIcon icon={faPlus} className="mr-2" /> Invite
+              </Button>
+            </div>
+
+            {/* Filter chips */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Active', 'Invited', 'Overdue'].map(f => (
+                <button 
+                  key={f}
+                  onClick={() => { setTenantFilter(f as any); setTenantPage(1); }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                    tenantFilter === f 
+                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
+                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
             </div>
 
             {/* Tenant Cards */}
-            <div className="flex flex-col gap-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {paginatedTenants.length === 0 ? (
-                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
+                <div className="sm:col-span-2 lg:col-span-3 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
                   <div className="h-10 w-10 flex items-center justify-center">
                     <FontAwesomeIcon icon={faUsers} className="h-6 w-6 text-zinc-400" />
                   </div>
@@ -2010,47 +2070,56 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                 </div>
               ) : (
                 paginatedTenants.map((tenant) => (
-                  <div key={tenant.email} className="bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/50 rounded-2xl p-4 flex items-center gap-4 shadow-sm relative group overflow-hidden">
-                    <div className="h-10 w-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800/30">
-                      <span className="font-black text-sm">{tenant.displayName.charAt(0).toUpperCase() || 'U'}</span>
-                    </div>
-                    <div className="flex-1 min-w-0 py-0.5">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{tenant.displayName || 'No Name'}</span>
-                        {tenant.status === 'active' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Active</Badge>}
-                        {tenant.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
-                        {tenant.status === 'invited' && <Badge className="bg-zinc-50 text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Invited</Badge>}
-                      </div>
-                      <div className="text-xs text-zinc-500 truncate mb-1.5">{tenant.email}</div>
-                      <div className="flex flex-wrap gap-1">
-                        {tenant.assignedProperties.length > 0 ? tenant.assignedProperties.map((p: any) => (
-                          <div key={p.id} className="flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-md px-2 py-1 border border-zinc-200 dark:border-zinc-700">
-                            <FontAwesomeIcon icon={faBuilding} className="h-2.5 w-2.5 text-zinc-400" />
-                            <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{buildings.find(b => b.id === properties.find(prop => prop.id === p.id)?.buildingId)?.name || 'Standalone Asset'} · {p.unitNumber || 'Unit'}</span>
+                  <div key={tenant.email} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col gap-3 shadow-sm group">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="h-10 w-10 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 flex items-center justify-center shrink-0 border border-zinc-200 dark:border-zinc-700">
+                          <span className="font-black text-sm">{tenant.displayName?.charAt(0).toUpperCase() || 'U'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-bold text-zinc-900 dark:text-white truncate">{tenant.displayName || 'No Name'}</span>
+                            {tenant.status === 'active' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Active</Badge>}
+                            {tenant.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
+                            {tenant.status === 'invited' && <Badge className="bg-zinc-50 text-zinc-500 dark:bg-zinc-800/50 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Invited</Badge>}
                           </div>
-                        )) : (
-                          <span className="text-[10px] font-medium text-zinc-400 italic">No assigned units</span>
-                        )}
+                          <div className="text-xs text-zinc-500 truncate">{tenant.email}</div>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger render={
+                          <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors -mr-2">
+                            <FontAwesomeIcon icon={faEllipsisV} />
+                          </button>
+                        } />
+                        <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-zinc-200 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
+                          <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}>
+                            <FontAwesomeIcon icon={faPlus} className="mr-2 text-zinc-400 w-4 text-center" /> Assign Asset
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => handleUnassignTenant(tenant.email)}>
+                            <FontAwesomeIcon icon={faMinus} className="mr-2 text-zinc-400 w-4 text-center" /> Unassign Asset
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => handleDeleteTenant(tenant.email)}>
+                            <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Tenant
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/50 mt-1">
+                      <div>
+                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Phone</div>
+                        <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">{tenant.phone || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Assigned Units</div>
+                        <div className="text-xs font-bold text-zinc-700 dark:text-zinc-300 truncate">
+                          {tenant.assignedProperties?.length > 0 
+                            ? tenant.assignedProperties.map((p: any) => `${buildings.find(b => b.id === properties.find(prop => prop.id === p.id)?.buildingId)?.name || 'Standalone'} ${p.unitNumber}`).join(', ')
+                            : 'None'}
+                        </div>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger render={
-                        <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
-                          <FontAwesomeIcon icon={faEllipsisV} />
-                        </button>
-                      } />
-                      <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
-                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => { setAssigningTenantEmail(tenant.email); setIsAssignDialogOpen(true); }}>
-                          <FontAwesomeIcon icon={faPlus} className="mr-2 text-indigo-500 w-4 text-center" /> Assign Asset
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => handleUnassignTenant(tenant.email)}>
-                          <FontAwesomeIcon icon={faMinus} className="mr-2 text-amber-500 w-4 text-center" /> Unassign Asset
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => handleDeleteTenant(tenant.email)}>
-                          <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Tenant
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
                   </div>
                 ))
               )}
@@ -2058,7 +2127,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             
             {/* Pagination */}
             {totalTenantPages > 1 && (
-              <div className="flex items-center justify-between mt-6 px-2">
+              <div className="flex items-center justify-between pt-4 px-2">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Page {tenantPage} of {totalTenantPages}</span>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setTenantPage(p => Math.max(1, p - 1))} disabled={tenantPage === 1} className="h-8 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"><FontAwesomeIcon icon={faChevronLeft} className="mr-2" /> Prev</Button>
@@ -2070,129 +2139,122 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'automations' && (
-          <div className="mt-4">
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden animate-in fade-in duration-300">
-              <CardHeader className="p-4 sm:p-5 border-b border-zinc-100 dark:border-zinc-800 flex flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-xl bg-purple-50 dark:bg-purple-950/30 flex items-center justify-center text-purple-600">
-                    <FontAwesomeIcon icon={faBell} className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base font-black">Notifications Hub</CardTitle>
-                    <CardDescription className="text-xs">Stay updated on booking requests, maintenance alerts, and rent ledger updates.</CardDescription>
-                  </div>
+          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* Header section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Notifications</h2>
+                <div className="text-sm text-zinc-500">
+                  {notifications.length} total messages · {notifications.filter(n => !n.read).length} unread
                 </div>
-                {notifications.some(n => !n.read) && (
-                  <Button
-                    variant="outline"
-                    onClick={handleMarkAllAsRead}
-                    className="h-9 px-4 rounded-xl text-[10px] font-black uppercase tracking-wider text-purple-600 border-purple-100 hover:bg-purple-50 dark:border-purple-900/30 dark:hover:bg-purple-950/20 gap-2 shrink-0"
-                  >
-                    Mark All Read
-                  </Button>
-                )}
-              </CardHeader>
-              <CardContent className="p-4 sm:p-5">
-                {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                    <div className="relative mb-4">
-                      <div className="h-16 w-16 rounded-3xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-400 dark:text-zinc-600">
-                        <FontAwesomeIcon icon={faBell} className="h-6 w-6 animate-pulse" />
-                      </div>
-                      <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-zinc-300 border-2 border-white dark:border-zinc-900" />
-                    </div>
-                    <h3 className="text-sm font-black text-zinc-900 dark:text-white">All Caught Up!</h3>
-                    <p className="text-xs text-zinc-500 max-w-sm mt-1">You have no new or archived notifications in your property ledger.</p>
+              </div>
+              {notifications.some(n => !n.read) && (
+                <Button
+                  onClick={handleMarkAllAsRead}
+                  className="h-10 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-zinc-900 text-white dark:bg-white dark:text-black hover:bg-zinc-800 shrink-0"
+                >
+                  <FontAwesomeIcon icon={faCheck} className="mr-2" /> Mark All Read
+                </Button>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="space-y-3">
+              {notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
+                  <div className="h-16 w-16 rounded-[2rem] bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center text-zinc-300 dark:text-zinc-600 mb-4">
+                    <FontAwesomeIcon icon={faBell} className="h-6 w-6" />
                   </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {notifications.map((notif) => {
-                      let icon = faBell;
-                      let iconColor = 'text-zinc-500';
-                      let iconBg = 'bg-zinc-50 dark:bg-zinc-800/50';
+                  <h3 className="text-base font-black text-zinc-900 dark:text-white">All Caught Up!</h3>
+                  <p className="text-xs font-medium text-zinc-500 max-w-sm mt-1">You have no new notifications.</p>
+                </div>
+              ) : (
+                notifications.map((notif) => {
+                  let icon = faBell;
+                  let iconColor = 'text-zinc-500 dark:text-zinc-400';
+                  let iconBg = 'bg-zinc-100 dark:bg-zinc-800';
 
-                      if (notif.type === 'booking' || notif.type?.includes('booking')) {
-                        icon = faBuilding;
-                        iconColor = 'text-indigo-600 dark:text-indigo-400';
-                        iconBg = 'bg-indigo-50 dark:bg-indigo-950/30';
-                      } else if (notif.type === 'maintenance' || notif.type?.includes('maintenance')) {
-                        icon = faTools;
-                        iconColor = 'text-amber-600 dark:text-amber-400';
-                        iconBg = 'bg-amber-50 dark:bg-amber-950/30';
-                      } else if (notif.type === 'payment' || notif.type?.includes('payment') || notif.type?.includes('rent')) {
-                        icon = faWallet;
-                        iconColor = 'text-emerald-600 dark:text-emerald-400';
-                        iconBg = 'bg-emerald-50 dark:bg-emerald-950/30';
-                      } else if (notif.type === 'urgent' || notif.type === 'alert') {
-                        icon = faBolt;
-                        iconColor = 'text-rose-600 dark:text-rose-400';
-                        iconBg = 'bg-rose-50 dark:bg-rose-950/30';
-                      }
+                  if (notif.type === 'booking' || notif.type?.includes('booking')) {
+                    icon = faBuilding;
+                    iconColor = 'text-indigo-600 dark:text-indigo-400';
+                    iconBg = 'bg-indigo-50 dark:bg-indigo-900/20';
+                  } else if (notif.type === 'maintenance' || notif.type?.includes('maintenance')) {
+                    icon = faTools;
+                    iconColor = 'text-amber-600 dark:text-amber-400';
+                    iconBg = 'bg-amber-50 dark:bg-amber-900/20';
+                  } else if (notif.type === 'payment' || notif.type?.includes('payment') || notif.type?.includes('rent')) {
+                    icon = faWallet;
+                    iconColor = 'text-emerald-600 dark:text-emerald-400';
+                    iconBg = 'bg-emerald-50 dark:bg-emerald-900/20';
+                  } else if (notif.type === 'urgent' || notif.type === 'alert') {
+                    icon = faBolt;
+                    iconColor = 'text-rose-600 dark:text-rose-400';
+                    iconBg = 'bg-rose-50 dark:bg-rose-900/20';
+                  }
 
-                      return (
-                        <div
-                          key={notif.id}
-                          className={`flex items-start gap-4 p-4 rounded-2xl border transition-all duration-150 relative group ${
-                            notif.read
-                              ? 'border-zinc-50 bg-zinc-50/20 dark:border-zinc-800/30 dark:bg-zinc-900/10 opacity-75'
-                              : 'border-purple-100 bg-purple-50/15 dark:border-purple-950/20 dark:bg-purple-950/5 shadow-xs'
-                          }`}
-                        >
-                          <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>
-                            <FontAwesomeIcon icon={icon} className="h-4 w-4" />
-                          </div>
-
-                          <div className="flex-1 min-w-0 pr-12">
-                            <div className="flex items-center gap-2">
-                              <h4 className={`text-xs uppercase tracking-wider ${notif.read ? 'font-bold text-zinc-700 dark:text-zinc-300' : 'font-black text-zinc-900 dark:text-white'}`}>
-                                {notif.title}
-                              </h4>
-                              {!notif.read && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-purple-600 shadow-[0_0_6px_#9333ea]" />
-                              )}
-                            </div>
-                            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed break-words">
-                              {notif.message}
-                            </p>
-                            <span className="text-[10px] font-bold text-zinc-400 mt-2 block">
-                              {new Date(notif.createdAt).toLocaleDateString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </span>
-                          </div>
-
-                          <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                            {!notif.read && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleMarkAsRead(notif.id)}
-                                className="h-7 w-7 rounded-lg text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                                title="Mark as read"
-                              >
-                                <FontAwesomeIcon icon={faCheck} className="h-3 w-3" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteNotification(notif.id)}
-                              className="h-7 w-7 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                              title="Delete notification"
-                            >
-                              <FontAwesomeIcon icon={faTrash} className="h-3 w-3" />
-                            </Button>
-                          </div>
+                  return (
+                    <div
+                      key={notif.id}
+                      className={`flex flex-col sm:flex-row sm:items-center gap-4 p-4 rounded-2xl border transition-all duration-150 ${
+                        notif.read
+                          ? 'border-zinc-100 bg-white dark:border-zinc-800 dark:bg-zinc-900 opacity-75'
+                          : 'border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-start gap-4 flex-1">
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>
+                          <FontAwesomeIcon icon={icon} className="h-4 w-4" />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+
+                        <div className="flex-1 min-w-0 pr-4">
+                          <div className="flex items-center gap-2">
+                            <h4 className={`text-sm tracking-tight ${notif.read ? 'font-bold text-zinc-700 dark:text-zinc-300' : 'font-black text-zinc-900 dark:text-white'}`}>
+                              {notif.title}
+                            </h4>
+                            {!notif.read && (
+                              <span className="h-2 w-2 rounded-full bg-zinc-900 dark:bg-white" />
+                            )}
+                          </div>
+                          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed break-words">
+                            {notif.message}
+                          </p>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-2 block">
+                            {new Date(notif.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 sm:self-center self-end mt-2 sm:mt-0">
+                        {!notif.read && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleMarkAsRead(notif.id)}
+                            className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            Mark Read
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteNotification(notif.id)}
+                          className="h-8 w-8 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                          title="Delete notification"
+                        >
+                          <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         )}
       </div>
