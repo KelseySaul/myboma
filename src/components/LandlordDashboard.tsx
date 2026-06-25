@@ -7,6 +7,9 @@ import { ensureRentInvoiceForProperty, syncAutomaticRentInvoices } from '../lib/
 import { formatStatKes, normalizeRentPayment } from '../lib/rentUtils';
 import { UserProfile } from '../App';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
+import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
 
 interface Building {
   id: string;
@@ -1302,10 +1306,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
           <div className="hidden sm:block">
             <DropdownMenu>
               <DropdownMenuTrigger render={
-                <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                <Button size="sm" className="hidden sm:flex items-center gap-2 shadow-sm rounded-lg">
                   <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                  <span className="hidden sm:inline">Create New</span>
-                </button>
+                  <span>Create New</span>
+                </Button>
               } />
               <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
               <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -1356,61 +1360,47 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="mt-4 space-y-6 animate-in fade-in duration-500">
             {/* Quick stats row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-1 bg-indigo-600 rounded-2xl p-5 flex flex-col gap-3 shadow-lg shadow-indigo-500/20">
-                <div className="flex items-center justify-between">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-indigo-100">Subscription</p>
-                  <FontAwesomeIcon icon={faBolt} className="text-indigo-200 h-3 w-3" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="col-span-2 md:col-span-1 lg:col-span-1 bg-primary rounded-xl p-5 flex flex-col justify-center gap-2 shadow-sm text-primary-foreground">
+                <div className="flex items-center justify-between text-primary-foreground/80">
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Subscription</p>
+                  <FontAwesomeIcon icon={faBolt} className="h-3 w-3" />
                 </div>
-                <p className="text-xl font-black text-white leading-tight">{subscriptionFeatures.label} Plan</p>
-                <p className="text-[9px] font-bold text-indigo-100 uppercase tracking-wider">
+                <p className="text-xl font-bold leading-tight">{subscriptionFeatures.label}</p>
+                <p className="text-[10px] font-medium text-primary-foreground/70">
                   {profile.subscriptionExpiresAt 
                     ? `Active until ${new Date(profile.subscriptionExpiresAt).toLocaleDateString()}` 
                     : 'Prepaid Plan'}
                 </p>
               </div>
 
-              {[
-                {
-                  label: 'Total Units',
-                  value: properties.length,
-                  sub: `${properties.filter(p => p.status === 'available').length} available`,
-                  color: 'bg-blue-500/10 text-blue-600',
-                  icon: faHome,
-                },
-                {
-                  label: 'Listings Limit',
-                  value: `${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`,
-                  sub: 'Units Capacity',
-                  color: 'bg-purple-500/10 text-purple-600',
-                  icon: faChartPie,
-                },
-                {
-                  label: 'Revenue (Paid)',
-                  value: `KES ${payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0).toLocaleString()}`,
-                  sub: `${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending`,
-                  color: 'bg-amber-500/10 text-amber-600',
-                  icon: faWallet,
-                },
-                {
-                  label: 'Maintenance',
-                  value: requests.filter(r => r.status !== 'resolved').length,
-                  sub: `${requests.filter(r => r.status === 'resolved').length} resolved`,
-                  color: 'bg-rose-500/10 text-rose-600',
-                  icon: faTools,
-                },
-              ].map(stat => (
-                <div key={stat.label} className="bg-white rounded-2xl border border-zinc-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{stat.label}</p>
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${stat.color}`}>
-                      <FontAwesomeIcon icon={stat.icon} className="h-3 w-3" />
-                    </div>
-                  </div>
-                  <p className="text-2xl font-black text-zinc-900 tabular-nums">{stat.value}</p>
-                  <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">{stat.sub}</p>
-                </div>
-              ))}
+              <StatCard
+                title="Total Units"
+                value={properties.length}
+                description={`${properties.filter(p => p.status === 'available').length} available`}
+                icon={<FontAwesomeIcon icon={faHome} className="text-blue-500" />}
+              />
+              
+              <StatCard
+                title="Listings Limit"
+                value={`${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`}
+                description="Units Capacity"
+                icon={<FontAwesomeIcon icon={faChartPie} className="text-purple-500" />}
+              />
+              
+              <StatCard
+                title="Revenue (Paid)"
+                value={formatCurrencyCompact(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
+                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending`}
+                icon={<FontAwesomeIcon icon={faWallet} className="text-amber-500" />}
+              />
+              
+              <StatCard
+                title="Maintenance"
+                value={requests.filter(r => r.status !== 'resolved').length}
+                description={`${requests.filter(r => r.status === 'resolved').length} resolved`}
+                icon={<FontAwesomeIcon icon={faTools} className="text-destructive" />}
+              />
             </div>
 
             {/* Recent payments + Maintenance split */}
@@ -1447,7 +1437,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     </div>
                   ))}
                   {payments.length === 0 && (
-                    <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-300 py-10">No payments yet</p>
+                    <EmptyState
+                      icon={<FontAwesomeIcon icon={faWallet} className="h-6 w-6" />}
+                      title="No payments yet"
+                      description="You haven't received any payments. When a tenant pays, it will show up here."
+                      className="border-0 shadow-none my-4"
+                    />
                   )}
                 </div>
               </div>
@@ -1479,19 +1474,26 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     </div>
                   ))}
                   {requests.length === 0 && (
-                    <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-300 py-10">No maintenance requests</p>
+                    <EmptyState
+                      icon={<FontAwesomeIcon icon={faTools} className="h-6 w-6" />}
+                      title="No maintenance requests"
+                      description="All clear! Your properties are in good shape."
+                      className="border-0 shadow-none my-4"
+                    />
                   )}
                 </div>
               </div>
               ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-10 text-center">
-                <FontAwesomeIcon icon={faTools} className="mb-3 h-8 w-8 text-zinc-300" />
-                <p className="text-sm font-black text-zinc-700">Maintenance hub not included</p>
-                <p className="mt-1 max-w-xs text-xs font-medium text-zinc-500">
-                  Upgrade to Growth or Pro for maintenance tickets. Your {subscriptionFeatures.label} plan includes up to{' '}
-                  {subscriptionFeatures.maxListings ?? 'unlimited'} listings.
-                </p>
-              </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faTools} className="h-6 w-6" />}
+                  title="Maintenance Hub"
+                  description="Upgrade your plan to unlock the maintenance ticketing system."
+                  action={{
+                    label: 'Upgrade Plan',
+                    onClick: () => setActiveTab('settings')
+                  }}
+                  className="h-full border border-dashed border-zinc-200 bg-zinc-50"
+                />
               )}
             </div>
           </div>
@@ -1523,41 +1525,46 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             </div>
 
             {/* Search and Add Button */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                <Input placeholder="Search units" className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input placeholder="Search units" className="pl-8 h-10 bg-background" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
               </div>
-              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shrink-0 font-bold shadow-sm">
-                <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                {properties.length === 0 ? 'Add property' : 'Add unit'}
+              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-10 shrink-0 shadow-sm rounded-lg flex items-center">
+                <FontAwesomeIcon icon={faPlus} className="mr-2 h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{properties.length === 0 ? 'Add property' : 'Add unit'}</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
 
             {/* Filter chips */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
-              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => (
-                <button 
-                  key={f}
-                  onClick={() => {
-                     if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
-                     else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
-                     else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
-                     else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
-                     setPropertyPage(1);
-                  }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
-                    (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
-                    (f === 'Rented' && propertyStatusFilter === 'rented') ||
-                    (f === 'Vacant' && propertyStatusFilter === 'available') ||
-                    (buildings.find(b => b.id === buildingFilter)?.name === f)
-                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
-                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => {
+                const isActive = (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
+                                 (f === 'Rented' && propertyStatusFilter === 'rented') ||
+                                 (f === 'Vacant' && propertyStatusFilter === 'available') ||
+                                 (buildings.find(b => b.id === buildingFilter)?.name === f);
+                
+                return (
+                  <button 
+                    key={f}
+                    onClick={() => {
+                       if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
+                       else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
+                       else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
+                       else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
+                       setPropertyPage(1);
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                        : 'bg-background border-border text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
             </div>
             
             <div className="space-y-8">
@@ -1607,9 +1614,15 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                 });
               })()}
               {paginatedProperties.length === 0 && (
-                <div className="text-center py-20 text-zinc-400 font-bold text-xs uppercase tracking-widest">
-                  No properties found
-                </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faHome} className="h-6 w-6" />}
+                  title="No properties found"
+                  description={propertySearch ? "Try adjusting your search or filters." : "You haven't added any units yet."}
+                  action={!propertySearch ? {
+                    label: 'Add Property',
+                    onClick: () => setIsAddOpen(true)
+                  } : undefined}
+                />
               )}
             </div>
 
@@ -1852,33 +1865,42 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'finances' && (
-          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="px-6 pb-24 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {/* Header section */}
             <div>
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Finances</h2>
-              <div className="text-sm text-zinc-500">
-                {formatStatKes(netIncome)} net performance · {payments.length} total transaction(s)
+              <div className="text-sm text-muted-foreground">
+                {netIncome === 0 ? 'Break-even' : `${formatCurrencyFull(netIncome)} Net Profit`} · {payments.length} total transaction(s)
               </div>
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors" onClick={() => setIsAnticipatedOpen(true)}>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Expected Rent <FontAwesomeIcon icon={faChartLine} className="text-blue-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(anticipatedRentTotal)}</span>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div onClick={() => setIsAnticipatedOpen(true)} className="cursor-pointer">
+                <StatCard
+                  title="Expected Rent"
+                  value={formatCurrencyCompact(anticipatedRentTotal)}
+                  icon={<FontAwesomeIcon icon={faChartLine} className="text-blue-500" />}
+                  className="hover:bg-muted/50 transition-colors h-full"
+                />
               </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Collected <FontAwesomeIcon icon={faWallet} className="text-emerald-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(paidRentTotal)}</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Operating Costs <FontAwesomeIcon icon={faChartPie} className="text-amber-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{(expenseTotal / 1000).toFixed(1)}k</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Net Performance <FontAwesomeIcon icon={faChartLine} className="text-rose-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{(netIncome / 1000).toFixed(1)}k</span>
-              </div>
+              
+              <StatCard
+                title="Collected"
+                value={formatCurrencyCompact(paidRentTotal)}
+                icon={<FontAwesomeIcon icon={faWallet} className="text-emerald-500" />}
+              />
+              
+              <StatCard
+                title="Operating Costs"
+                value={formatCurrencyCompact(expenseTotal)}
+                icon={<FontAwesomeIcon icon={faChartPie} className="text-amber-500" />}
+              />
+              
+              <StatCard
+                title="Net Performance"
+                value={formatCurrencyCompact(netIncome)}
+                icon={<FontAwesomeIcon icon={faChartLine} className="text-rose-500" />}
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1887,25 +1909,31 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             </div>
 
             {/* Search and Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                <Input placeholder="Search ledger..." className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input placeholder="Search ledger..." className="pl-8 h-10 bg-background" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
               </div>
-              <Button variant="outline" onClick={downloadExcel} className="h-12 px-4 rounded-xl font-bold bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm shrink-0"><FontAwesomeIcon icon={faFileExcel} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Export</span><span className="hidden sm:inline">Export</span></Button>
-              <Button onClick={() => setIsExpenseOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 font-bold shadow-sm shrink-0"><FontAwesomeIcon icon={faChartPie} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Expense</span><span className="hidden sm:inline">Expense</span></Button>
+              <Button variant="outline" size="sm" onClick={downloadExcel} className="h-10 shrink-0 shadow-sm rounded-lg">
+                <FontAwesomeIcon icon={faFileExcel} className="mr-2 hidden sm:inline" /> 
+                <span>Export</span>
+              </Button>
+              <Button size="sm" onClick={() => setIsExpenseOpen(true)} className="h-10 shrink-0 shadow-sm rounded-lg">
+                <FontAwesomeIcon icon={faChartPie} className="mr-2 hidden sm:inline" /> 
+                <span>Expense</span>
+              </Button>
             </div>
 
             {/* Filter chips */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
               {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
                 <button 
                   key={f}
                   onClick={() => { setPaymentStatusFilter(f.toLowerCase()); setPaymentPage(1); }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
                     (f.toLowerCase() === paymentStatusFilter)
-                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
-                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                      : 'bg-background border-border text-muted-foreground hover:bg-muted'
                   }`}
                 >
                   {f}
@@ -1917,12 +1945,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             <div className="space-y-3">
               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Ledger Transactions</h3>
               {paginatedPayments.length === 0 ? (
-                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
-                  <div className="h-10 w-10 flex items-center justify-center">
-                    <FontAwesomeIcon icon={faReceipt} className="h-6 w-6 text-zinc-400" />
-                  </div>
-                  <p className="text-zinc-500 text-sm font-medium">No {paymentStatusFilter !== 'all' ? paymentStatusFilter : ''} transactions match your criteria.</p>
-                </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faReceipt} className="h-6 w-6" />}
+                  title={`No ${paymentStatusFilter !== 'all' ? paymentStatusFilter : ''} transactions`}
+                  description="Transactions matching your criteria will appear here."
+                  className="my-4"
+                />
               ) : (
                 paginatedPayments.map((payment) => {
                   const prop = properties.find(p => p.id === payment.propertyId);
@@ -2868,21 +2896,21 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
 function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName, tenantName, onViewDetails }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string, tenantName?: string, onViewDetails?: (p: Property) => void }) {
   return (
-    <div className="bg-[#1e1e1e] dark:bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-4 text-zinc-100 transition-all hover:border-zinc-700">
+    <Card className="flex flex-col group relative">
       {/* Header Row */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="text-base font-bold text-white">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
+      <CardHeader className="flex flex-row items-start justify-between pb-2 border-b">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              property.status === 'rented' ? 'bg-green-900/30 text-green-500' :
-              property.status === 'available' ? 'bg-zinc-800 text-zinc-400' :
-              'bg-amber-900/30 text-amber-500'
+              property.status === 'rented' ? 'bg-success/10 text-success' :
+              property.status === 'available' ? 'bg-muted text-muted-foreground' :
+              'bg-warning/10 text-warning-foreground'
             }`}>
               {property.status === 'available' ? 'Vacant' : property.status.charAt(0).toUpperCase() + property.status.slice(1)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <FontAwesomeIcon icon={faBuilding} className="w-3" />
             <span>{property.location}</span>
           </div>
@@ -2890,54 +2918,56 @@ function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, bui
         
         <DropdownMenu>
           <DropdownMenuTrigger render={
-            <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+            <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
               <FontAwesomeIcon icon={faEllipsisV} />
-            </button>
+            </Button>
           } />
-          <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-zinc-800 bg-zinc-900 shadow-xl">
-            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800" onClick={() => onEdit(property)}>
-              <FontAwesomeIcon icon={faEdit} className="mr-2 text-zinc-400 w-4 text-center" /> Edit Unit
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onEdit(property)}>
+              <FontAwesomeIcon icon={faEdit} className="mr-2 w-4 text-center text-muted-foreground" /> Edit Unit
             </DropdownMenuItem>
             {profile.uid === property.landlordId && (
-              <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-blue-400 hover:bg-blue-900/20" onClick={() => onManageAccess(property)}>
-                <FontAwesomeIcon icon={faUsers} className="mr-2 text-blue-400 w-4 text-center" /> Manage Tenant
+              <DropdownMenuItem onClick={() => onManageAccess(property)}>
+                <FontAwesomeIcon icon={faUsers} className="mr-2 w-4 text-center text-muted-foreground" /> Manage Tenant
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-900/20" onClick={() => onDelete(property.id)}>
-              <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Unit
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(property.id)}>
+              <FontAwesomeIcon icon={faTrash} className="mr-2 w-4 text-center" /> Delete Unit
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </CardHeader>
 
       {/* Facts Strip */}
-      <div className="grid grid-cols-3 gap-4 border-b border-zinc-800 pb-4">
+      <CardContent className="grid grid-cols-3 gap-4 pt-4 pb-4 border-b">
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Rent</div>
-          <div className="text-sm font-bold text-white">KSh {property.price.toLocaleString()}<span className="text-[10px] text-zinc-400 font-normal">/mo</span></div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Rent</div>
+          <div className="text-sm font-semibold">{formatCurrencyFull(property.price)}<span className="text-[10px] text-muted-foreground font-normal">/mo</span></div>
         </div>
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tenant</div>
-          <div className="text-sm font-bold text-white truncate">{tenantName || <span className="text-zinc-600 italic">Vacant</span>}</div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tenant</div>
+          <div className="text-sm font-medium truncate">{tenantName || <span className="text-muted-foreground italic">Vacant</span>}</div>
         </div>
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Type</div>
-          <div className="text-sm font-bold text-white capitalize">{property.type}</div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Type</div>
+          <div className="text-sm font-medium capitalize">{property.type}</div>
         </div>
-      </div>
+      </CardContent>
 
       {/* Footer */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-zinc-400">
+      <div className="flex items-center justify-between p-4 bg-muted/20">
+        <div className="text-xs text-muted-foreground">
           {property.status === 'rented' ? 'Next payment in 12 days' : 'Ready for occupancy'}
         </div>
-        <button 
+        <Button 
+          variant="link"
+          size="sm"
           onClick={() => onViewDetails?.(property)}
-          className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+          className="h-auto p-0 text-xs font-semibold"
         >
-          View details <FontAwesomeIcon icon={faChevronRight} className="w-2" />
-        </button>
+          View details <FontAwesomeIcon icon={faChevronRight} className="ml-1.5 w-2" />
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }
