@@ -241,8 +241,8 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       }
     };
 
-    const handleEmailAuth = async (e: React.FormEvent) => {
-      e.preventDefault();
+    const handleEmailAuth = async (e?: React.FormEvent | React.MouseEvent) => {
+      if (e) e.preventDefault();
       console.log("Landing: handleEmailAuth called", authMode);
       
       if (authMode === 'signup' && !agreed) {
@@ -755,7 +755,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                       </div>
                     )}
 
-                    <Button type="submit" className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95" disabled={loading}>
+                    <Button type="submit" onClick={handleEmailAuth} className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95" disabled={loading}>
                       {loading 
                         ? <FontAwesomeIcon icon={faCheckCircle} className="animate-spin" />
                         : (authMode === 'login'

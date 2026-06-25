@@ -15,7 +15,7 @@ import {
   type SubscriptionTier,
 } from '../src/lib/landlordSubscription.ts';
 
-const tierSchema = z.enum(['test', 'starter', 'growth', 'pro', 'pro_plus']);
+const tierSchema = z.enum(['basic', 'starter', 'growth', 'pro', 'proplus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -154,7 +154,7 @@ export const activateLandlordSubscription = async (
   const {error: profileError} = await supabase
     .from('users')
     .update({
-      role: input.tier === 'pro_plus' ? 'admin' : 'landlord',
+      role: input.tier === 'proplus' ? 'admin' : 'landlord',
       subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
       subscriptionStatus: 'active',
       subscriptionExpiresAt: periodEnd.toISOString(),
@@ -222,7 +222,7 @@ export const saveLandlordPayoutProfile = async (
   const {error} = await supabase
     .from('users')
     .update({
-      role: body.tier === 'pro_plus' ? 'admin' : 'landlord',
+      role: body.tier === 'proplus' ? 'admin' : 'landlord',
       rentPayoutMethod: body.rentPayoutMethod,
       subscriptionStatus: 'pending',
       cashPayoutNotes: body.cashPayoutNotes?.trim() || null,

@@ -64,7 +64,7 @@ interface RentPayment {
   propertyId: string;
   landlordId: string;
   amount: number;
-  status: 'paid' | 'pending' | 'overdue';
+  status: 'paid' | 'pending' | 'overdue' | 'verifying';
   dueDate: string;
   paidAt?: string;
   receiptUrl?: string;
@@ -89,6 +89,8 @@ interface Landlord {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  rentPayoutMethod?: string;
+  mpesaSettlementPhone?: string;
 }
 
 interface Notification {
