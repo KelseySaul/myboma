@@ -1,10 +1,20 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AuthenticatedRequest, RentPaymentRecord, UserProfileRecord } from './types.js';
+import {and, eq, gte, ilike, inArray, lte, sql} from 'drizzle-orm';
+import {db, schema} from '../db/client.ts';
+import {canViewRentPayment, isAdmin} from '../db/authz.ts';
+import {toActor} from './types.ts';
+import type {AuthenticatedRequest} from './types.ts';
 
 export type NotificationDependencies = {
-  supabase: SupabaseClient;
-  sendEmail: (args: { to?: string | null; subject: string; text: string }) => Promise<void>;
-  insertNotification: (payload: Record<string, unknown>) => Promise<void>;
+  sendEmail: (args: {to?: string | null; subject: string; text: string}) => Promise<void>;
+  insertNotification: (payload: {
+    recipientEmail: string;
+    platformId?: string | null;
+    type?: string | null;
+    title: string;
+    message?: string | null;
+    propertyId?: string | null;
+    read?: boolean;
+  }) => Promise<void>;
 };
 
 export const sendOneSignalPushNotification = async (
@@ -30,14 +40,12 @@ export const sendOneSignalPushNotification = async (
       },
       body: JSON.stringify({
         app_id: appId,
-        // Target users by external_id (we use email as the external_id in many setups)
-        // Or target by aliases: { external_id: email }
         target_channel: 'push',
         include_aliases: {
           external_id: [email.toLowerCase()],
         },
-        headings: { en: title },
-        contents: { en: message },
+        headings: {en: title},
+        contents: {en: message},
         url,
       }),
     });
@@ -51,65 +59,74 @@ export const sendOneSignalPushNotification = async (
   }
 };
 
+/** Looks up a rent payment plus its property's display fields in one query. */
+async function findRentPaymentWithProperty(rentPaymentId: string) {
+  const [row] = await db
+    .select({
+      payment: schema.rentPayments,
+      propertyTitle: schema.properties.title,
+      propertyUnitNumber: schema.properties.unitNumber,
+      propertyLocation: schema.properties.location,
+    })
+    .from(schema.rentPayments)
+    .innerJoin(schema.properties, eq(schema.properties.id, schema.rentPayments.propertyId))
+    .where(eq(schema.rentPayments.id, rentPaymentId))
+    .limit(1);
+  return row;
+}
+
 export const handleSendRentReminder = async (
   req: AuthenticatedRequest,
   res: any,
   deps: NotificationDependencies
 ) => {
-  const { rentPaymentId } = req.validatedBody as { rentPaymentId: string };
-  const { supabase, sendEmail, insertNotification } = deps;
+  const {rentPaymentId} = req.validatedBody as {rentPaymentId: string};
+  const {sendEmail, insertNotification} = deps;
+  const actor = toActor(req.profile!);
 
-  // 1. Fetch the payment and ensure the user is the landlord or an admin
-  const { data: payment, error: paymentError } = await supabase
-    .from('rentPayments')
-    .select('*, properties(title, unitNumber, location)')
-    .eq('id', rentPaymentId)
-    .maybeSingle();
-
-  if (paymentError || !payment) {
-    return res.status(404).json({ error: 'Rent payment not found.' });
+  // 1. Fetch the payment and ensure the user is the landlord, a property manager, or an admin
+  const row = await findRentPaymentWithProperty(rentPaymentId);
+  if (!row) {
+    return res.status(404).json({error: 'Rent payment not found.'});
   }
+  const payment = row.payment;
 
-  const isLandlord = payment.landlordId === req.profile?.uid;
-  const isAdmin = req.profile?.isSuperAdmin || req.profile?.isAdmin || req.profile?.role === 'admin';
-
-  if (!isLandlord && !isAdmin) {
-    return res.status(403).json({ error: 'You do not have permission to send reminders for this property.' });
+  if (!(await canViewRentPayment(actor, payment))) {
+    return res.status(403).json({error: 'You do not have permission to send reminders for this property.'});
   }
 
   // 2. Ensure landlord has pro or proplus plan (or is admin)
-  if (!isAdmin) {
-    const { data: landlordData } = await supabase
-      .from('users')
-      .select('subscriptionPlan')
-      .eq('uid', payment.landlordId)
-      .maybeSingle();
-      
-    const plan = landlordData?.subscriptionPlan || '';
+  if (!isAdmin(actor)) {
+    const landlord = await db.query.users.findFirst({
+      where: eq(schema.users.uid, payment.landlordId),
+      columns: {subscriptionPlan: true},
+    });
+
+    const plan = landlord?.subscriptionPlan || '';
     if (!plan.includes('pro') && !plan.includes('proplus')) {
-      return res.status(403).json({ error: 'Automated and manual reminders are only available on Pro and Pro Plus plans.' });
+      return res.status(403).json({error: 'Automated and manual reminders are only available on Pro and Pro Plus plans.'});
     }
   }
 
   if (payment.status === 'paid') {
-    return res.status(400).json({ error: 'This rent payment is already paid.' });
+    return res.status(400).json({error: 'This rent payment is already paid.'});
   }
 
-  // 3. Fetch tenant info
+  // 3. Fetch tenant info (tenantId historically holds either an email or a uid)
   const tenantId = String(payment.tenantId);
-  const { data: tenantData } = tenantId.includes('@')
-    ? await supabase.from('users').select('uid,email,displayName,platformId').ilike('email', tenantId).maybeSingle()
-    : await supabase.from('users').select('uid,email,displayName,platformId').eq('uid', tenantId).maybeSingle();
+  const tenant = tenantId.includes('@')
+    ? await db.query.users.findFirst({where: ilike(schema.users.email, tenantId), columns: {email: true}})
+    : await db.query.users.findFirst({where: eq(schema.users.uid, tenantId), columns: {email: true}});
 
-  const tenantEmail = tenantData?.email || payment.tenantId;
+  const tenantEmail = tenant?.email || payment.tenantId;
 
   if (!tenantEmail || !tenantEmail.includes('@')) {
-    return res.status(422).json({ error: 'Tenant email not found or invalid.' });
+    return res.status(422).json({error: 'Tenant email not found or invalid.'});
   }
 
   const amount = Number(payment.amount).toLocaleString('en-KE');
-  const propertyLabel = payment.properties?.title || payment.properties?.unitNumber || 'your unit';
-  const dueDateStr = new Date(payment.dueDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const propertyLabel = row.propertyTitle || row.propertyUnitNumber || 'your unit';
+  const dueDateStr = new Date(payment.dueDate).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
   const title = 'Rent Reminder';
   const message = `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
 
@@ -134,78 +151,90 @@ export const handleSendRentReminder = async (
 
   await Promise.allSettled(promises);
 
-  return res.json({ success: true, message: 'Reminder sent successfully.' });
+  return res.json({success: true, message: 'Reminder sent successfully.'});
 };
 
 export const processAutomatedRentReminders = async (deps: NotificationDependencies) => {
-  const { supabase, sendEmail, insertNotification } = deps;
-  
+  const {sendEmail, insertNotification} = deps;
+
   // Find pending rent payments where due date is within the next 3 days or already overdue
   const today = new Date();
   const threeDaysFromNow = new Date();
   threeDaysFromNow.setDate(today.getDate() + 3);
+  const cutoff = threeDaysFromNow.toISOString().split('T')[0];
 
-  const { data: payments, error } = await supabase
-    .from('rentPayments')
-    .select('*, properties(title, unitNumber, location)')
-    .eq('status', 'pending')
-    .lte('dueDate', threeDaysFromNow.toISOString().split('T')[0]);
+  const rows = await db
+    .select({
+      payment: schema.rentPayments,
+      propertyTitle: schema.properties.title,
+      propertyUnitNumber: schema.properties.unitNumber,
+    })
+    .from(schema.rentPayments)
+    .innerJoin(schema.properties, eq(schema.properties.id, schema.rentPayments.propertyId))
+    .where(and(eq(schema.rentPayments.status, 'pending'), lte(schema.rentPayments.dueDate, cutoff)));
 
-  if (error || !payments || payments.length === 0) return;
+  if (rows.length === 0) return;
 
   // We need to fetch all landlords and check their plans
-  const landlordIds = [...new Set(payments.map(p => p.landlordId))];
-  const { data: landlords } = await supabase
-    .from('users')
-    .select('uid, subscriptionPlan')
-    .in('uid', landlordIds);
+  const landlordIds = [...new Set(rows.map((r) => r.payment.landlordId))];
+  const landlords = await db
+    .select({uid: schema.users.uid, subscriptionPlan: schema.users.subscriptionPlan})
+    .from(schema.users)
+    .where(inArray(schema.users.uid, landlordIds));
 
   const proLandlordIds = new Set(
-    landlords?.filter(l => l.subscriptionPlan?.includes('pro') || l.subscriptionPlan?.includes('proplus')).map(l => l.uid)
+    landlords.filter((l) => l.subscriptionPlan?.includes('pro') || l.subscriptionPlan?.includes('proplus')).map((l) => l.uid),
   );
 
-  for (const payment of payments) {
+  for (const row of rows) {
+    const payment = row.payment;
     if (!proLandlordIds.has(payment.landlordId)) continue; // Skip if landlord is not on pro/proplus
 
-    const tenantId = String(payment.tenantId);
-    if (!tenantId.includes('@')) {
-      // In a real scenario we'd fetch the user's email by uid. For simplicity, if it's an email we proceed.
-      // Let's quickly fetch the email if it's a uid.
-      const { data: tenantData } = await supabase.from('users').select('email,platformId').eq('uid', tenantId).maybeSingle();
-      if (!tenantData?.email) continue;
-      payment.tenantId = tenantData.email;
-      payment.platformId = payment.platformId || tenantData.platformId;
+    let tenantEmail = String(payment.tenantId);
+    let platformId = payment.platformId;
+    if (!tenantEmail.includes('@')) {
+      const tenant = await db.query.users.findFirst({
+        where: eq(schema.users.uid, payment.tenantId),
+        columns: {email: true, platformId: true},
+      });
+      if (!tenant?.email) continue;
+      tenantEmail = tenant.email;
+      platformId = platformId || tenant.platformId;
     }
 
-    const tenantEmail = payment.tenantId;
     const amount = Number(payment.amount).toLocaleString('en-KE');
-    const propertyLabel = payment.properties?.title || payment.properties?.unitNumber || 'your unit';
+    const propertyLabel = row.propertyTitle || row.propertyUnitNumber || 'your unit';
     const dueDate = new Date(payment.dueDate);
     const isOverdue = dueDate < today;
-    
-    const dueDateStr = dueDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    
+
+    const dueDateStr = dueDate.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+
     const title = isOverdue ? 'Rent Overdue Notice' : 'Upcoming Rent Reminder';
-    const message = isOverdue 
+    const message = isOverdue
       ? `Notice: Your rent payment of KES ${amount} for ${propertyLabel} was due on ${dueDateStr} and is currently overdue.`
       : `Reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
 
-    // Try to avoid spamming everyday: We can check if a notification was already sent recently
-    const { data: recentNotifs } = await supabase
-      .from('notifications')
-      .select('id')
-      .eq('propertyId', payment.propertyId)
-      .eq('recipientEmail', tenantEmail.toLowerCase())
-      .eq('title', title)
-      .gte('createdAt', new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString())
+    // Try to avoid spamming everyday: skip if a matching notification went out in the last 24h.
+    const since = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const recentNotifs = await db
+      .select({id: schema.notifications.id})
+      .from(schema.notifications)
+      .where(
+        and(
+          eq(schema.notifications.propertyId, payment.propertyId),
+          sql`lower(${schema.notifications.recipientEmail}) = ${tenantEmail.toLowerCase()}`,
+          eq(schema.notifications.title, title),
+          gte(schema.notifications.createdAt, since),
+        ),
+      )
       .limit(1);
 
-    if (recentNotifs && recentNotifs.length > 0) continue; // Already reminded today
+    if (recentNotifs.length > 0) continue; // Already reminded today
 
     await Promise.allSettled([
       insertNotification({
         recipientEmail: tenantEmail.toLowerCase(),
-        platformId: payment.platformId,
+        platformId,
         type: 'reminder',
         title,
         message,

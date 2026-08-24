@@ -1,9 +1,31 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import { supabase } from '../supabase';
-import { provisionUser, markRentPaymentManual } from '../lib/api';
+import { authClient } from '../lib/auth-client';
+import {
+  provisionUser,
+  markRentPaymentManual,
+  sendRentReminder as sendRentReminderRequest,
+  getLandlordDashboard,
+  syncRentInvoices,
+  createBuilding,
+  updateBuilding,
+  deleteBuilding as deleteBuildingRequest,
+  createProperties,
+  updateProperty,
+  deleteProperty as deletePropertyRequest,
+  addPropertyManager,
+  assignTenant,
+  unassignTenant,
+  deleteTenant as deleteTenantRequest,
+  updateMaintenanceRequestStatus,
+  createExpense,
+  updateMyProfile,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification as deleteNotificationRequest,
+} from '../lib/api';
 import { logAudit } from '../lib/audit';
-import { ensureRentInvoiceForProperty, syncAutomaticRentInvoices } from '../lib/rentInvoices';
 import { formatStatKes, normalizeRentPayment } from '../lib/rentUtils';
 import { UserProfile } from '../App';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -233,243 +255,34 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     receiptUrl: '',
   });
 
-  useEffect(() => {
-    let propSub: any = null;
-    let reqSub: any = null;
-    let paySub: any = null;
-    let bookingSub: any = null;
-    let expenseSub: any = null;
-    let invSub: any = null;
-    let notifSub: any = null;
-    let isActive = true;
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    const fetchAndSubscribe = async () => {
-      // Buildings
-      const bldsQuery = supabase.from('buildings').select('*');
-      const { data: blds } = await bldsQuery;
-      if (!isActive) return;
-      if (blds) setBuildings(blds);
-
-      // Get properties this user manages
-      const { data: managed } = await supabase
-        .from('property_managers')
-        .select('propertyId')
-        .eq('userId', profile.uid);
-      
-      const managedIds = managed?.map(m => m.propertyId) || [];
-      const filterString = `landlordId.eq.${profile.uid}${managedIds.length > 0 ? `,id.in.(${managedIds.join(',')})` : ''}`;
-
-      // Properties
-      const propsQuery = supabase.from('properties').select('*').or(filterString);
-      const { data: props } = await propsQuery;
-      if (!isActive) return;
-      const loadedProperties = (props || []) as Property[];
-      if (props) setProperties(loadedProperties);
-      
-      propSub = supabase
-        .channel(`landlord-props-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, (payload) => {
-          if (!isActive) return;
-          const prop = payload.new as Property;
-          if (payload.eventType === 'INSERT') {
-            if (prop.landlordId === profile.uid || managedIds.includes(prop.id)) {
-              setProperties(prev => [...prev, prop]);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            if (prop.landlordId === profile.uid || managedIds.includes(prop.id)) {
-              setProperties(prev => {
-                const exists = prev.find(p => p.id === prop.id);
-                if (exists) return prev.map(p => p.id === prop.id ? prop : p);
-                return [...prev, prop];
-              });
-            } else {
-              setProperties(prev => prev.filter(p => p.id !== prop.id));
-            }
-          } else if (payload.eventType === 'DELETE') {
-            setProperties(prev => prev.filter(p => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Requests
-      const reqsQuery = supabase.from('maintenanceRequests').select('*');
-      const { data: reqs } = await reqsQuery;
-      if (!isActive) return;
-      if (reqs) setRequests(reqs);
-
-      reqSub = supabase
-        .channel(`landlord-reqs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenanceRequests' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setRequests(prev => [...prev, payload.new as MaintenanceRequest]);
-          } else if (payload.eventType === 'UPDATE') {
-            setRequests(prev => prev.map(r => r.id === payload.new.id ? payload.new as MaintenanceRequest : r));
-          } else if (payload.eventType === 'DELETE') {
-            setRequests(prev => prev.filter(r => r.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Payments
-      const paysQuery = supabase.from('rentPayments').select('*');
-      const { data: pays, error: paysError } = await paysQuery.order('dueDate', { ascending: false });
-      if (paysError) {
-        console.error('Landlord rent fetch:', paysError);
-        toast.error('Could not load rent ledger');
-      }
-      let loadedPayments = pays ? pays.map((row) => normalizeRentPayment(row as RentPayment)) : [];
-      if (!isActive) return;
-      if (pays) setPayments(loadedPayments);
-
-      if (profile.role !== 'admin' && isActive) {
-        try {
-          await syncAutomaticRentInvoices(
-            supabase,
-            loadedProperties,
-            loadedPayments,
-            profile.uid,
-            profile.platformId,
-          );
-          const {data: refreshed, error: refreshError} = await supabase
-            .from('rentPayments')
-            .select('*')
-            .eq('landlordId', profile.uid)
-            .order('dueDate', {ascending: false});
-          if (!refreshError && refreshed && isActive) {
-            setPayments(refreshed.map((row) => normalizeRentPayment(row as RentPayment)));
-          }
-        } catch (syncError) {
-          console.error('Automatic rent invoice sync:', syncError);
-        }
-      }
-
-      paySub = supabase
-        .channel(`landlord-pays-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rentPayments' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setPayments((prev) => [...prev, normalizeRentPayment(payload.new as RentPayment)]);
-          } else if (payload.eventType === 'UPDATE') {
-            setPayments((prev) =>
-              prev.map((p) =>
-                p.id === payload.new.id ? normalizeRentPayment(payload.new as RentPayment) : p,
-              ),
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setPayments((prev) => prev.filter((p) => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // BNB bookings
-      const bookingQuery = supabase.from('bookings').select('*').order('startDate', { ascending: false });
-      const { data: bookingRows } = await bookingQuery;
-      if (!isActive) return;
-      if (bookingRows) setBookings(bookingRows);
-
-      bookingSub = supabase
-        .channel(`landlord-bookings-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setBookings(prev => [payload.new as Booking, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setBookings(prev => prev.map(b => b.id === payload.new.id ? payload.new as Booking : b));
-          } else if (payload.eventType === 'DELETE') {
-            setBookings(prev => prev.filter(b => b.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Operating expenses / books
-      const expenseQuery = supabase.from('expenses').select('*').order('expenseDate', { ascending: false });
-      const { data: expenseRows } = await expenseQuery;
-      if (!isActive) return;
-      if (expenseRows) setExpenses(expenseRows);
-
-      expenseSub = supabase
-        .channel(`landlord-expenses-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setExpenses(prev => [payload.new as Expense, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setExpenses(prev => prev.map(e => e.id === payload.new.id ? payload.new as Expense : e));
-          } else if (payload.eventType === 'DELETE') {
-            setExpenses(prev => prev.filter(e => e.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Invitations (Tenants list)
-      const invQuery = supabase.from('invitations').select('*');
-      if (profile.role !== 'admin') {
-        invQuery.eq('landlordId', profile.uid);
-      }
-      const { data: invRows } = await invQuery;
-      if (!isActive) return;
-      if (invRows) setInvitations(invRows as Invitation[]);
-
-      const invFilter = profile.role === 'admin' ? undefined : `landlordId=eq.${profile.uid}`;
-      invSub = supabase
-        .channel(`landlord-invs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations', ...(invFilter ? { filter: invFilter } : {}) }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setInvitations(prev => {
-              const exists = prev.some(i => i.email.toLowerCase() === payload.new.email.toLowerCase());
-              if (exists) return prev;
-              return [...prev, payload.new as Invitation];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setInvitations(prev => prev.map(i => i.email.toLowerCase() === payload.new.email.toLowerCase() ? payload.new as Invitation : i));
-          } else if (payload.eventType === 'DELETE') {
-            setInvitations(prev => prev.filter(i => i.email.toLowerCase() !== payload.old.email.toLowerCase()));
-          }
-        })
-        .subscribe();
-
-      // Notifications
-      const notifQuery = supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipientEmail', profile.email.toLowerCase())
-        .order('createdAt', { ascending: false });
-      const { data: notifRows } = await notifQuery;
-      if (!isActive) return;
-      if (notifRows) setNotifications(notifRows);
-
-      notifSub = supabase
-        .channel(`landlord-notifs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipientEmail=eq.${profile.email.toLowerCase()}` }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setNotifications(prev => [payload.new, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
-          } else if (payload.eventType === 'DELETE') {
-            setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
+  // Polls the consolidated landlord dashboard endpoint (buildings, properties, requests,
+  // payments, bookings, expenses, invitations, notifications) — replaces the old seven
+  // Supabase Realtime channels. The endpoint also runs the automatic rent-invoice sync
+  // that used to happen client-side (see server/rentInvoiceSync.ts).
+  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
+  fetchDashboard.current = async () => {
+    try {
+      const data = await getLandlordDashboard();
+      setBuildings(data.buildings as Building[]);
+      setProperties(data.properties as Property[]);
+      setRequests(data.requests as MaintenanceRequest[]);
+      setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+      setBookings(data.bookings as Booking[]);
+      setExpenses(data.expenses as Expense[]);
+      setInvitations(data.invitations as Invitation[]);
+      setNotifications(data.notifications);
+    } catch (err) {
+      console.error('Landlord dashboard fetch failed:', err);
+      toast.error('Could not load dashboard data');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchAndSubscribe();
-
-    return () => {
-      isActive = false;
-      if (propSub) supabase.removeChannel(propSub);
-      if (reqSub) supabase.removeChannel(reqSub);
-      if (paySub) supabase.removeChannel(paySub);
-      if (bookingSub) supabase.removeChannel(bookingSub);
-      if (expenseSub) supabase.removeChannel(expenseSub);
-      if (invSub) supabase.removeChannel(invSub);
-      if (notifSub) supabase.removeChannel(notifSub);
-    };
+  useEffect(() => {
+    fetchDashboard.current();
+    const interval = setInterval(() => fetchDashboard.current(), 30000);
+    return () => clearInterval(interval);
   }, [profile.uid]);
 
   const filteredProperties = properties.filter(p => {
@@ -598,21 +411,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const sendRentReminder = async (payment: RentPayment) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('/api/web/notifications/remind-rent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ rentPaymentId: payment.id }),
-      });
-
-      const body = await response.json();
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to send reminder');
-      }
-
+      await sendRentReminderRequest(payment.id);
       toast.success(`Reminder sent successfully!`);
     } catch (error: any) {
       toast.error(error.message || "Failed to send reminder");
@@ -662,12 +461,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleAddManager = async () => {
     if (!managingProperty || !managerEmail) return;
     try {
-      const { error } = await supabase.rpc('add_property_manager', {
-        p_property_id: managingProperty.id,
-        p_email: managerEmail,
-        p_role: 'manager'
-      });
-      if (error) throw error;
+      await addPropertyManager(managingProperty.id, managerEmail, 'manager');
       toast.success("Manager added successfully!");
       setIsManageAccessOpen(false);
       setManagerEmail('');
@@ -680,18 +474,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleAddBuilding = async () => {
     if (!newBuilding.name) return;
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .insert([{
-          name: newBuilding.name,
-          address: newBuilding.address,
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-        }])
-        .select();
-      
-      if (error) throw error;
-      setBuildings(prev => [...prev, ...data]);
+      const created = await createBuilding({ name: newBuilding.name, address: newBuilding.address });
+      setBuildings(prev => [...prev, created as Building]);
       toast.success("Building added!");
       setIsBuildingOpen(false);
       setNewBuilding({ name: '', address: '' });
@@ -703,18 +487,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleUpdateBuilding = async () => {
     if (!editBuildingForm.name) return;
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .update({
-          name: editBuildingForm.name,
-          address: editBuildingForm.address,
-        })
-        .eq('id', editBuildingForm.id)
-        .select('*');
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? data[0] : b));
-      }
+      const updated = await updateBuilding(editBuildingForm.id, {
+        name: editBuildingForm.name,
+        address: editBuildingForm.address,
+      });
+      setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? (updated as Building) : b));
       toast.success("Asset updated!");
       setIsEditBuildingOpen(false);
     } catch (err: any) {
@@ -725,8 +502,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteBuilding = async (id: string) => {
     if (!confirm("Are you sure you want to delete this asset group? Any standalone units inside will become unassigned.")) return;
     try {
-      const { error } = await supabase.from('buildings').delete().eq('id', id);
-      if (error) throw error;
+      await deleteBuildingRequest(id);
       setBuildings(prev => prev.filter(b => b.id !== id));
       toast.success("Asset deleted successfully!");
     } catch (err: any) {
@@ -747,25 +523,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       return;
     }
     try {
-      const { error } = await supabase
-        .from('properties')
-        .insert([{
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-          buildingId: newProperty.buildingId === 'none' ? null : newProperty.buildingId,
-          unitNumber: newProperty.unitNumber,
-          title: newProperty.title,
-          description: newProperty.description,
-          type: newProperty.type,
-          price: Number(newProperty.price),
-          location: newProperty.location,
-          status: 'available',
-          amenities: newProperty.amenities.split(',').map(a => a.trim()).filter(a => a),
-          images: newProperty.images.split(',').map(url => url.trim()).filter(url => url),
-          createdAt: new Date().toISOString(),
-        }]);
-      
-      if (error) throw error;
+      const created = await createProperties([{
+        buildingId: newProperty.buildingId === 'none' ? null : newProperty.buildingId,
+        unitNumber: newProperty.unitNumber,
+        title: newProperty.title,
+        description: newProperty.description,
+        type: newProperty.type,
+        price: Number(newProperty.price),
+        location: newProperty.location,
+        amenities: newProperty.amenities.split(',').map(a => a.trim()).filter(a => a),
+        images: newProperty.images.split(',').map(url => url.trim()).filter(url => url),
+      }]);
+      setProperties(prev => [...prev, ...(created as Property[])]);
       toast.success("Property added!");
       setIsAddOpen(false);
       setNewProperty({ buildingId: 'none', unitNumber: '', title: '', description: '', type: 'residential', price: '', location: '', amenities: '', images: '' });
@@ -794,8 +563,6 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       for (let i = 0; i < bulkAddForm.count; i++) {
         const unitNum = `${bulkAddForm.prefix}${Number(bulkAddForm.startNumber) + i}`;
         inserts.push({
-          landlordId: profile.uid,
-          platformId: profile.platformId,
           buildingId: bulkAddForm.buildingId,
           unitNumber: unitNum,
           title: `${building.name} - ${unitNum}`,
@@ -803,15 +570,13 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
           type: bulkAddForm.type,
           price: Number(bulkAddForm.price),
           location: building.address,
-          status: 'available',
           amenities: bulkAddForm.amenities.split(',').map(a => a.trim()).filter(a => a),
           images: bulkAddForm.images.split(',').map(url => url.trim()).filter(url => url),
-          createdAt: new Date().toISOString(),
         });
       }
-      const { error } = await supabase.from('properties').insert(inserts);
-      if (error) throw error;
-      
+      const created = await createProperties(inserts);
+      setProperties(prev => [...prev, ...(created as Property[])]);
+
       toast.success(`Successfully created ${bulkAddForm.count} units!`);
       setIsBulkAddOpen(false);
       setBulkAddForm({ buildingId: 'none', type: 'residential', price: '', prefix: '', startNumber: 1, count: 10, amenities: '', images: '' });
@@ -820,40 +585,19 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
-  const refreshLandlordPayments = async () => {
-    const {data, error} = await supabase
-      .from('rentPayments')
-      .select('*')
-      .eq('landlordId', profile.uid)
-      .order('dueDate', {ascending: false});
-    if (error) throw error;
-    if (data) setPayments(data.map((row) => normalizeRentPayment(row as RentPayment)));
-  };
-
-  const refreshLandlordInvitations = async () => {
-    const { data } = await supabase
-      .from('invitations')
-      .select('*')
-      .eq('landlordId', profile.uid);
-    if (data) setInvitations(data as Invitation[]);
-  };
+  const refreshLandlordPayments = () => fetchDashboard.current();
 
   const handleRecordExpense = async () => {
     try {
-      const { error } = await supabase
-        .from('expenses')
-        .insert([{
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-          propertyId: newExpense.propertyId === 'none' ? null : newExpense.propertyId,
-          category: newExpense.category,
-          description: newExpense.description,
-          amount: Number(newExpense.amount),
-          expenseDate: newExpense.expenseDate,
-          receiptUrl: newExpense.receiptUrl || null,
-          createdAt: new Date().toISOString(),
-        }]);
-      if (error) throw error;
+      const created = await createExpense({
+        propertyId: newExpense.propertyId === 'none' ? null : newExpense.propertyId,
+        category: newExpense.category,
+        description: newExpense.description,
+        amount: Number(newExpense.amount),
+        expenseDate: newExpense.expenseDate,
+        receiptUrl: newExpense.receiptUrl || null,
+      });
+      setExpenses(prev => [created as Expense, ...prev]);
       toast.success("Expense recorded!");
       setIsExpenseOpen(false);
       setNewExpense({ propertyId: 'none', category: 'maintenance', description: '', amount: '', expenseDate: new Date().toISOString().split('T')[0], receiptUrl: '' });
@@ -865,8 +609,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteProperty = async (id: string) => {
     if (!confirm("Delete property?")) return;
     try {
-      const { error } = await supabase.from('properties').delete().eq('id', id);
-      if (error) throw error;
+      await deletePropertyRequest(id);
+      setProperties(prev => prev.filter(p => p.id !== id));
       toast.success("Deleted");
     } catch (error) {
       toast.error("Failed");
@@ -882,18 +626,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!editingProperty) return;
     try {
       const { id, ...data } = editingProperty;
-      const { error } = await supabase.from('properties').update(data).eq('id', id);
-      if (error) throw error;
+      const updated = await updateProperty(id, data);
+      setProperties(prev => prev.map(p => p.id === id ? (updated as Property) : p));
 
       if (data.status === 'rented' && data.tenantId) {
-        await ensureRentInvoiceForProperty(
-          supabase,
-          {...editingProperty, ...data, id},
-          String(data.tenantId),
-          profile.uid,
-          profile.platformId,
-          payments,
-        );
         await refreshLandlordPayments();
       }
 
@@ -906,8 +642,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleUpdateProfile = async () => {
     try {
-      const { error } = await supabase.from('users').update(landlordProfile).eq('uid', profile.uid);
-      if (error) throw error;
+      await updateMyProfile(landlordProfile);
       toast.success("Profile updated");
       setIsProfileOpen(false);
     } catch (error) {
@@ -916,10 +651,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authClient.signOut({});
     toast.success('Signed out');
   };
 
+  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -941,7 +677,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAsPaid = async (paymentId: string) => {
     try {
       await markRentPaymentManual(paymentId, 'Landlord marked as paid (cash/manual)');
-      
+
       // Update local state for immediate feedback
       setPayments((prev) =>
         prev.map((p) =>
@@ -960,13 +696,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       toast.success('Marked as paid (manual)');
 
       // After marking paid, sync to ensure next month's invoice is ready
-      await syncAutomaticRentInvoices(
-        supabase,
-        properties,
-        payments.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p),
-        profile.uid,
-        profile.platformId
-      );
+      await syncRentInvoices();
       await refreshLandlordPayments();
     } catch (error: any) {
       toast.error(error.message || 'Failed to mark payment. Is the API server running (npm run dev)?');
@@ -1017,26 +747,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       if (!selectedProp) return;
 
       const tenantEmail = assigningTenantEmail.toLowerCase();
-      const { error } = await supabase.from('properties').update({ 
-        tenantId: tenantEmail, 
-        status: 'rented' 
-      }).eq('id', selectedPropertyToAssign);
-      
-      if (error) throw error;
-
-      const rentedProperty = {...selectedProp, tenantId: tenantEmail, status: 'rented' as const};
-      
-      // When assigning, we generate the first invoice. 
-      // It should be 'pending' even if created today, giving 30 days of grace logic.
-      await ensureRentInvoiceForProperty(
-        supabase,
-        rentedProperty,
-        tenantEmail,
-        profile.uid,
-        profile.platformId,
-        payments,
-        true // initialAssignment flag
-      );
+      // The server assigns the property and generates the first invoice (pending, with a
+      // 30-day grace period) in one step — see /landlord/tenants/assign.
+      const { property: updated } = await assignTenant(selectedProp.id, tenantEmail);
+      setProperties(prev => prev.map(p => p.id === updated.id ? (updated as Property) : p));
       await refreshLandlordPayments();
 
       toast.success('Tenant assigned — first rent invoice generated');
@@ -1051,31 +765,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm(`Unassign all properties from ${email} and cancel unpaid invoices?`)) return;
     try {
       const normalizedEmail = email.toLowerCase();
-      
-      // 1. Unassign from properties
-      const { error } = await supabase.from('properties').update({ 
-        tenantId: null, 
-        status: 'available' 
-      }).ilike('tenantId', normalizedEmail);
-      
-      if (error) throw error;
-      
-      // 2. Delete unpaid invoices for this tenant
-      await supabase.from('rentPayments')
-        .delete()
-        .ilike('tenantId', normalizedEmail)
-        .neq('status', 'paid');
+      await unassignTenant(normalizedEmail);
 
       // Update local state immediately
-      setProperties(prev => prev.map(p => 
-        p.tenantId?.toLowerCase() === normalizedEmail 
-          ? { ...p, tenantId: null, status: 'available' as const } 
+      setProperties(prev => prev.map(p =>
+        p.tenantId?.toLowerCase() === normalizedEmail
+          ? { ...p, tenantId: null, status: 'available' as const }
           : p
       ));
-      setPayments(prev => prev.filter(p => 
+      setPayments(prev => prev.filter(p =>
         p.tenantId?.toLowerCase() !== normalizedEmail || p.status === 'paid'
       ));
-      
+
       toast.success("Properties unassigned & unpaid invoices cleared");
     } catch (error) {
       toast.error("Failed to unassign properties");
@@ -1086,32 +787,16 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm("Delete tenant, unassign from all units, and cancel unpaid invoices?")) return;
     try {
       const normalizedEmail = email.toLowerCase();
-      
-      // 1. Remove invitation
-      const { error: invError } = await supabase.from('invitations').delete().ilike('email', normalizedEmail);
-      if (invError) throw invError;
-      
-      // 2. Unassign from properties
-      const { error: propError } = await supabase.from('properties').update({ 
-        tenantId: null, 
-        status: 'available' 
-      }).ilike('tenantId', normalizedEmail);
-      if (propError) throw propError;
-
-      // 3. Delete unpaid invoices
-      await supabase.from('rentPayments')
-        .delete()
-        .ilike('tenantId', normalizedEmail)
-        .neq('status', 'paid');
+      await deleteTenantRequest(normalizedEmail);
 
       // Update local state immediately
       setInvitations(prev => prev.filter(i => i.email.toLowerCase() !== normalizedEmail));
-      setProperties(prev => prev.map(p => 
-        p.tenantId?.toLowerCase() === normalizedEmail 
-          ? { ...p, tenantId: null, status: 'available' as const } 
+      setProperties(prev => prev.map(p =>
+        p.tenantId?.toLowerCase() === normalizedEmail
+          ? { ...p, tenantId: null, status: 'available' as const }
           : p
       ));
-      setPayments(prev => prev.filter(p => 
+      setPayments(prev => prev.filter(p =>
         p.tenantId?.toLowerCase() !== normalizedEmail || p.status === 'paid'
       ));
 
@@ -1126,12 +811,9 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm(`Delete ${selectedTenantEmails.length} tenants, unassign from all units, and cancel unpaid invoices?`)) return;
     try {
       for (const email of selectedTenantEmails) {
-        const normalizedEmail = email.toLowerCase();
-        await supabase.from('invitations').delete().ilike('email', normalizedEmail);
-        await supabase.from('properties').update({ tenantId: null, status: 'available' }).ilike('tenantId', normalizedEmail);
-        await supabase.from('rentPayments').delete().ilike('tenantId', normalizedEmail).neq('status', 'paid');
+        await deleteTenantRequest(email.toLowerCase());
       }
-      
+
       const normalizedEmails = selectedTenantEmails.map(e => e.toLowerCase());
       setInvitations(prev => prev.filter(i => !normalizedEmails.includes(i.email.toLowerCase())));
       setProperties(prev => prev.map(p => 
@@ -1188,12 +870,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id);
-
-      if (error) throw error;
+      await markNotificationRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       toast.success('Marked as read');
     } catch (err: any) {
@@ -1204,13 +881,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleMarkAllAsRead = async () => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('recipientEmail', profile.email.toLowerCase())
-        .eq('read', false);
-
-      if (error) throw error;
+      await markAllNotificationsRead();
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       toast.success('All notifications marked as read');
     } catch (err: any) {
@@ -1219,14 +890,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
+  // Preserves the original behavior: supabase-setup.sql never granted a DELETE policy
+  // on notifications to anyone but the service role, so this always 403s for a
+  // non-super-admin landlord (see the /notifications/:id DELETE route in app.ts).
   const handleDeleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteNotificationRequest(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast.success('Notification deleted');
     } catch (err: any) {
@@ -1241,8 +910,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const updateRequestStatus = async (id: string, status: string) => {
     try {
-      const { error } = await supabase.from('maintenanceRequests').update({ status }).eq('id', id);
-      if (error) throw error;
+      await updateMaintenanceRequestStatus(id, status as 'pending' | 'in-progress' | 'resolved');
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, status: status as MaintenanceRequest['status'] } : r));
       toast.success("Updated");
     } catch (error) {
       toast.error("Failed");
