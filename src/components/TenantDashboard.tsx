@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
 import { UserProfile } from '../App';
 import {
   createPesapalRentCheckout,
@@ -10,6 +9,7 @@ import {
   createMaintenanceRequest,
   markNotificationRead as markNotificationReadRequest,
   updateMyProfile,
+  uploadFile,
 } from '../lib/api';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
@@ -286,12 +286,9 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     if (!file) return;
     setIsUploading(true);
     try {
-      const fileName = `${profile.uid}/avatar-${Date.now()}.${file.name.split('.').pop()}`;
-      const { error } = await supabase.storage.from('properties').upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
-      setTenantProfile({ ...tenantProfile, avatarUrl: publicUrl });
-      await updateMyProfile({ avatarUrl: publicUrl });
+      const { url } = await uploadFile(file, file.name, 'avatar');
+      setTenantProfile({ ...tenantProfile, avatarUrl: url });
+      await updateMyProfile({ avatarUrl: url });
     } catch (error) {
       toast.error("Failed to upload profile picture");
     } finally {

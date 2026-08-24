@@ -4,6 +4,8 @@ import {randomUUID} from 'node:crypto';
 import dotenv from 'dotenv';
 import {and, desc, eq, ilike, inArray, isNull, ne, or, sql} from 'drizzle-orm';
 import express, {type ErrorRequestHandler, type NextFunction, type Request, type Response} from 'express';
+import multer from 'multer';
+import {buildObjectKey, uploadObject} from './server/storage.ts';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import {createProxyMiddleware} from 'http-proxy-middleware';
@@ -1674,6 +1676,38 @@ app.post('/api/webhooks/pesapal/ipn', webhookLimiter, handlePesapalIpn);
 
 const bffRouter = express.Router();
 bffRouter.use(authLimiter);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {fileSize: 10 * 1024 * 1024},
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new Error('Only image uploads are allowed'));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+/** Replaces supabase.storage.from('properties').upload(...) — every upload lands
+ * under the caller's own uid folder, matching the old bucket's storage RLS policy. */
+bffRouter.post(
+  '/uploads',
+  requireAuth,
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    const file = (req as unknown as {file?: Express.Multer.File}).file;
+    if (!file) {
+      res.status(400).json({error: 'No file provided'});
+      return;
+    }
+    const subpath = typeof req.body?.subpath === 'string' ? req.body.subpath.replace(/^\/+|\/+$/g, '') : undefined;
+    const key = buildObjectKey(req.profile!.uid, file.originalname, subpath);
+    const url = await uploadObject(key, file.buffer, file.mimetype);
+    res.status(201).json({url});
+  }),
+);
+
 bffRouter.get('/session', requireAuth, asyncHandler(async (req, res) => {
   res.json({
     client: req.clientKind,
