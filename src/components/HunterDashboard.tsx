@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../supabase';
+import { getAvailableProperties, getLandlordPublicContact, createBooking } from '../lib/api';
 import { UserProfile } from '../App';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -121,41 +121,28 @@ export default function HunterDashboard({
     });
   };
 
+  // Polls the public available-listings endpoint — replaces the old Supabase Realtime
+  // subscription on properties where status=available.
   useEffect(() => {
     let isActive = true;
-    let propSub: any = null;
 
-    const fetchAndSubscribe = async () => {
-      const { data: props } = await supabase
-        .from('properties')
-        .select('*')
-        .eq('status', 'available')
-        .order('createdAt', { ascending: false });
-      if (!isActive) return;
-
-      if (props) setProperties(props);
-      setLoading(false);
-
-      propSub = supabase
-        .channel(`public-properties-available-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'properties', filter: 'status=eq.available' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setProperties(prev => [...prev, payload.new as Property]);
-          } else if (payload.eventType === 'UPDATE') {
-            setProperties(prev => prev.map(p => p.id === payload.new.id ? payload.new as Property : p));
-          } else if (payload.eventType === 'DELETE') {
-            setProperties(prev => prev.filter(p => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
+    const fetchProperties = async () => {
+      try {
+        const props = await getAvailableProperties();
+        if (isActive) setProperties(props as Property[]);
+      } catch (err) {
+        console.error('Failed to load available properties:', err);
+      } finally {
+        if (isActive) setLoading(false);
+      }
     };
 
-    fetchAndSubscribe();
+    fetchProperties();
+    const interval = setInterval(fetchProperties, 30000);
 
     return () => {
       isActive = false;
-      if (propSub) supabase.removeChannel(propSub);
+      clearInterval(interval);
     };
   }, []);
 
@@ -195,44 +182,17 @@ export default function HunterDashboard({
     try {
       setPaying(true);
 
-      const bookingData = {
-        hunterId: profile.uid,
+      // The server creates the booking and notifies the landlord in one step.
+      await createBooking({
         propertyId: property.id,
         landlordId: property.landlordId,
         platformId: property.platformId,
         startDate: property.type === 'bnb' ? bookingDates.checkIn : new Date().toISOString().split('T')[0],
         endDate: property.type === 'bnb' ? bookingDates.checkOut : new Date(Date.now() + 86400000).toISOString().split('T')[0],
-        totalPrice: totalPrice,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-
-      const { error } = await supabase.from('bookings').insert([bookingData]);
-
-      if (error) throw error;
+        totalPrice,
+      });
 
       logAudit('BOOKING_CREATE', 'booking', property.id, { status: 'pending', totalPrice });
-
-      const { data: landlordRow } = await supabase
-        .from('users')
-        .select('email')
-        .eq('uid', property.landlordId)
-        .maybeSingle();
-
-      if (landlordRow?.email) {
-        await supabase.from('notifications').insert([
-          {
-            recipientEmail: landlordRow.email.toLowerCase(),
-            platformId: property.platformId,
-            type: 'booking',
-            title: 'New booking request',
-            message: `${profile.displayName || profile.email} requested ${property.title}. Total KES ${totalPrice.toLocaleString()}. Confirm after payment.`,
-            propertyId: property.id,
-            read: false,
-          },
-        ]);
-      }
-
       toast.success('Booking request sent! The landlord will confirm after payment.');
     } catch (error) {
       console.error("Booking error:", error);
@@ -383,17 +343,14 @@ export default function HunterDashboard({
     const [fetching, setFetching] = useState(true);
 
     useEffect(() => {
+      if (!profile) {
+        setFetching(false);
+        return;
+      }
       const fetchLandlord = async () => {
         try {
-          const { data, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('uid', landlordId)
-            .single();
-          
-          if (data) {
-            setLandlord(data);
-          }
+          const data = await getLandlordPublicContact(landlordId);
+          setLandlord(data);
         } catch (error) {
           console.error("Error fetching landlord:", error);
         } finally {

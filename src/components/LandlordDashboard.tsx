@@ -1,12 +1,37 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import { supabase } from '../supabase';
-import { provisionUser, markRentPaymentManual } from '../lib/api';
+import { authClient } from '../lib/auth-client';
+import {
+  provisionUser,
+  markRentPaymentManual,
+  sendRentReminder as sendRentReminderRequest,
+  getLandlordDashboard,
+  syncRentInvoices,
+  createBuilding,
+  updateBuilding,
+  deleteBuilding as deleteBuildingRequest,
+  createProperties,
+  updateProperty,
+  deleteProperty as deletePropertyRequest,
+  addPropertyManager,
+  assignTenant,
+  unassignTenant,
+  deleteTenant as deleteTenantRequest,
+  updateMaintenanceRequestStatus,
+  createExpense,
+  updateMyProfile,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification as deleteNotificationRequest,
+} from '../lib/api';
 import { logAudit } from '../lib/audit';
-import { ensureRentInvoiceForProperty, syncAutomaticRentInvoices } from '../lib/rentInvoices';
 import { formatStatKes, normalizeRentPayment } from '../lib/rentUtils';
 import { UserProfile } from '../App';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatCard } from '@/components/ui/stat-card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
+import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
 
 interface Building {
   id: string;
@@ -229,243 +255,34 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     receiptUrl: '',
   });
 
-  useEffect(() => {
-    let propSub: any = null;
-    let reqSub: any = null;
-    let paySub: any = null;
-    let bookingSub: any = null;
-    let expenseSub: any = null;
-    let invSub: any = null;
-    let notifSub: any = null;
-    let isActive = true;
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    const fetchAndSubscribe = async () => {
-      // Buildings
-      const bldsQuery = supabase.from('buildings').select('*');
-      const { data: blds } = await bldsQuery;
-      if (!isActive) return;
-      if (blds) setBuildings(blds);
-
-      // Get properties this user manages
-      const { data: managed } = await supabase
-        .from('property_managers')
-        .select('propertyId')
-        .eq('userId', profile.uid);
-      
-      const managedIds = managed?.map(m => m.propertyId) || [];
-      const filterString = `landlordId.eq.${profile.uid}${managedIds.length > 0 ? `,id.in.(${managedIds.join(',')})` : ''}`;
-
-      // Properties
-      const propsQuery = supabase.from('properties').select('*').or(filterString);
-      const { data: props } = await propsQuery;
-      if (!isActive) return;
-      const loadedProperties = (props || []) as Property[];
-      if (props) setProperties(loadedProperties);
-      
-      propSub = supabase
-        .channel(`landlord-props-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, (payload) => {
-          if (!isActive) return;
-          const prop = payload.new as Property;
-          if (payload.eventType === 'INSERT') {
-            if (prop.landlordId === profile.uid || managedIds.includes(prop.id)) {
-              setProperties(prev => [...prev, prop]);
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            if (prop.landlordId === profile.uid || managedIds.includes(prop.id)) {
-              setProperties(prev => {
-                const exists = prev.find(p => p.id === prop.id);
-                if (exists) return prev.map(p => p.id === prop.id ? prop : p);
-                return [...prev, prop];
-              });
-            } else {
-              setProperties(prev => prev.filter(p => p.id !== prop.id));
-            }
-          } else if (payload.eventType === 'DELETE') {
-            setProperties(prev => prev.filter(p => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Requests
-      const reqsQuery = supabase.from('maintenanceRequests').select('*');
-      const { data: reqs } = await reqsQuery;
-      if (!isActive) return;
-      if (reqs) setRequests(reqs);
-
-      reqSub = supabase
-        .channel(`landlord-reqs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenanceRequests' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setRequests(prev => [...prev, payload.new as MaintenanceRequest]);
-          } else if (payload.eventType === 'UPDATE') {
-            setRequests(prev => prev.map(r => r.id === payload.new.id ? payload.new as MaintenanceRequest : r));
-          } else if (payload.eventType === 'DELETE') {
-            setRequests(prev => prev.filter(r => r.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Payments
-      const paysQuery = supabase.from('rentPayments').select('*');
-      const { data: pays, error: paysError } = await paysQuery.order('dueDate', { ascending: false });
-      if (paysError) {
-        console.error('Landlord rent fetch:', paysError);
-        toast.error('Could not load rent ledger');
-      }
-      let loadedPayments = pays ? pays.map((row) => normalizeRentPayment(row as RentPayment)) : [];
-      if (!isActive) return;
-      if (pays) setPayments(loadedPayments);
-
-      if (profile.role !== 'admin' && isActive) {
-        try {
-          await syncAutomaticRentInvoices(
-            supabase,
-            loadedProperties,
-            loadedPayments,
-            profile.uid,
-            profile.platformId,
-          );
-          const {data: refreshed, error: refreshError} = await supabase
-            .from('rentPayments')
-            .select('*')
-            .eq('landlordId', profile.uid)
-            .order('dueDate', {ascending: false});
-          if (!refreshError && refreshed && isActive) {
-            setPayments(refreshed.map((row) => normalizeRentPayment(row as RentPayment)));
-          }
-        } catch (syncError) {
-          console.error('Automatic rent invoice sync:', syncError);
-        }
-      }
-
-      paySub = supabase
-        .channel(`landlord-pays-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rentPayments' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setPayments((prev) => [...prev, normalizeRentPayment(payload.new as RentPayment)]);
-          } else if (payload.eventType === 'UPDATE') {
-            setPayments((prev) =>
-              prev.map((p) =>
-                p.id === payload.new.id ? normalizeRentPayment(payload.new as RentPayment) : p,
-              ),
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setPayments((prev) => prev.filter((p) => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // BNB bookings
-      const bookingQuery = supabase.from('bookings').select('*').order('startDate', { ascending: false });
-      const { data: bookingRows } = await bookingQuery;
-      if (!isActive) return;
-      if (bookingRows) setBookings(bookingRows);
-
-      bookingSub = supabase
-        .channel(`landlord-bookings-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setBookings(prev => [payload.new as Booking, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setBookings(prev => prev.map(b => b.id === payload.new.id ? payload.new as Booking : b));
-          } else if (payload.eventType === 'DELETE') {
-            setBookings(prev => prev.filter(b => b.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Operating expenses / books
-      const expenseQuery = supabase.from('expenses').select('*').order('expenseDate', { ascending: false });
-      const { data: expenseRows } = await expenseQuery;
-      if (!isActive) return;
-      if (expenseRows) setExpenses(expenseRows);
-
-      expenseSub = supabase
-        .channel(`landlord-expenses-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setExpenses(prev => [payload.new as Expense, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setExpenses(prev => prev.map(e => e.id === payload.new.id ? payload.new as Expense : e));
-          } else if (payload.eventType === 'DELETE') {
-            setExpenses(prev => prev.filter(e => e.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Invitations (Tenants list)
-      const invQuery = supabase.from('invitations').select('*');
-      if (profile.role !== 'admin') {
-        invQuery.eq('landlordId', profile.uid);
-      }
-      const { data: invRows } = await invQuery;
-      if (!isActive) return;
-      if (invRows) setInvitations(invRows as Invitation[]);
-
-      const invFilter = profile.role === 'admin' ? undefined : `landlordId=eq.${profile.uid}`;
-      invSub = supabase
-        .channel(`landlord-invs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'invitations', ...(invFilter ? { filter: invFilter } : {}) }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setInvitations(prev => {
-              const exists = prev.some(i => i.email.toLowerCase() === payload.new.email.toLowerCase());
-              if (exists) return prev;
-              return [...prev, payload.new as Invitation];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            setInvitations(prev => prev.map(i => i.email.toLowerCase() === payload.new.email.toLowerCase() ? payload.new as Invitation : i));
-          } else if (payload.eventType === 'DELETE') {
-            setInvitations(prev => prev.filter(i => i.email.toLowerCase() !== payload.old.email.toLowerCase()));
-          }
-        })
-        .subscribe();
-
-      // Notifications
-      const notifQuery = supabase
-        .from('notifications')
-        .select('*')
-        .eq('recipientEmail', profile.email.toLowerCase())
-        .order('createdAt', { ascending: false });
-      const { data: notifRows } = await notifQuery;
-      if (!isActive) return;
-      if (notifRows) setNotifications(notifRows);
-
-      notifSub = supabase
-        .channel(`landlord-notifs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipientEmail=eq.${profile.email.toLowerCase()}` }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setNotifications(prev => [payload.new, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new : n));
-          } else if (payload.eventType === 'DELETE') {
-            setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
+  // Polls the consolidated landlord dashboard endpoint (buildings, properties, requests,
+  // payments, bookings, expenses, invitations, notifications) — replaces the old seven
+  // Supabase Realtime channels. The endpoint also runs the automatic rent-invoice sync
+  // that used to happen client-side (see server/rentInvoiceSync.ts).
+  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
+  fetchDashboard.current = async () => {
+    try {
+      const data = await getLandlordDashboard();
+      setBuildings(data.buildings as Building[]);
+      setProperties(data.properties as Property[]);
+      setRequests(data.requests as MaintenanceRequest[]);
+      setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+      setBookings(data.bookings as Booking[]);
+      setExpenses(data.expenses as Expense[]);
+      setInvitations(data.invitations as Invitation[]);
+      setNotifications(data.notifications);
+    } catch (err) {
+      console.error('Landlord dashboard fetch failed:', err);
+      toast.error('Could not load dashboard data');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchAndSubscribe();
-
-    return () => {
-      isActive = false;
-      if (propSub) supabase.removeChannel(propSub);
-      if (reqSub) supabase.removeChannel(reqSub);
-      if (paySub) supabase.removeChannel(paySub);
-      if (bookingSub) supabase.removeChannel(bookingSub);
-      if (expenseSub) supabase.removeChannel(expenseSub);
-      if (invSub) supabase.removeChannel(invSub);
-      if (notifSub) supabase.removeChannel(notifSub);
-    };
+  useEffect(() => {
+    fetchDashboard.current();
+    const interval = setInterval(() => fetchDashboard.current(), 30000);
+    return () => clearInterval(interval);
   }, [profile.uid]);
 
   const filteredProperties = properties.filter(p => {
@@ -594,21 +411,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const sendRentReminder = async (payment: RentPayment) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('/api/web/notifications/remind-rent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ rentPaymentId: payment.id }),
-      });
-
-      const body = await response.json();
-      if (!response.ok) {
-        throw new Error(body.error || 'Failed to send reminder');
-      }
-
+      await sendRentReminderRequest(payment.id);
       toast.success(`Reminder sent successfully!`);
     } catch (error: any) {
       toast.error(error.message || "Failed to send reminder");
@@ -658,12 +461,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleAddManager = async () => {
     if (!managingProperty || !managerEmail) return;
     try {
-      const { error } = await supabase.rpc('add_property_manager', {
-        p_property_id: managingProperty.id,
-        p_email: managerEmail,
-        p_role: 'manager'
-      });
-      if (error) throw error;
+      await addPropertyManager(managingProperty.id, managerEmail, 'manager');
       toast.success("Manager added successfully!");
       setIsManageAccessOpen(false);
       setManagerEmail('');
@@ -676,18 +474,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleAddBuilding = async () => {
     if (!newBuilding.name) return;
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .insert([{
-          name: newBuilding.name,
-          address: newBuilding.address,
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-        }])
-        .select();
-      
-      if (error) throw error;
-      setBuildings(prev => [...prev, ...data]);
+      const created = await createBuilding({ name: newBuilding.name, address: newBuilding.address });
+      setBuildings(prev => [...prev, created as Building]);
       toast.success("Building added!");
       setIsBuildingOpen(false);
       setNewBuilding({ name: '', address: '' });
@@ -699,18 +487,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleUpdateBuilding = async () => {
     if (!editBuildingForm.name) return;
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .update({
-          name: editBuildingForm.name,
-          address: editBuildingForm.address,
-        })
-        .eq('id', editBuildingForm.id)
-        .select('*');
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? data[0] : b));
-      }
+      const updated = await updateBuilding(editBuildingForm.id, {
+        name: editBuildingForm.name,
+        address: editBuildingForm.address,
+      });
+      setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? (updated as Building) : b));
       toast.success("Asset updated!");
       setIsEditBuildingOpen(false);
     } catch (err: any) {
@@ -721,8 +502,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteBuilding = async (id: string) => {
     if (!confirm("Are you sure you want to delete this asset group? Any standalone units inside will become unassigned.")) return;
     try {
-      const { error } = await supabase.from('buildings').delete().eq('id', id);
-      if (error) throw error;
+      await deleteBuildingRequest(id);
       setBuildings(prev => prev.filter(b => b.id !== id));
       toast.success("Asset deleted successfully!");
     } catch (err: any) {
@@ -743,25 +523,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       return;
     }
     try {
-      const { error } = await supabase
-        .from('properties')
-        .insert([{
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-          buildingId: newProperty.buildingId === 'none' ? null : newProperty.buildingId,
-          unitNumber: newProperty.unitNumber,
-          title: newProperty.title,
-          description: newProperty.description,
-          type: newProperty.type,
-          price: Number(newProperty.price),
-          location: newProperty.location,
-          status: 'available',
-          amenities: newProperty.amenities.split(',').map(a => a.trim()).filter(a => a),
-          images: newProperty.images.split(',').map(url => url.trim()).filter(url => url),
-          createdAt: new Date().toISOString(),
-        }]);
-      
-      if (error) throw error;
+      const created = await createProperties([{
+        buildingId: newProperty.buildingId === 'none' ? null : newProperty.buildingId,
+        unitNumber: newProperty.unitNumber,
+        title: newProperty.title,
+        description: newProperty.description,
+        type: newProperty.type,
+        price: Number(newProperty.price),
+        location: newProperty.location,
+        amenities: newProperty.amenities.split(',').map(a => a.trim()).filter(a => a),
+        images: newProperty.images.split(',').map(url => url.trim()).filter(url => url),
+      }]);
+      setProperties(prev => [...prev, ...(created as Property[])]);
       toast.success("Property added!");
       setIsAddOpen(false);
       setNewProperty({ buildingId: 'none', unitNumber: '', title: '', description: '', type: 'residential', price: '', location: '', amenities: '', images: '' });
@@ -790,8 +563,6 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       for (let i = 0; i < bulkAddForm.count; i++) {
         const unitNum = `${bulkAddForm.prefix}${Number(bulkAddForm.startNumber) + i}`;
         inserts.push({
-          landlordId: profile.uid,
-          platformId: profile.platformId,
           buildingId: bulkAddForm.buildingId,
           unitNumber: unitNum,
           title: `${building.name} - ${unitNum}`,
@@ -799,15 +570,13 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
           type: bulkAddForm.type,
           price: Number(bulkAddForm.price),
           location: building.address,
-          status: 'available',
           amenities: bulkAddForm.amenities.split(',').map(a => a.trim()).filter(a => a),
           images: bulkAddForm.images.split(',').map(url => url.trim()).filter(url => url),
-          createdAt: new Date().toISOString(),
         });
       }
-      const { error } = await supabase.from('properties').insert(inserts);
-      if (error) throw error;
-      
+      const created = await createProperties(inserts);
+      setProperties(prev => [...prev, ...(created as Property[])]);
+
       toast.success(`Successfully created ${bulkAddForm.count} units!`);
       setIsBulkAddOpen(false);
       setBulkAddForm({ buildingId: 'none', type: 'residential', price: '', prefix: '', startNumber: 1, count: 10, amenities: '', images: '' });
@@ -816,40 +585,19 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
-  const refreshLandlordPayments = async () => {
-    const {data, error} = await supabase
-      .from('rentPayments')
-      .select('*')
-      .eq('landlordId', profile.uid)
-      .order('dueDate', {ascending: false});
-    if (error) throw error;
-    if (data) setPayments(data.map((row) => normalizeRentPayment(row as RentPayment)));
-  };
-
-  const refreshLandlordInvitations = async () => {
-    const { data } = await supabase
-      .from('invitations')
-      .select('*')
-      .eq('landlordId', profile.uid);
-    if (data) setInvitations(data as Invitation[]);
-  };
+  const refreshLandlordPayments = () => fetchDashboard.current();
 
   const handleRecordExpense = async () => {
     try {
-      const { error } = await supabase
-        .from('expenses')
-        .insert([{
-          landlordId: profile.uid,
-          platformId: profile.platformId,
-          propertyId: newExpense.propertyId === 'none' ? null : newExpense.propertyId,
-          category: newExpense.category,
-          description: newExpense.description,
-          amount: Number(newExpense.amount),
-          expenseDate: newExpense.expenseDate,
-          receiptUrl: newExpense.receiptUrl || null,
-          createdAt: new Date().toISOString(),
-        }]);
-      if (error) throw error;
+      const created = await createExpense({
+        propertyId: newExpense.propertyId === 'none' ? null : newExpense.propertyId,
+        category: newExpense.category,
+        description: newExpense.description,
+        amount: Number(newExpense.amount),
+        expenseDate: newExpense.expenseDate,
+        receiptUrl: newExpense.receiptUrl || null,
+      });
+      setExpenses(prev => [created as Expense, ...prev]);
       toast.success("Expense recorded!");
       setIsExpenseOpen(false);
       setNewExpense({ propertyId: 'none', category: 'maintenance', description: '', amount: '', expenseDate: new Date().toISOString().split('T')[0], receiptUrl: '' });
@@ -861,8 +609,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteProperty = async (id: string) => {
     if (!confirm("Delete property?")) return;
     try {
-      const { error } = await supabase.from('properties').delete().eq('id', id);
-      if (error) throw error;
+      await deletePropertyRequest(id);
+      setProperties(prev => prev.filter(p => p.id !== id));
       toast.success("Deleted");
     } catch (error) {
       toast.error("Failed");
@@ -878,18 +626,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!editingProperty) return;
     try {
       const { id, ...data } = editingProperty;
-      const { error } = await supabase.from('properties').update(data).eq('id', id);
-      if (error) throw error;
+      const updated = await updateProperty(id, data);
+      setProperties(prev => prev.map(p => p.id === id ? (updated as Property) : p));
 
       if (data.status === 'rented' && data.tenantId) {
-        await ensureRentInvoiceForProperty(
-          supabase,
-          {...editingProperty, ...data, id},
-          String(data.tenantId),
-          profile.uid,
-          profile.platformId,
-          payments,
-        );
         await refreshLandlordPayments();
       }
 
@@ -902,8 +642,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleUpdateProfile = async () => {
     try {
-      const { error } = await supabase.from('users').update(landlordProfile).eq('uid', profile.uid);
-      if (error) throw error;
+      await updateMyProfile(landlordProfile);
       toast.success("Profile updated");
       setIsProfileOpen(false);
     } catch (error) {
@@ -912,10 +651,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authClient.signOut({});
     toast.success('Signed out');
   };
 
+  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -937,7 +677,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAsPaid = async (paymentId: string) => {
     try {
       await markRentPaymentManual(paymentId, 'Landlord marked as paid (cash/manual)');
-      
+
       // Update local state for immediate feedback
       setPayments((prev) =>
         prev.map((p) =>
@@ -956,13 +696,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       toast.success('Marked as paid (manual)');
 
       // After marking paid, sync to ensure next month's invoice is ready
-      await syncAutomaticRentInvoices(
-        supabase,
-        properties,
-        payments.map(p => p.id === paymentId ? { ...p, status: 'paid' } : p),
-        profile.uid,
-        profile.platformId
-      );
+      await syncRentInvoices();
       await refreshLandlordPayments();
     } catch (error: any) {
       toast.error(error.message || 'Failed to mark payment. Is the API server running (npm run dev)?');
@@ -1013,26 +747,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       if (!selectedProp) return;
 
       const tenantEmail = assigningTenantEmail.toLowerCase();
-      const { error } = await supabase.from('properties').update({ 
-        tenantId: tenantEmail, 
-        status: 'rented' 
-      }).eq('id', selectedPropertyToAssign);
-      
-      if (error) throw error;
-
-      const rentedProperty = {...selectedProp, tenantId: tenantEmail, status: 'rented' as const};
-      
-      // When assigning, we generate the first invoice. 
-      // It should be 'pending' even if created today, giving 30 days of grace logic.
-      await ensureRentInvoiceForProperty(
-        supabase,
-        rentedProperty,
-        tenantEmail,
-        profile.uid,
-        profile.platformId,
-        payments,
-        true // initialAssignment flag
-      );
+      // The server assigns the property and generates the first invoice (pending, with a
+      // 30-day grace period) in one step — see /landlord/tenants/assign.
+      const { property: updated } = await assignTenant(selectedProp.id, tenantEmail);
+      setProperties(prev => prev.map(p => p.id === updated.id ? (updated as Property) : p));
       await refreshLandlordPayments();
 
       toast.success('Tenant assigned — first rent invoice generated');
@@ -1047,31 +765,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm(`Unassign all properties from ${email} and cancel unpaid invoices?`)) return;
     try {
       const normalizedEmail = email.toLowerCase();
-      
-      // 1. Unassign from properties
-      const { error } = await supabase.from('properties').update({ 
-        tenantId: null, 
-        status: 'available' 
-      }).ilike('tenantId', normalizedEmail);
-      
-      if (error) throw error;
-      
-      // 2. Delete unpaid invoices for this tenant
-      await supabase.from('rentPayments')
-        .delete()
-        .ilike('tenantId', normalizedEmail)
-        .neq('status', 'paid');
+      await unassignTenant(normalizedEmail);
 
       // Update local state immediately
-      setProperties(prev => prev.map(p => 
-        p.tenantId?.toLowerCase() === normalizedEmail 
-          ? { ...p, tenantId: null, status: 'available' as const } 
+      setProperties(prev => prev.map(p =>
+        p.tenantId?.toLowerCase() === normalizedEmail
+          ? { ...p, tenantId: null, status: 'available' as const }
           : p
       ));
-      setPayments(prev => prev.filter(p => 
+      setPayments(prev => prev.filter(p =>
         p.tenantId?.toLowerCase() !== normalizedEmail || p.status === 'paid'
       ));
-      
+
       toast.success("Properties unassigned & unpaid invoices cleared");
     } catch (error) {
       toast.error("Failed to unassign properties");
@@ -1082,32 +787,16 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm("Delete tenant, unassign from all units, and cancel unpaid invoices?")) return;
     try {
       const normalizedEmail = email.toLowerCase();
-      
-      // 1. Remove invitation
-      const { error: invError } = await supabase.from('invitations').delete().ilike('email', normalizedEmail);
-      if (invError) throw invError;
-      
-      // 2. Unassign from properties
-      const { error: propError } = await supabase.from('properties').update({ 
-        tenantId: null, 
-        status: 'available' 
-      }).ilike('tenantId', normalizedEmail);
-      if (propError) throw propError;
-
-      // 3. Delete unpaid invoices
-      await supabase.from('rentPayments')
-        .delete()
-        .ilike('tenantId', normalizedEmail)
-        .neq('status', 'paid');
+      await deleteTenantRequest(normalizedEmail);
 
       // Update local state immediately
       setInvitations(prev => prev.filter(i => i.email.toLowerCase() !== normalizedEmail));
-      setProperties(prev => prev.map(p => 
-        p.tenantId?.toLowerCase() === normalizedEmail 
-          ? { ...p, tenantId: null, status: 'available' as const } 
+      setProperties(prev => prev.map(p =>
+        p.tenantId?.toLowerCase() === normalizedEmail
+          ? { ...p, tenantId: null, status: 'available' as const }
           : p
       ));
-      setPayments(prev => prev.filter(p => 
+      setPayments(prev => prev.filter(p =>
         p.tenantId?.toLowerCase() !== normalizedEmail || p.status === 'paid'
       ));
 
@@ -1122,12 +811,9 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     if (!confirm(`Delete ${selectedTenantEmails.length} tenants, unassign from all units, and cancel unpaid invoices?`)) return;
     try {
       for (const email of selectedTenantEmails) {
-        const normalizedEmail = email.toLowerCase();
-        await supabase.from('invitations').delete().ilike('email', normalizedEmail);
-        await supabase.from('properties').update({ tenantId: null, status: 'available' }).ilike('tenantId', normalizedEmail);
-        await supabase.from('rentPayments').delete().ilike('tenantId', normalizedEmail).neq('status', 'paid');
+        await deleteTenantRequest(email.toLowerCase());
       }
-      
+
       const normalizedEmails = selectedTenantEmails.map(e => e.toLowerCase());
       setInvitations(prev => prev.filter(i => !normalizedEmails.includes(i.email.toLowerCase())));
       setProperties(prev => prev.map(p => 
@@ -1184,12 +870,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id);
-
-      if (error) throw error;
+      await markNotificationRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       toast.success('Marked as read');
     } catch (err: any) {
@@ -1200,13 +881,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleMarkAllAsRead = async () => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('recipientEmail', profile.email.toLowerCase())
-        .eq('read', false);
-
-      if (error) throw error;
+      await markAllNotificationsRead();
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       toast.success('All notifications marked as read');
     } catch (err: any) {
@@ -1215,14 +890,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
+  // Preserves the original behavior: supabase-setup.sql never granted a DELETE policy
+  // on notifications to anyone but the service role, so this always 403s for a
+  // non-super-admin landlord (see the /notifications/:id DELETE route in app.ts).
   const handleDeleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await deleteNotificationRequest(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast.success('Notification deleted');
     } catch (err: any) {
@@ -1237,8 +910,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const updateRequestStatus = async (id: string, status: string) => {
     try {
-      const { error } = await supabase.from('maintenanceRequests').update({ status }).eq('id', id);
-      if (error) throw error;
+      await updateMaintenanceRequestStatus(id, status as 'pending' | 'in-progress' | 'resolved');
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, status: status as MaintenanceRequest['status'] } : r));
       toast.success("Updated");
     } catch (error) {
       toast.error("Failed");
@@ -1302,10 +975,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
           <div className="hidden sm:block">
             <DropdownMenu>
               <DropdownMenuTrigger render={
-                <button className="btn-primary text-[11px] font-bold tracking-wider px-4 py-2.5 h-auto shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+                <Button size="sm" className="hidden sm:flex items-center gap-2 shadow-sm rounded-lg">
                   <FontAwesomeIcon icon={faPlus} className="h-3.5 w-3.5" /> 
-                  <span className="hidden sm:inline">Create New</span>
-                </button>
+                  <span>Create New</span>
+                </Button>
               } />
               <DropdownMenuContent align="end" className="w-56 p-2 rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-xl bg-white dark:bg-zinc-900">
               <DropdownMenuItem onClick={() => setIsAddOpen(true)} className="cursor-pointer rounded-xl p-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800">
@@ -1356,61 +1029,47 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="mt-4 space-y-6 animate-in fade-in duration-500">
             {/* Quick stats row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-1 bg-indigo-600 rounded-2xl p-5 flex flex-col gap-3 shadow-lg shadow-indigo-500/20">
-                <div className="flex items-center justify-between">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-indigo-100">Subscription</p>
-                  <FontAwesomeIcon icon={faBolt} className="text-indigo-200 h-3 w-3" />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="col-span-2 md:col-span-1 lg:col-span-1 bg-primary rounded-xl p-5 flex flex-col justify-center gap-2 shadow-sm text-primary-foreground">
+                <div className="flex items-center justify-between text-primary-foreground/80">
+                  <p className="text-[10px] font-bold uppercase tracking-wider">Subscription</p>
+                  <FontAwesomeIcon icon={faBolt} className="h-3 w-3" />
                 </div>
-                <p className="text-xl font-black text-white leading-tight">{subscriptionFeatures.label} Plan</p>
-                <p className="text-[9px] font-bold text-indigo-100 uppercase tracking-wider">
+                <p className="text-xl font-bold leading-tight">{subscriptionFeatures.label}</p>
+                <p className="text-[10px] font-medium text-primary-foreground/70">
                   {profile.subscriptionExpiresAt 
                     ? `Active until ${new Date(profile.subscriptionExpiresAt).toLocaleDateString()}` 
                     : 'Prepaid Plan'}
                 </p>
               </div>
 
-              {[
-                {
-                  label: 'Total Units',
-                  value: properties.length,
-                  sub: `${properties.filter(p => p.status === 'available').length} available`,
-                  color: 'bg-blue-500/10 text-blue-600',
-                  icon: faHome,
-                },
-                {
-                  label: 'Listings Limit',
-                  value: `${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`,
-                  sub: 'Units Capacity',
-                  color: 'bg-purple-500/10 text-purple-600',
-                  icon: faChartPie,
-                },
-                {
-                  label: 'Revenue (Paid)',
-                  value: `KES ${payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0).toLocaleString()}`,
-                  sub: `${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending`,
-                  color: 'bg-amber-500/10 text-amber-600',
-                  icon: faWallet,
-                },
-                {
-                  label: 'Maintenance',
-                  value: requests.filter(r => r.status !== 'resolved').length,
-                  sub: `${requests.filter(r => r.status === 'resolved').length} resolved`,
-                  color: 'bg-rose-500/10 text-rose-600',
-                  icon: faTools,
-                },
-              ].map(stat => (
-                <div key={stat.label} className="bg-white rounded-2xl border border-zinc-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{stat.label}</p>
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center ${stat.color}`}>
-                      <FontAwesomeIcon icon={stat.icon} className="h-3 w-3" />
-                    </div>
-                  </div>
-                  <p className="text-2xl font-black text-zinc-900 tabular-nums">{stat.value}</p>
-                  <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">{stat.sub}</p>
-                </div>
-              ))}
+              <StatCard
+                title="Total Units"
+                value={properties.length}
+                description={`${properties.filter(p => p.status === 'available').length} available`}
+                icon={<FontAwesomeIcon icon={faHome} className="text-blue-500" />}
+              />
+              
+              <StatCard
+                title="Listings Limit"
+                value={`${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`}
+                description="Units Capacity"
+                icon={<FontAwesomeIcon icon={faChartPie} className="text-purple-500" />}
+              />
+              
+              <StatCard
+                title="Revenue (Paid)"
+                value={formatCurrencyCompact(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
+                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending`}
+                icon={<FontAwesomeIcon icon={faWallet} className="text-amber-500" />}
+              />
+              
+              <StatCard
+                title="Maintenance"
+                value={requests.filter(r => r.status !== 'resolved').length}
+                description={`${requests.filter(r => r.status === 'resolved').length} resolved`}
+                icon={<FontAwesomeIcon icon={faTools} className="text-destructive" />}
+              />
             </div>
 
             {/* Recent payments + Maintenance split */}
@@ -1447,7 +1106,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     </div>
                   ))}
                   {payments.length === 0 && (
-                    <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-300 py-10">No payments yet</p>
+                    <EmptyState
+                      icon={<FontAwesomeIcon icon={faWallet} className="h-6 w-6" />}
+                      title="No payments yet"
+                      description="You haven't received any payments. When a tenant pays, it will show up here."
+                      className="border-0 shadow-none my-4"
+                    />
                   )}
                 </div>
               </div>
@@ -1479,19 +1143,26 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     </div>
                   ))}
                   {requests.length === 0 && (
-                    <p className="text-center text-[10px] font-black uppercase tracking-widest text-zinc-300 py-10">No maintenance requests</p>
+                    <EmptyState
+                      icon={<FontAwesomeIcon icon={faTools} className="h-6 w-6" />}
+                      title="No maintenance requests"
+                      description="All clear! Your properties are in good shape."
+                      className="border-0 shadow-none my-4"
+                    />
                   )}
                 </div>
               </div>
               ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-10 text-center">
-                <FontAwesomeIcon icon={faTools} className="mb-3 h-8 w-8 text-zinc-300" />
-                <p className="text-sm font-black text-zinc-700">Maintenance hub not included</p>
-                <p className="mt-1 max-w-xs text-xs font-medium text-zinc-500">
-                  Upgrade to Growth or Pro for maintenance tickets. Your {subscriptionFeatures.label} plan includes up to{' '}
-                  {subscriptionFeatures.maxListings ?? 'unlimited'} listings.
-                </p>
-              </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faTools} className="h-6 w-6" />}
+                  title="Maintenance Hub"
+                  description="Upgrade your plan to unlock the maintenance ticketing system."
+                  action={{
+                    label: 'Upgrade Plan',
+                    onClick: () => setActiveTab('settings')
+                  }}
+                  className="h-full border border-dashed border-zinc-200 bg-zinc-50"
+                />
               )}
             </div>
           </div>
@@ -1523,41 +1194,46 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             </div>
 
             {/* Search and Add Button */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                <Input placeholder="Search units" className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input placeholder="Search units" className="pl-8 h-10 bg-background" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
               </div>
-              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shrink-0 font-bold shadow-sm">
-                <FontAwesomeIcon icon={faPlus} className="mr-2" />
-                {properties.length === 0 ? 'Add property' : 'Add unit'}
+              <Button onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-10 shrink-0 shadow-sm rounded-lg flex items-center">
+                <FontAwesomeIcon icon={faPlus} className="mr-2 h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{properties.length === 0 ? 'Add property' : 'Add unit'}</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </div>
 
             {/* Filter chips */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
-              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => (
-                <button 
-                  key={f}
-                  onClick={() => {
-                     if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
-                     else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
-                     else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
-                     else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
-                     setPropertyPage(1);
-                  }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
-                    (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
-                    (f === 'Rented' && propertyStatusFilter === 'rented') ||
-                    (f === 'Vacant' && propertyStatusFilter === 'available') ||
-                    (buildings.find(b => b.id === buildingFilter)?.name === f)
-                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
-                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+              {['All', 'Rented', 'Vacant', ...buildings.map(b => b.name)].map(f => {
+                const isActive = (f === 'All' && buildingFilter === 'all' && propertyStatusFilter === 'all') ||
+                                 (f === 'Rented' && propertyStatusFilter === 'rented') ||
+                                 (f === 'Vacant' && propertyStatusFilter === 'available') ||
+                                 (buildings.find(b => b.id === buildingFilter)?.name === f);
+                
+                return (
+                  <button 
+                    key={f}
+                    onClick={() => {
+                       if (f === 'All') { setBuildingFilter('all'); setPropertyStatusFilter('all'); }
+                       else if (f === 'Rented') { setBuildingFilter('all'); setPropertyStatusFilter('rented'); }
+                       else if (f === 'Vacant') { setBuildingFilter('all'); setPropertyStatusFilter('available'); }
+                       else { setBuildingFilter(buildings.find(b => b.name === f)?.id || 'all'); setPropertyStatusFilter('all'); }
+                       setPropertyPage(1);
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                        : 'bg-background border-border text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
             </div>
             
             <div className="space-y-8">
@@ -1607,9 +1283,15 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                 });
               })()}
               {paginatedProperties.length === 0 && (
-                <div className="text-center py-20 text-zinc-400 font-bold text-xs uppercase tracking-widest">
-                  No properties found
-                </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faHome} className="h-6 w-6" />}
+                  title="No properties found"
+                  description={propertySearch ? "Try adjusting your search or filters." : "You haven't added any units yet."}
+                  action={!propertySearch ? {
+                    label: 'Add Property',
+                    onClick: () => setIsAddOpen(true)
+                  } : undefined}
+                />
               )}
             </div>
 
@@ -1852,33 +1534,42 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
 
         {activeTab === 'finances' && (
-          <div className="px-6 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="px-6 pb-24 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {/* Header section */}
             <div>
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-white mb-1">Finances</h2>
-              <div className="text-sm text-zinc-500">
-                {formatStatKes(netIncome)} net performance · {payments.length} total transaction(s)
+              <div className="text-sm text-muted-foreground">
+                {netIncome === 0 ? 'Break-even' : `${formatCurrencyFull(netIncome)} Net Profit`} · {payments.length} total transaction(s)
               </div>
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors" onClick={() => setIsAnticipatedOpen(true)}>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Expected Rent <FontAwesomeIcon icon={faChartLine} className="text-blue-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(anticipatedRentTotal)}</span>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div onClick={() => setIsAnticipatedOpen(true)} className="cursor-pointer">
+                <StatCard
+                  title="Expected Rent"
+                  value={formatCurrencyCompact(anticipatedRentTotal)}
+                  icon={<FontAwesomeIcon icon={faChartLine} className="text-blue-500" />}
+                  className="hover:bg-muted/50 transition-colors h-full"
+                />
               </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Collected <FontAwesomeIcon icon={faWallet} className="text-emerald-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{formatStatKes(paidRentTotal)}</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Operating Costs <FontAwesomeIcon icon={faChartPie} className="text-amber-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{(expenseTotal / 1000).toFixed(1)}k</span>
-              </div>
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2 flex items-center justify-between">Net Performance <FontAwesomeIcon icon={faChartLine} className="text-rose-500" /></span>
-                <span className="text-xl font-black text-zinc-900 dark:text-white">{(netIncome / 1000).toFixed(1)}k</span>
-              </div>
+              
+              <StatCard
+                title="Collected"
+                value={formatCurrencyCompact(paidRentTotal)}
+                icon={<FontAwesomeIcon icon={faWallet} className="text-emerald-500" />}
+              />
+              
+              <StatCard
+                title="Operating Costs"
+                value={formatCurrencyCompact(expenseTotal)}
+                icon={<FontAwesomeIcon icon={faChartPie} className="text-amber-500" />}
+              />
+              
+              <StatCard
+                title="Net Performance"
+                value={formatCurrencyCompact(netIncome)}
+                icon={<FontAwesomeIcon icon={faChartLine} className="text-rose-500" />}
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1887,25 +1578,31 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             </div>
 
             {/* Search and Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <div className="relative flex-1">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                <Input placeholder="Search ledger..." className="pl-8 h-12 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-xl text-sm shadow-sm" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input placeholder="Search ledger..." className="pl-8 h-10 bg-background" value={paymentSearch} onChange={(e) => { setPaymentSearch(e.target.value); setPaymentPage(1); }} />
               </div>
-              <Button variant="outline" onClick={downloadExcel} className="h-12 px-4 rounded-xl font-bold bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm shrink-0"><FontAwesomeIcon icon={faFileExcel} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Export</span><span className="hidden sm:inline">Export</span></Button>
-              <Button onClick={() => setIsExpenseOpen(true)} className="h-12 px-4 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 font-bold shadow-sm shrink-0"><FontAwesomeIcon icon={faChartPie} className="mr-2 hidden sm:inline" /> <span className="sm:hidden">Expense</span><span className="hidden sm:inline">Expense</span></Button>
+              <Button variant="outline" size="sm" onClick={downloadExcel} className="h-10 shrink-0 shadow-sm rounded-lg">
+                <FontAwesomeIcon icon={faFileExcel} className="mr-2 hidden sm:inline" /> 
+                <span>Export</span>
+              </Button>
+              <Button size="sm" onClick={() => setIsExpenseOpen(true)} className="h-10 shrink-0 shadow-sm rounded-lg">
+                <FontAwesomeIcon icon={faChartPie} className="mr-2 hidden sm:inline" /> 
+                <span>Expense</span>
+              </Button>
             </div>
 
             {/* Filter chips */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 sm:mx-0 sm:px-0">
               {['All', 'Paid', 'Pending', 'Overdue'].map(f => (
                 <button 
                   key={f}
                   onClick={() => { setPaymentStatusFilter(f.toLowerCase()); setPaymentPage(1); }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold border shrink-0 transition-colors ${
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold border shrink-0 transition-colors ${
                     (f.toLowerCase() === paymentStatusFilter)
-                      ? 'bg-zinc-900 dark:bg-white text-white dark:text-black border-zinc-900 dark:border-white shadow-sm' 
-                      : 'bg-white dark:bg-transparent border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm' 
+                      : 'bg-background border-border text-muted-foreground hover:bg-muted'
                   }`}
                 >
                   {f}
@@ -1917,12 +1614,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
             <div className="space-y-3">
               <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-1">Ledger Transactions</h3>
               {paginatedPayments.length === 0 ? (
-                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-3">
-                  <div className="h-10 w-10 flex items-center justify-center">
-                    <FontAwesomeIcon icon={faReceipt} className="h-6 w-6 text-zinc-400" />
-                  </div>
-                  <p className="text-zinc-500 text-sm font-medium">No {paymentStatusFilter !== 'all' ? paymentStatusFilter : ''} transactions match your criteria.</p>
-                </div>
+                <EmptyState
+                  icon={<FontAwesomeIcon icon={faReceipt} className="h-6 w-6" />}
+                  title={`No ${paymentStatusFilter !== 'all' ? paymentStatusFilter : ''} transactions`}
+                  description="Transactions matching your criteria will appear here."
+                  className="my-4"
+                />
               ) : (
                 paginatedPayments.map((payment) => {
                   const prop = properties.find(p => p.id === payment.propertyId);
@@ -2868,21 +2565,21 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
 function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, buildingName, tenantName, onViewDetails }: { property: Property, profile: UserProfile, onEdit: (p: Property) => void, onDelete: (id: string) => void, onManageAccess: (p: Property) => void, buildingName?: string, tenantName?: string, onViewDetails?: (p: Property) => void }) {
   return (
-    <div className="bg-[#1e1e1e] dark:bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col gap-4 text-zinc-100 transition-all hover:border-zinc-700">
+    <Card className="flex flex-col group relative">
       {/* Header Row */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="text-base font-bold text-white">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
+      <CardHeader className="flex flex-row items-start justify-between pb-2 border-b">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg">{property.unitNumber ? `Unit ${property.unitNumber}` : property.title}</h3>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-              property.status === 'rented' ? 'bg-green-900/30 text-green-500' :
-              property.status === 'available' ? 'bg-zinc-800 text-zinc-400' :
-              'bg-amber-900/30 text-amber-500'
+              property.status === 'rented' ? 'bg-success/10 text-success' :
+              property.status === 'available' ? 'bg-muted text-muted-foreground' :
+              'bg-warning/10 text-warning-foreground'
             }`}>
               {property.status === 'available' ? 'Vacant' : property.status.charAt(0).toUpperCase() + property.status.slice(1)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <FontAwesomeIcon icon={faBuilding} className="w-3" />
             <span>{property.location}</span>
           </div>
@@ -2890,54 +2587,56 @@ function PropertyCard({ property, profile, onEdit, onDelete, onManageAccess, bui
         
         <DropdownMenu>
           <DropdownMenuTrigger render={
-            <button className="h-8 w-8 rounded-lg text-zinc-400 hover:bg-zinc-800 flex items-center justify-center shrink-0 transition-colors">
+            <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
               <FontAwesomeIcon icon={faEllipsisV} />
-            </button>
+            </Button>
           } />
-          <DropdownMenuContent align="end" className="w-48 p-2 rounded-2xl border-zinc-800 bg-zinc-900 shadow-xl">
-            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-zinc-200 hover:bg-zinc-800" onClick={() => onEdit(property)}>
-              <FontAwesomeIcon icon={faEdit} className="mr-2 text-zinc-400 w-4 text-center" /> Edit Unit
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onClick={() => onEdit(property)}>
+              <FontAwesomeIcon icon={faEdit} className="mr-2 w-4 text-center text-muted-foreground" /> Edit Unit
             </DropdownMenuItem>
             {profile.uid === property.landlordId && (
-              <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-blue-400 hover:bg-blue-900/20" onClick={() => onManageAccess(property)}>
-                <FontAwesomeIcon icon={faUsers} className="mr-2 text-blue-400 w-4 text-center" /> Manage Tenant
+              <DropdownMenuItem onClick={() => onManageAccess(property)}>
+                <FontAwesomeIcon icon={faUsers} className="mr-2 w-4 text-center text-muted-foreground" /> Manage Tenant
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem className="cursor-pointer rounded-xl px-3 py-2 text-xs font-bold text-rose-500 hover:bg-rose-900/20" onClick={() => onDelete(property.id)}>
-              <FontAwesomeIcon icon={faTrash} className="mr-2 text-rose-500 w-4 text-center" /> Delete Unit
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(property.id)}>
+              <FontAwesomeIcon icon={faTrash} className="mr-2 w-4 text-center" /> Delete Unit
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </CardHeader>
 
       {/* Facts Strip */}
-      <div className="grid grid-cols-3 gap-4 border-b border-zinc-800 pb-4">
+      <CardContent className="grid grid-cols-3 gap-4 pt-4 pb-4 border-b">
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Rent</div>
-          <div className="text-sm font-bold text-white">KSh {property.price.toLocaleString()}<span className="text-[10px] text-zinc-400 font-normal">/mo</span></div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Rent</div>
+          <div className="text-sm font-semibold">{formatCurrencyFull(property.price)}<span className="text-[10px] text-muted-foreground font-normal">/mo</span></div>
         </div>
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Tenant</div>
-          <div className="text-sm font-bold text-white truncate">{tenantName || <span className="text-zinc-600 italic">Vacant</span>}</div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Tenant</div>
+          <div className="text-sm font-medium truncate">{tenantName || <span className="text-muted-foreground italic">Vacant</span>}</div>
         </div>
         <div>
-          <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Type</div>
-          <div className="text-sm font-bold text-white capitalize">{property.type}</div>
+          <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Type</div>
+          <div className="text-sm font-medium capitalize">{property.type}</div>
         </div>
-      </div>
+      </CardContent>
 
       {/* Footer */}
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-zinc-400">
+      <div className="flex items-center justify-between p-4 bg-muted/20">
+        <div className="text-xs text-muted-foreground">
           {property.status === 'rented' ? 'Next payment in 12 days' : 'Ready for occupancy'}
         </div>
-        <button 
+        <Button 
+          variant="link"
+          size="sm"
           onClick={() => onViewDetails?.(property)}
-          className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
+          className="h-auto p-0 text-xs font-semibold"
         >
-          View details <FontAwesomeIcon icon={faChevronRight} className="w-2" />
-        </button>
+          View details <FontAwesomeIcon icon={faChevronRight} className="ml-1.5 w-2" />
+        </Button>
       </div>
-    </div>
+    </Card>
   );
 }

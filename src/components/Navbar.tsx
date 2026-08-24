@@ -1,4 +1,5 @@
-import { supabase } from '../supabase';
+import { authClient } from '../lib/auth-client';
+import { getUnreadNotificationCount, getPlatformBranding } from '../lib/api';
 import { UserProfile, UserRole, promptForPush } from '../App';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
@@ -62,56 +63,45 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
 
   useEffect(() => {
     if (profile?.platformId) {
-      supabase.from('platforms').select('name, brandLogoUrl, brandPrimaryColor, brandSecondaryColor').eq('id', profile.platformId).maybeSingle()
-        .then(({ data }) => {
-          if (data) {
-            setPlatformBranding(data);
-            const root = document.documentElement;
-            if (data.brandPrimaryColor) {
-              root.style.setProperty('--brand-primary', data.brandPrimaryColor);
-            }
-            if (data.brandSecondaryColor) {
-              root.style.setProperty('--brand-secondary', data.brandSecondaryColor);
-            }
+      getPlatformBranding(profile.platformId)
+        .then((data) => {
+          setPlatformBranding(data);
+          const root = document.documentElement;
+          if (data.brandPrimaryColor) {
+            root.style.setProperty('--brand-primary', data.brandPrimaryColor);
           }
-        });
+          if (data.brandSecondaryColor) {
+            root.style.setProperty('--brand-secondary', data.brandSecondaryColor);
+          }
+        })
+        .catch(() => {});
     }
   }, [profile?.platformId]);
 
+  // Polls for unread notifications — replaces the old Supabase Realtime subscription.
   useEffect(() => {
     if (!profile?.email) return;
 
     let isActive = true;
-    const email = profile.email.toLowerCase();
-
-    const fetchUnread = async () => {
-      const { count, error } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipientEmail', email)
-        .eq('read', false);
-
-      if (!error && isActive) {
-        setUnreadCount(count || 0);
-      }
+    const fetchUnread = () => {
+      getUnreadNotificationCount()
+        .then(({ count }) => {
+          if (isActive) setUnreadCount(count);
+        })
+        .catch(() => {});
     };
 
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const notifSub = supabase
-      .channel(`navbar-notifs-${channelToken}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipientEmail=eq.${email}` }, fetchUnread)
-      .subscribe();
-
-    void fetchUnread();
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 20000);
 
     return () => {
       isActive = false;
-      void supabase.removeChannel(notifSub);
+      clearInterval(interval);
     };
   }, [profile?.email, profile?.uid]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authClient.signOut({});
   };
 
   const switchRole = (role: UserRole) => {

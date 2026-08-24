@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
-import { supabase } from '../supabase';
+import { authClient } from '../lib/auth-client';
+import { getUnreadNotificationCount } from '../lib/api';
 import { toast } from 'sonner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -101,40 +102,30 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
   const topOffset = isImpersonating ? '100px' : '56px';
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Polls for unread notifications — replaces the old Supabase Realtime subscription.
   useEffect(() => {
     if (!profile?.email) return;
 
     let isActive = true;
-    const email = profile.email.toLowerCase();
-
-    const fetchUnread = async () => {
-      const { count, error } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipientEmail', email)
-        .eq('read', false);
-
-      if (!error && isActive) {
-        setUnreadCount(count || 0);
-      }
+    const fetchUnread = () => {
+      getUnreadNotificationCount()
+        .then(({ count }) => {
+          if (isActive) setUnreadCount(count);
+        })
+        .catch(() => {});
     };
 
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const notifSub = supabase
-      .channel(`sidebar-notifs-${channelToken}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipientEmail=eq.${email}` }, fetchUnread)
-      .subscribe();
-
-    void fetchUnread();
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 20000);
 
     return () => {
       isActive = false;
-      void supabase.removeChannel(notifSub);
+      clearInterval(interval);
     };
   }, [profile?.email, profile?.uid]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await authClient.signOut({});
     toast.success('Signed out');
   };
 

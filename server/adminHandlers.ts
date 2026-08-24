@@ -1,6 +1,9 @@
-import type {SupabaseClient} from '@supabase/supabase-js';
 import type {Response} from 'express';
+import {eq, ilike, ne, and} from 'drizzle-orm';
 import {z} from 'zod';
+import {APIError} from 'better-auth';
+import {auth} from './auth.ts';
+import {db, schema} from '../db/client.ts';
 import type {AuthenticatedRequest, UserProfileRecord} from './types.ts';
 
 const emailSchema = z.string().email().max(320);
@@ -54,21 +57,18 @@ export const updatePlatformBrandingSchema = z
   .strict();
 
 export const syncSuperAdminFromEnv = async (
-  supabase: SupabaseClient,
   profile: UserProfileRecord,
   isEnvSuperAdmin: (email?: string | null) => boolean,
 ): Promise<UserProfileRecord> => {
   if (!isEnvSuperAdmin(profile.email) || profile.isSuperAdmin) return profile;
 
-  const {data, error} = await supabase
-    .from('users')
-    .update({isSuperAdmin: true, isAdmin: true, role: 'admin'})
-    .eq('uid', profile.uid)
-    .select('uid,email,displayName,role,platformId,phone,isAdmin,isSuperAdmin,stripeAccountId,mpesaSettlementPhone,mpesaSettlementShortCode')
-    .single();
+  const [updated] = await db
+    .update(schema.users)
+    .set({isSuperAdmin: true, isAdmin: true, role: 'admin'})
+    .where(eq(schema.users.uid, profile.uid))
+    .returning();
 
-  if (error) throw error;
-  return data as UserProfileRecord;
+  return updated as unknown as UserProfileRecord;
 };
 
 export const assertCanProvision = (actor: UserProfileRecord, body: z.infer<typeof provisionUserSchema>) => {
@@ -97,228 +97,211 @@ export const assertCanProvision = (actor: UserProfileRecord, body: z.infer<typeo
   throw error;
 };
 
-export const handleProvisionUser =
-  (supabase: SupabaseClient) => async (req: AuthenticatedRequest, res: Response) => {
-    const body = req.validatedBody as z.infer<typeof provisionUserSchema>;
-    const actor = req.profile!;
-    assertCanProvision(actor, body);
+export const handleProvisionUser = async (req: AuthenticatedRequest, res: Response) => {
+  const body = req.validatedBody as z.infer<typeof provisionUserSchema>;
+  const actor = req.profile!;
+  assertCanProvision(actor, body);
 
-    const email = body.email.toLowerCase();
-    const platformId = body.platformId ?? actor.platformId ?? null;
-    const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : body.landlordId;
+  const email = body.email.toLowerCase();
+  const platformId = body.platformId ?? actor.platformId ?? null;
+  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : body.landlordId;
 
-    // 1. Try to create the auth user
-    let uid: string | undefined;
-    const {data: authData, error: authError} = await supabase.auth.admin.createUser({
-      email,
-      password: body.password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: body.displayName,
+  // 1. Try to create the auth user. signUpEmail also runs databaseHooks.user.create.after
+  // (server/auth.ts), which seeds a baseline public.users row from these same fields.
+  let uid: string | undefined;
+  try {
+    const signUpResult = await auth.api.signUpEmail({
+      body: {
+        email,
+        password: body.password,
+        name: body.displayName,
         phone: body.phone,
         intended_role: body.role,
         must_change_password: body.mustChangePassword ?? true,
-      },
+      } as Parameters<typeof auth.api.signUpEmail>[0]['body'],
     });
+    uid = signUpResult.user.id;
+  } catch (err) {
+    // If the user already exists, look them up by email instead of failing.
+    const isDuplicate = err instanceof APIError && err.status === 'UNPROCESSABLE_ENTITY';
+    if (!isDuplicate) {
+      res.status(400).json({error: err instanceof Error ? err.message : 'Failed to create user'});
+      return;
+    }
+    const existingProfile = await db.query.users.findFirst({
+      where: ilike(schema.users.email, email),
+      columns: {uid: true},
+    });
+    uid = existingProfile?.uid;
+  }
 
-    if (authError) {
-      // If user already exists, look them up by email from the users table (service role bypasses RLS)
-      if (authError.message.toLowerCase().includes('already registered') || authError.message.toLowerCase().includes('already exists')) {
-        const {data: existingProfile} = await supabase
-          .from('users')
-          .select('uid')
-          .ilike('email', email)
-          .maybeSingle();
-        if (existingProfile?.uid) {
-          uid = existingProfile.uid;
+  if (!uid) {
+    res.status(500).json({error: 'Failed to resolve user ID'});
+    return;
+  }
+
+  // 2. Upsert the profile with admin-provisioning-specific fields the signup hook
+  // doesn't set (payout routing, managed-landlord subscription defaults, etc).
+  const isManagedLandlord = body.role === 'landlord';
+  const rentRecipientId = isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null;
+  const managedByAdminId = isManagedLandlord ? actor.uid : null;
+
+  const profileValues = {
+    uid,
+    email,
+    displayName: body.displayName,
+    role: body.role,
+    platformId,
+    phone: body.phone ?? null,
+    isAdmin: body.role === 'admin',
+    isSuperAdmin: false,
+    mustChangePassword: body.mustChangePassword ?? true,
+    rentRecipientId,
+    managedByAdminId,
+    rentPayoutMethod: body.rentRouting === 'direct' ? (body.rentPayoutMethod ?? null) : null,
+    mpesaSettlementPhone: body.rentRouting === 'direct' ? (body.mpesaSettlementPhone ?? null) : null,
+    mpesaSettlementShortCode: body.rentRouting === 'direct' ? (body.mpesaSettlementShortCode ?? null) : null,
+    bankName: body.rentRouting === 'direct' ? (body.bankName ?? null) : null,
+    bankAccountNumber: body.rentRouting === 'direct' ? (body.bankAccountNumber ?? null) : null,
+    bankAccountName: body.rentRouting === 'direct' ? (body.bankAccountName ?? null) : null,
+    ...(isManagedLandlord
+      ? {
+          subscriptionPlan: actor.subscriptionPlan ?? 'pro_plus:monthly',
+          subscriptionStatus: (actor.subscriptionStatus ?? 'active') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
+          subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt) : new Date('2099-12-31T23:59:59Z'),
         }
-      }
-
-      if (!uid) {
-        res.status(400).json({error: authError.message});
-        return;
-      }
-    } else {
-      uid = authData.user?.id;
-    }
-
-    if (!uid) {
-      res.status(500).json({error: 'Failed to resolve user ID'});
-      return;
-    }
-
-    // 2. Upsert the profile
-    const isManagedLandlord = body.role === 'landlord';
-    const rentRecipientId = isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null;
-    const managedByAdminId = isManagedLandlord ? actor.uid : null;
-
-    const {error: upsertError} = await supabase.from('users').upsert(
-      [
-        {
-          uid,
-          email,
-          displayName: body.displayName,
-          role: body.role,
-          platformId,
-          phone: body.phone ?? null,
-          isAdmin: body.role === 'admin',
-          isSuperAdmin: false,
-          mustChangePassword: body.mustChangePassword ?? true,
-          rentRecipientId,
-          managedByAdminId,
-          rentPayoutMethod: body.rentRouting === 'direct' ? body.rentPayoutMethod : null,
-          mpesaSettlementPhone: body.rentRouting === 'direct' ? body.mpesaSettlementPhone : null,
-          mpesaSettlementShortCode: body.rentRouting === 'direct' ? body.mpesaSettlementShortCode : null,
-          bankName: body.rentRouting === 'direct' ? body.bankName : null,
-          bankAccountNumber: body.rentRouting === 'direct' ? body.bankAccountNumber : null,
-          bankAccountName: body.rentRouting === 'direct' ? body.bankAccountName : null,
-          ...(isManagedLandlord ? {
-            subscriptionPlan: actor.subscriptionPlan ?? 'pro_plus:monthly',
-            subscriptionStatus: actor.subscriptionStatus ?? 'active',
-            subscriptionExpiresAt: actor.subscriptionExpiresAt ?? '2099-12-31T23:59:59Z',
-          } : {})
-        },
-      ],
-      {onConflict: 'uid'},
-    );
-
-    if (upsertError) {
-      res.status(500).json({error: `Profile sync failed: ${upsertError.message}`});
-      return;
-    }
-
-    // 3. Ensure the invitation exists for the landlord's tenant list
-    // We NO LONGER delete it here, as the LandlordDashboard relies on the invitations table
-    // to show the registry of tenants linked to that landlord.
-    const {data: invitation, error: invError} = await supabase.from('invitations').upsert(
-      [
-        {
-          email,
-          displayName: body.displayName,
-          phone: body.phone ?? null,
-          role: body.role,
-          platformId,
-          landlordId: landlordId ?? null,
-        },
-      ],
-      {onConflict: 'email'},
-    ).select().maybeSingle();
-
-    if (invError) {
-      console.error(`[Provisioning] Invitation upsert failed for ${email}:`, invError);
-      res.status(500).json({error: `Invitation sync failed: ${invError.message}`});
-      return;
-    }
-
-    console.log(`[Provisioning] Successfully provisioned ${body.role}: ${email} (UID: ${uid}, Landlord: ${landlordId})`);
-    res.status(201).json({uid, email, invitation});
+      : {}),
   };
 
-export const handleSuspendUser =
-  (supabase: SupabaseClient) => async (req: AuthenticatedRequest, res: Response) => {
-    const {status} = req.validatedBody as z.infer<typeof suspendUserSchema>;
-    const targetUid = req.params.uid;
-    if (!targetUid) {
-      res.status(400).json({error: 'User id is required'});
+  await db
+    .insert(schema.users)
+    .values(profileValues)
+    .onConflictDoUpdate({target: schema.users.uid, set: profileValues});
+
+  // 3. Ensure the invitation exists for the landlord's tenant list. We NO LONGER
+  // delete it here, as the LandlordDashboard relies on the invitations table
+  // to show the registry of tenants linked to that landlord.
+  const invitationValues = {
+    email,
+    displayName: body.displayName,
+    phone: body.phone ?? null,
+    role: body.role,
+    platformId,
+    landlordId: landlordId ?? null,
+  };
+
+  const [invitation] = await db
+    .insert(schema.invitations)
+    .values(invitationValues)
+    .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
+    .returning();
+
+  console.log(`[Provisioning] Successfully provisioned ${body.role}: ${email} (UID: ${uid}, Landlord: ${landlordId})`);
+  res.status(201).json({uid, email, invitation});
+};
+
+export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response) => {
+  const {status} = req.validatedBody as z.infer<typeof suspendUserSchema>;
+  const targetUid = req.params.uid;
+  if (!targetUid) {
+    res.status(400).json({error: 'User id is required'});
+    return;
+  }
+
+  const actor = req.profile!;
+  if (!actor.isSuperAdmin && !actor.isAdmin) {
+    res.status(403).json({error: 'Forbidden'});
+    return;
+  }
+
+  const target = await db.query.users.findFirst({
+    where: eq(schema.users.uid, targetUid),
+    columns: {uid: true, platformId: true, isSuperAdmin: true},
+  });
+
+  if (!target) {
+    res.status(404).json({error: 'User not found'});
+    return;
+  }
+  if (target.isSuperAdmin && !actor.isSuperAdmin) {
+    res.status(403).json({error: 'Cannot modify a super admin'});
+    return;
+  }
+  if (!actor.isSuperAdmin && actor.platformId && target.platformId !== actor.platformId) {
+    res.status(403).json({error: 'User is outside your platform'});
+    return;
+  }
+
+  // Enforced at app.ts's requireAuth (checks profile.status on every request) — there is
+  // no separate auth-provider-level ban to set, unlike the old Supabase Auth admin API.
+  await db.update(schema.users).set({status}).where(eq(schema.users.uid, targetUid));
+
+  res.json({uid: targetUid, status});
+};
+
+export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response) => {
+  const targetUid = req.params.uid;
+  const actor = req.profile!;
+
+  try {
+    if (targetUid === actor.uid) {
+      res.status(400).json({error: 'You cannot delete your own account'});
       return;
     }
 
-    const actor = req.profile!;
-    if (!actor.isSuperAdmin && !actor.isAdmin) {
-      res.status(403).json({error: 'Forbidden'});
-      return;
-    }
+    // 1. Fetch user details first to check permissions and delete invitations/assignments
+    console.log(`[handleDeleteUser] Attempting to delete targetUid: "${targetUid}" by actor: ${actor.uid}`);
 
-    const {data: target, error: targetError} = await supabase
-      .from('users')
-      .select('uid,platformId,isSuperAdmin')
-      .eq('uid', targetUid)
-      .maybeSingle();
+    const targetUser = await db.query.users.findFirst({
+      where: eq(schema.users.uid, targetUid),
+      columns: {email: true, platformId: true, role: true},
+    });
 
-    if (targetError) throw targetError;
-    if (!target) {
+    console.log(`[handleDeleteUser] Fetch result - targetUser:`, targetUser);
+
+    if (!targetUser) {
       res.status(404).json({error: 'User not found'});
       return;
     }
-    if (target.isSuperAdmin && !actor.isSuperAdmin) {
-      res.status(403).json({error: 'Cannot modify a super admin'});
-      return;
-    }
-    if (!actor.isSuperAdmin && actor.platformId && target.platformId !== actor.platformId) {
-      res.status(403).json({error: 'User is outside your platform'});
-      return;
-    }
 
-    const banDuration = status === 'suspended' ? '876000h' : 'none';
-    const {error: authError} = await supabase.auth.admin.updateUserById(targetUid, {ban_duration: banDuration});
-    if (authError) throw authError;
-
-    const {error: dbError} = await supabase.from('users').update({status}).eq('uid', targetUid);
-    if (dbError) throw dbError;
-
-    res.json({uid: targetUid, status});
-  };
-
-export const handleDeleteUser =
-  (supabase: SupabaseClient) => async (req: AuthenticatedRequest, res: Response) => {
-    const targetUid = req.params.uid;
-    const actor = req.profile!;
-
-    try {
-      if (targetUid === actor.uid) {
-        res.status(400).json({error: 'You cannot delete your own account'});
-        return;
-      }
-
-      // 1. Fetch user details first to check permissions and delete invitations/assignments
-      console.log(`[handleDeleteUser] Attempting to delete targetUid: "${targetUid}" by actor: ${actor.uid}`);
-      
-      const { data: targetUser, error: fetchError } = await supabase
-        .from('users')
-        .select('email, platformId, role')
-        .eq('uid', targetUid)
-        .maybeSingle();
-
-      console.log(`[handleDeleteUser] Fetch result - targetUser:`, targetUser, `error:`, fetchError);
-
-      if (!targetUser) {
-        res.status(404).json({error: 'User not found'});
-        return;
-      }
-
-      if (!actor.isSuperAdmin) {
-        let isCreator = false;
-        if (!actor.isAdmin) {
-          const { data: inv } = await supabase.from('invitations').select('landlordId').eq('email', targetUser.email).maybeSingle();
-          if (inv && inv.landlordId === actor.uid) {
-            isCreator = true;
-          }
-        }
-        
-        if (!isCreator && (!actor.isAdmin || targetUser.platformId !== actor.platformId)) {
-          res.status(403).json({error: 'You do not have permission to delete this user.'});
-          return;
+    if (!actor.isSuperAdmin) {
+      let isCreator = false;
+      if (!actor.isAdmin) {
+        const inv = await db.query.invitations.findFirst({
+          where: eq(schema.invitations.email, targetUser.email),
+          columns: {landlordId: true},
+        });
+        if (inv && inv.landlordId === actor.uid) {
+          isCreator = true;
         }
       }
 
-      // 2. Delete auth user
-      const {error: authError} = await supabase.auth.admin.deleteUser(targetUid);
-      if (authError) throw authError;
-
-      // 3. Delete user profile
-      await supabase.from('users').delete().eq('uid', targetUid);
-
-      // 4. Purge invitations, unassign properties, and cancel unpaid invoices for the user email
-      if (targetUser?.email) {
-        const email = targetUser.email.trim().toLowerCase();
-        await supabase.from('invitations').delete().ilike('email', email);
-        await supabase.from('properties').update({ tenantId: null, status: 'available' }).ilike('tenantId', email);
-        await supabase.from('rentPayments').delete().ilike('tenantId', email).neq('status', 'paid');
+      if (!isCreator && (!actor.isAdmin || targetUser.platformId !== actor.platformId)) {
+        res.status(403).json({error: 'You do not have permission to delete this user.'});
+        return;
       }
-
-      res.json({deleted: true});
-    } catch (err: any) {
-      console.error('Error in handleDeleteUser:', err);
-      res.status(500).json({error: err.message || 'Internal Server Error'});
     }
-  };
+
+    // 2. Delete the auth user — cascades to public.users (FK onDelete: 'cascade') and to
+    // Better-Auth's own session/account rows.
+    await db.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
+
+    // 3. Purge invitations, unassign properties, and cancel unpaid invoices for the user email
+    if (targetUser?.email) {
+      const email = targetUser.email.trim().toLowerCase();
+      await db.delete(schema.invitations).where(ilike(schema.invitations.email, email));
+      await db
+        .update(schema.properties)
+        .set({tenantId: null, status: 'available'})
+        .where(ilike(schema.properties.tenantId, email));
+      await db
+        .delete(schema.rentPayments)
+        .where(and(ilike(schema.rentPayments.tenantId, email), ne(schema.rentPayments.status, 'paid')));
+    }
+
+    res.json({deleted: true});
+  } catch (err: any) {
+    console.error('Error in handleDeleteUser:', err);
+    res.status(500).json({error: err.message || 'Internal Server Error'});
+  }
+};
