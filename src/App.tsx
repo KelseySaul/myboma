@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from './supabase';
+import { authClient } from './lib/auth-client';
+import { getSession, completePasswordReset } from './lib/api';
 import LandingPage from './components/LandingPage';
 import LandlordDashboard from './components/LandlordDashboard';
 import TenantDashboard from './components/TenantDashboard';
@@ -121,76 +122,13 @@ const normalizeProfile = (data: any): UserProfile => {
   } as UserProfile;
 };
 
-const stripUndefined = (value: Record<string, any>) => (
-  Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
-);
-
-const getStoredTermsAcceptance = () => {
-  try {
-    const raw = localStorage.getItem('myboma_terms_acceptance');
-    if (!raw) return null;
-    return JSON.parse(raw) as {
-      acceptedAt?: string;
-      termsVersion?: string;
-      privacyVersion?: string;
-    };
-  } catch {
-    return null;
-  }
-};
-
-const getMissingSchemaColumn = (error: any) => {
-  const message = error?.message || '';
-  return /'([^']+)' column/.exec(message)?.[1] || null;
-};
-
-const upsertProfile = async (profile: UserProfile) => {
-  const unsupportedColumns = new Set<string>();
-  let lastError: any = null;
-
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const payload = stripUndefined(
-      Object.fromEntries(Object.entries(profile).filter(([key]) => !unsupportedColumns.has(key)))
-    );
-    const { error } = await supabase
-      .from('users')
-      .upsert([payload], { onConflict: 'uid' });
-
-    if (!error) return;
-
-    lastError = error;
-    const missingColumn = getMissingSchemaColumn(error);
-    if (error.code === 'PGRST204' && missingColumn && !unsupportedColumns.has(missingColumn)) {
-      console.warn(`App: Supabase schema is missing '${missingColumn}'. Retrying profile sync without it.`);
-      unsupportedColumns.add(missingColumn);
-      continue;
-    }
-
-    throw error;
-  }
-
-  throw lastError;
-};
-
-const fetchInvitation = async (email: string) => {
-  if (!email) return null;
-
-  const { data, error } = await supabase
-    .from('invitations')
-    .select('email,platformId,displayName,phone,role,landlordId')
-    .eq('email', email.toLowerCase())
-    .maybeSingle();
-
-  if (error) {
-    console.warn("App: Invitation lookup skipped:", error.message);
-    return null;
-  }
-
-  return data;
-};
-
 export default function App() {
-  const [user, setUser] = useState<any>(null);
+  const sessionState = authClient.useSession() as {
+    data: {user: {id: string; email: string; name?: string}} | null;
+    isPending: boolean;
+  };
+  const user = sessionState.data?.user ?? null;
+  const sessionPending = sessionState.isPending;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -291,21 +229,11 @@ export default function App() {
 
     setResetLoading(true);
     try {
-      // 1. Update password in Supabase Auth
-      const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
-      if (authError) throw authError;
+      // Sets the new password and clears mustChangePassword server-side, atomically.
+      await completePasswordReset(newPassword);
 
-      // 2. Update mustChangePassword flag in public.users table
-      const { error: dbError } = await supabase
-        .from('users')
-        .update({ mustChangePassword: false })
-        .eq('uid', profile.uid);
-      if (dbError) throw dbError;
-
-      // 3. Log audit event
       logAudit('PROFILE_UPDATE', 'user', profile.uid, { action: 'forced_password_reset' });
 
-      // 4. Update state to unlock UI
       setProfile(prev => prev ? { ...prev, mustChangePassword: false } : null);
       
       // Clean up inputs
@@ -343,10 +271,29 @@ export default function App() {
     profileRef.current = profile;
   }, [user, profile]);
 
+  // Sync OneSignal's device identity with the current auth user (unchanged from before).
+  const syncOneSignalIdentity = useCallback((uid: string | null) => {
+    if (Capacitor.isNativePlatform()) {
+      if (!oneSignalNativeInitialized) return;
+      try {
+        if (uid) OneSignalNative.login(uid); else OneSignalNative.logout();
+      } catch (e) {
+        console.error('OneSignalNative identity sync failed:', e);
+      }
+    } else {
+      if (!oneSignalWebInitialized) return;
+      try {
+        if (uid) OneSignalWeb.login(uid); else OneSignalWeb.logout();
+      } catch (e) {
+        console.error('OneSignalWeb identity sync failed:', e);
+      }
+    }
+  }, []);
+
+  // Loads (or reloads) the app profile for the current session via the BFF's
+  // /session endpoint, which returns req.profile (see app.ts requireAuth).
   useEffect(() => {
-    let profileSubscription: any = null;
     let isMounted = true;
-    let lastProcessedUserId: string | null = null;
 
     // Safety timeout: if auth doesn't resolve in 8 seconds, stop loading
     const safetyTimeout = setTimeout(() => {
@@ -356,252 +303,73 @@ export default function App() {
       }
     }, 8000);
 
-    const handleProfile = async (currentUser: any, retryCount = 0) => {
-      if (!currentUser || !isMounted) {
-        setProfile(null);
-        return;
-      }
-
-      if (lastProcessedUserId === currentUser.id && profileRef.current) {
-        return;
-      }
-      lastProcessedUserId = currentUser.id;
-
+    const loadProfile = async (retryCount = 0): Promise<void> => {
       try {
-        const { data: profileData, error: profileError } = await supabase
-          .from('users')
-          .select('uid,email,displayName,role,platformId,isAdmin,isSuperAdmin,phone,address,avatarUrl,bankName,bankAccountNumber,bankAccountName,rentPayoutMethod,cashPayoutNotes,subscriptionPlan,subscriptionStatus,subscriptionExpiresAt,createdAt,mustChangePassword,status,termsAcceptedAt,termsVersion,privacyVersion')
-          .eq('uid', currentUser.id)
-          .maybeSingle();
-
+        const { profile: profileData } = await getSession();
         if (!isMounted) return;
-
-        if (profileData) {
-          const p = normalizeProfile(profileData);
-          setProfile(p);
-          if (!activeView) setActiveView(p.role);
-          // Show onboarding tour for first-time users
-          if (shouldShowOnboarding(p.role)) setShowOnboarding(true);
-          setError(null);
-        } else if (profileError) {
-          console.error("App: Profile fetch error:", JSON.stringify(profileError, null, 2));
-          throw profileError;
-        } else {
-          // Profile genuinely doesn't exist, create it
-          const email = (currentUser.email || '').toLowerCase();
-          const invitation = await fetchInvitation(email);
-          const savedRole = normalizeRole(localStorage.getItem('myboma_intended_role'));
-          const invitedRole = normalizeRole(invitation?.role);
-          const role = invitation ? invitedRole : savedRole;
-          const termsAcceptance = getStoredTermsAcceptance();
-
-          const newProfile: UserProfile = {
-            uid: currentUser.id,
-            platformId: invitation?.platformId,
-            email,
-            displayName: currentUser.user_metadata?.full_name || invitation?.displayName || 'User',
-            role,
-            isAdmin: role === 'admin',
-            isSuperAdmin: false,
-            phone: currentUser.user_metadata?.phone || invitation?.phone,
-            createdAt: new Date().toISOString(),
-            termsAcceptedAt: currentUser.user_metadata?.terms_accepted_at || termsAcceptance?.acceptedAt,
-            termsVersion: currentUser.user_metadata?.terms_version || termsAcceptance?.termsVersion,
-            privacyVersion: currentUser.user_metadata?.privacy_version || termsAcceptance?.privacyVersion,
-          };
-          
-          await upsertProfile(newProfile);
-
-          // NOTE: We intentionally do NOT delete the invitation here.
-          // The server keeps invitations alive as the landlord's tenant registry.
-          // The DB trigger (handle_new_user) already consumed the invite for role/platformId assignment.
-          
-          if (isMounted) {
-            const p = normalizeProfile(newProfile);
-            setProfile(p);
-            if (!activeView) setActiveView(p.role);
-            // Show onboarding tour for new accounts
-            if (shouldShowOnboarding(p.role)) setShowOnboarding(true);
-            localStorage.removeItem('myboma_intended_role');
-            setError(null);
-          }
-        }
-
-        // Set up realtime with a stable channel name (no random suffix to avoid WebSocket leaks)
-        if (profileSubscription) profileSubscription.unsubscribe();
-        profileSubscription = supabase
-          .channel(`profile-changes-${currentUser.id}`)
-          .on('postgres_changes', 
-              { event: 'UPDATE', schema: 'public', table: 'users', filter: `uid=eq.${currentUser.id}` }, 
-              (payload) => {
-                if (isMounted) {
-                  const updatedProfile = normalizeProfile(payload.new);
-                  setProfile(updatedProfile);
-                  setActiveView(prev => (!updatedProfile.isAdmin ? updatedProfile.role : prev || updatedProfile.role));
-                }
-              }
-          )
-          .subscribe();
+        const p = normalizeProfile(profileData);
+        setProfile(p);
+        if (!activeView) setActiveView(p.role);
+        if (shouldShowOnboarding(p.role)) setShowOnboarding(true);
+        setError(null);
       } catch (err: any) {
-        console.error("App: Profile handling error:", err);
-        if (isMounted) {
-          if (retryCount < 1) {
-            return handleProfile(currentUser, retryCount + 1);
-          }
-          setError(err.message || "Failed to load profile");
+        console.error('App: Profile handling error:', err);
+        if (!isMounted) return;
+        if (retryCount < 1) {
+          await loadProfile(retryCount + 1);
+          return;
         }
-        throw err;
+        setError(err.message || 'Failed to load profile');
       }
     };
 
-    // 1. Get initial session synchronously on mount to avoid long timeouts on refresh
-    const initSession = async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        
-        if (!isMounted) return;
-        
-        if (session?.user) {
-          setUser(session.user);
-          const pref = localStorage.getItem(`myboma_default_page_${session.user.id}`);
-          if (pref) setActiveTab(pref);
-          await handleProfile(session.user);
-          // Tie this device to your Supabase User ID
-          if (Capacitor.isNativePlatform()) {
-            if (oneSignalNativeInitialized) {
-              try {
-                OneSignalNative.login(session.user.id);
-              } catch (e) {
-                console.error("OneSignalNative.login failed:", e);
-              }
-            }
-          } else {
-            if (oneSignalWebInitialized) {
-              try {
-                OneSignalWeb.login(session.user.id);
-              } catch (e) {
-                console.error("OneSignalWeb.login failed:", e);
-              }
-            }
-          }
-        } else {
-          // When they log out
-          if (Capacitor.isNativePlatform()) {
-            if (oneSignalNativeInitialized) {
-              try {
-                OneSignalNative.logout();
-              } catch (e) {
-                console.error("OneSignalNative.logout failed:", e);
-              }
-            }
-          } else {
-            if (oneSignalWebInitialized) {
-              try {
-                OneSignalWeb.logout();
-              } catch (e) {
-                console.error("OneSignalWeb.logout failed:", e);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("App: Session restore error:", err);
-      } finally {
+    if (sessionPending) return () => { isMounted = false; };
+
+    if (user) {
+      const pref = localStorage.getItem(`myboma_default_page_${user.id}`);
+      if (pref) setActiveTab(pref);
+      syncOneSignalIdentity(user.id);
+      loadProfile().finally(() => {
         if (isMounted) {
           setLoading(false);
           clearTimeout(safetyTimeout);
         }
-      }
-    };
-
-    initSession();
-
-    // 2. Set up event listener for subsequent changes
-    const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
-
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      
-      if (currentUser) {
-        const pref = localStorage.getItem(`myboma_default_page_${currentUser.id}`);
-        if (pref) setActiveTab(pref);
-        handleProfile(currentUser).catch(() => {});
-        // Tie this device to your Supabase User ID
-        if (Capacitor.isNativePlatform()) {
-          if (oneSignalNativeInitialized) {
-            try {
-              OneSignalNative.login(currentUser.id);
-            } catch (e) {
-              console.error("OneSignalNative.login failed:", e);
-            }
-          }
-        } else {
-          if (oneSignalWebInitialized) {
-            try {
-              OneSignalWeb.login(currentUser.id);
-            } catch (e) {
-              console.error("OneSignalWeb.login failed:", e);
-            }
-          }
-        }
-      } else {
-        lastProcessedUserId = null;
-        setProfile(null);
-        setActiveView(null);
-        setError(null);
-        if (profileSubscription) {
-          profileSubscription.unsubscribe();
-          profileSubscription = null;
-        }
-        // When they log out
-        if (Capacitor.isNativePlatform()) {
-          if (oneSignalNativeInitialized) {
-            try {
-              OneSignalNative.logout();
-            } catch (e) {
-              console.error("OneSignalNative.logout failed:", e);
-            }
-          }
-        } else {
-          if (oneSignalWebInitialized) {
-            try {
-              OneSignalWeb.logout();
-            } catch (e) {
-              console.error("OneSignalWeb.logout failed:", e);
-            }
-          }
-        }
-      }
-      
-      // Only set loading=false here for sign-out / session-missing events.
-      // For sign-in events, initSession already sets loading=false after the profile fetch completes.
-      // Doing it here too causes the UI to flash before the profile is ready.
-      if (!currentUser) {
-        setLoading(false);
-        clearTimeout(safetyTimeout);
-      }
-    });
+      });
+    } else {
+      setProfile(null);
+      setActiveView(null);
+      setError(null);
+      syncOneSignalIdentity(null);
+      setLoading(false);
+      clearTimeout(safetyTimeout);
+    }
 
     return () => {
       isMounted = false;
-      authListener.unsubscribe();
-      if (profileSubscription) profileSubscription.unsubscribe();
       clearTimeout(safetyTimeout);
     };
-  }, []);
+  }, [user?.id, sessionPending, syncOneSignalIdentity]);
+
+  // Polls for profile changes (role/subscription updates made elsewhere, e.g. by an
+  // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
+  useEffect(() => {
+    if (!user?.id) return;
+    const interval = setInterval(() => {
+      getSession()
+        .then(({ profile: profileData }) => {
+          const p = normalizeProfile(profileData);
+          setProfile(p);
+          setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
+        })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
-    const { data } = await supabase
-      .from('users')
-      .select(
-        'uid,email,displayName,role,platformId,isAdmin,isSuperAdmin,phone,address,avatarUrl,bankName,bankAccountNumber,bankAccountName,rentPayoutMethod,cashPayoutNotes,subscriptionPlan,subscriptionStatus,subscriptionExpiresAt,createdAt,mustChangePassword,status,termsAcceptedAt,termsVersion,privacyVersion',
-      )
-      .eq('uid', user.id)
-      .maybeSingle();
-    if (data) setProfile(normalizeProfile(data));
+    const { profile: profileData } = await getSession();
+    setProfile(normalizeProfile(profileData));
   }, [user?.id]);
 
   useEffect(() => {
@@ -626,12 +394,8 @@ export default function App() {
         let attempts = 0;
         const poll = setInterval(async () => {
           attempts++;
-          const { data, error } = await supabase
-            .from('users')
-            .select('subscriptionStatus, subscriptionExpiresAt, role')
-            .eq('uid', currentUserId)
-            .maybeSingle();
-          
+          const { profile: data } = await getSession().catch(() => ({ profile: null as any }));
+
           const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
           console.log(`[Polling Activation] Attempt ${attempts}: status=${data?.subscriptionStatus}, role=${data?.role}, hasExpiry=${!!data?.subscriptionExpiresAt}`);
           
@@ -1213,7 +977,7 @@ export default function App() {
               <button
                 onClick={async () => {
                   setIsMobileMenuOpen(false);
-                  await supabase.auth.signOut();
+                  await authClient.signOut({});
                 }}
                 className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all"
               >

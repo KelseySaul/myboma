@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { authClient } from '../lib/auth-client';
+import { initPlatform, updatePlatformBranding, getPlatformBranding, updateMyProfile } from '../lib/api';
 import { UserProfile, promptForPush } from '../App';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -71,32 +73,26 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
   useEffect(() => {
     if (profile.role === 'admin') {
       if (profile.platformId) {
-        supabase.from('platforms').select('*').eq('id', profile.platformId).maybeSingle()
-          .then(({ data }) => {
-            if (data) {
-              setPlatformName(data.name || '');
-              setBrandingForm({
-                brandLogoUrl: data.brandLogoUrl || '',
-                brandPrimaryColor: data.brandPrimaryColor || '',
-                brandSecondaryColor: data.brandSecondaryColor || '',
-              });
-            }
-          });
+        getPlatformBranding(profile.platformId)
+          .then((data) => {
+            setPlatformName(data.name || '');
+            setBrandingForm({
+              brandLogoUrl: data.brandLogoUrl || '',
+              brandPrimaryColor: data.brandPrimaryColor || '',
+              brandSecondaryColor: data.brandSecondaryColor || '',
+            });
+          })
+          .catch(() => {});
       } else {
         // Init platform for this admin if missing
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (session) {
-            fetch('/api/web/admin/init-platform', {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${session.access_token}` }
-            }).then(res => res.json()).then(data => {
-              if (data.status === 'created') {
-                toast.success('Platform initialized!');
-                window.location.reload();
-              }
-            }).catch(console.error);
-          }
-        });
+        initPlatform()
+          .then((data) => {
+            if (data.status === 'created') {
+              toast.success('Platform initialized!');
+              window.location.reload();
+            }
+          })
+          .catch(console.error);
       }
     }
   }, [profile]);
@@ -105,16 +101,7 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
     if (!profile.platformId) return;
     setSavingBranding(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/web/platforms/${profile.platformId}/branding`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ ...brandingForm, name: platformName })
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await updatePlatformBranding(profile.platformId, { ...brandingForm, name: platformName });
       toast.success('Branding updated successfully! Refresh the page to see changes.');
     } catch (err: any) {
       toast.error('Failed to update branding: ' + err.message);
@@ -160,7 +147,7 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
       setProfileForm(prev => ({ ...prev, avatarUrl: publicUrl }));
-      await supabase.from('users').update({ avatarUrl: publicUrl }).eq('uid', profile.uid);
+      await updateMyProfile({ avatarUrl: publicUrl });
       toast.success('Avatar updated!');
     } catch {
       toast.error('Failed to upload avatar');
@@ -192,8 +179,7 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
     setSavingProfile(true);
     setProfileSaved(false);
     try {
-      const { error } = await supabase.from('users').update(profileForm).eq('uid', profile.uid);
-      if (error) throw error;
+      await updateMyProfile(profileForm);
       setProfileSaved(true);
       toast.success('Profile updated successfully!');
       setTimeout(() => setProfileSaved(false), 3000);
@@ -220,18 +206,14 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
     setSavingPassword(true);
     setPasswordSaved(false);
     try {
-      // 1. Re-authenticate to verify old password
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: profile.email,
-        password: passwordForm.oldPassword,
+      // changePassword verifies currentPassword itself before setting newPassword.
+      const { error } = await authClient.changePassword({
+        currentPassword: passwordForm.oldPassword,
+        newPassword: passwordForm.newPassword,
       });
-      if (authError) {
-        throw new Error('Incorrect current password. Please try again.');
+      if (error) {
+        throw new Error(error.message || 'Incorrect current password. Please try again.');
       }
-
-      // 2. Update password
-      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPassword });
-      if (error) throw error;
       setPasswordSaved(true);
       toast.success('Password changed successfully!');
       setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });

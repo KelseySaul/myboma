@@ -1,8 +1,8 @@
 import * as Sentry from '@sentry/node';
-import {createClient, type User} from '@supabase/supabase-js';
 import cors from 'cors';
 import {randomUUID} from 'node:crypto';
 import dotenv from 'dotenv';
+import {and, desc, eq, ilike, inArray, isNull, ne, or, sql} from 'drizzle-orm';
 import express, {type ErrorRequestHandler, type NextFunction, type Request, type Response} from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
@@ -12,6 +12,9 @@ import path from 'path';
 import {fileURLToPath} from 'url';
 import {z, type ZodSchema} from 'zod';
 import Stripe from 'stripe';
+import {toNodeHandler, fromNodeHeaders} from 'better-auth/node';
+import {auth} from './server/auth.ts';
+import {db, schema} from './db/client.ts';
 import {LEGAL_DOCUMENTS} from './src/legalDocuments.ts';
 import {isSuperAdminEmail} from './config/superAdmin.ts';
 import {assertAllowedRedirectUrl, verifyMpesaCallback} from './server/helpers.ts';
@@ -39,7 +42,23 @@ import {
   type SubscriptionTier,
 } from './src/lib/landlordSubscription.ts';
 import type {AuthenticatedRequest, RentPaymentRecord, UserProfileRecord} from './server/types.ts';
+import {toActor} from './server/types.ts';
+import {
+  canCreateBooking,
+  canCreateMaintenanceRequest,
+  canManageBuilding,
+  canManagePlatform,
+  canManageProperty,
+  canReadPlatformBranding,
+  canUpdateMaintenanceRequest,
+  canUpdateNotification,
+  canWriteUser,
+  isAdmin,
+  isAdminInPlatform,
+  isSuperAdmin,
+} from './db/authz.ts';
 import { handleSendRentReminder, processAutomatedRentReminders } from './server/notificationHandlers.ts';
+import { syncAutomaticRentInvoices, ensureRentInvoiceForProperty } from './server/rentInvoiceSync.ts';
 import cron from 'node-cron';
 
 dotenv.config();
@@ -103,26 +122,6 @@ const requiredEnv = {
   supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
 };
-
-const supabase =
-  requiredEnv.supabaseUrl && requiredEnv.supabaseServiceRoleKey
-    ? createClient(requiredEnv.supabaseUrl, requiredEnv.supabaseServiceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    : null;
-
-const supabaseAuth =
-  requiredEnv.supabaseUrl && requiredEnv.supabaseAnonKey
-    ? createClient(requiredEnv.supabaseUrl, requiredEnv.supabaseAnonKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      })
-    : null;
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 let pesapalTokenCache: {token: string; expiresAt: number} | null = null;
@@ -210,6 +209,7 @@ const validateBody =
   };
 
 const uuidSchema = z.string().uuid();
+const emailSchema = z.string().email().max(320);
 const absoluteUrlSchema = z.string().url().max(2048);
 const phoneSchema = z
   .string()
@@ -288,25 +288,7 @@ const getBearerToken = (req: Request) => {
   return header.slice('Bearer '.length).trim();
 };
 
-const requireSupabase = () => {
-  if (!supabase || !supabaseAuth) {
-    const missing = [];
-    if (!requiredEnv.supabaseUrl) missing.push('VITE_SUPABASE_URL');
-    if (!requiredEnv.supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
-    if (!requiredEnv.supabaseServiceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-    
-    const msg = `Supabase server credentials are not configured. Missing: ${missing.join(', ')}`;
-    console.error(`[Config Error] ${msg}`);
-    const error = new Error(msg);
-    (error as any).statusCode = 503;
-    throw error;
-  }
-
-  return {supabase, supabaseAuth};
-};
-
 const requireAuth = asyncHandler(async (req, res, next) => {
-  const {supabase, supabaseAuth} = requireSupabase();
   const token = getBearerToken(req);
 
   if (!token) {
@@ -314,37 +296,39 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     return;
   }
 
-  const {
-    data: {user},
-    error,
-  } = await supabaseAuth.auth.getUser(token);
+  // The bearer plugin resolves an `Authorization: Bearer <token>` header into a
+  // session for this request — see server/auth.ts.
+  const session = await auth.api.getSession({headers: fromNodeHeaders(req.headers)});
 
-  if (error || !user) {
+  if (!session?.user) {
     res.status(401).json({error: 'Invalid or expired token'});
     return;
   }
 
-  const {data: profileRow, error: profileError} = await supabase
-    .from('users')
-    .select(
-      'uid,email,displayName,role,platformId,phone,isAdmin,isSuperAdmin,stripeAccountId,mpesaSettlementPhone,mpesaSettlementShortCode,subscriptionPlan,subscriptionStatus,subscriptionExpiresAt',
-    )
-    .eq('uid', user.id)
-    .maybeSingle();
+  const profileRow = await db.query.users.findFirst({
+    where: eq(schema.users.uid, session.user.id),
+  });
 
-  if (profileError) throw profileError;
   if (!profileRow) {
     res.status(403).json({error: 'User profile is not provisioned'});
     return;
   }
 
-  let profile = profileRow as UserProfileRecord;
-  profile = await syncSuperAdminFromEnv(supabase, profile, isSuperAdminEmail);
+  // Old Supabase Auth enforced suspension via `ban_duration` at the auth-provider
+  // level; there is no equivalent here, so it's enforced at this single chokepoint
+  // instead (server/adminHandlers.ts's handleSuspendUser only flips this DB column).
+  if (profileRow.status === 'suspended') {
+    res.status(403).json({error: 'This account has been suspended'});
+    return;
+  }
 
-  req.authUser = user;
+  let profile = profileRow as unknown as UserProfileRecord;
+  profile = await syncSuperAdminFromEnv(profile, isSuperAdminEmail);
+
+  req.authUser = {id: session.user.id, email: session.user.email};
   req.profile = profile;
   req.clientKind = getClientKind(req);
-  Sentry.setUser({id: user.id, email: user.email ?? undefined});
+  Sentry.setUser({id: session.user.id, email: session.user.email});
   next();
 });
 
@@ -377,22 +361,17 @@ const assertTenantCanPay = (profile: UserProfileRecord, payment: RentPaymentReco
 };
 
 const fetchPaymentContext = async (rentPaymentId: string, profile?: UserProfileRecord) => {
-  const {supabase} = requireSupabase();
+  const payment = await db.query.rentPayments.findFirst({
+    where: eq(schema.rentPayments.id, rentPaymentId),
+  });
 
-  const {data: payment, error: paymentError} = await supabase
-    .from('rentPayments')
-    .select('*')
-    .eq('id', rentPaymentId)
-    .maybeSingle();
-
-  if (paymentError) throw paymentError;
   if (!payment) {
     const error = new Error('Rent payment not found.');
     (error as any).statusCode = 404;
     throw error;
   }
 
-  const rentPayment = payment as RentPaymentRecord;
+  const rentPayment = payment as unknown as RentPaymentRecord;
 
   if (profile && !assertTenantCanPay(profile, rentPayment)) {
     const error = new Error('You can only pay rent assigned to your account.');
@@ -406,48 +385,43 @@ const fetchPaymentContext = async (rentPaymentId: string, profile?: UserProfileR
     throw error;
   }
 
-  const {data: landlord, error: landlordError} = await supabase
-    .from('users')
-    .select('uid,email,displayName,phone,stripeAccountId,mpesaSettlementPhone,mpesaSettlementShortCode')
-    .eq('uid', rentPayment.landlordId)
-    .maybeSingle();
+  const landlord = await db.query.users.findFirst({
+    where: eq(schema.users.uid, payment.landlordId),
+    columns: {uid: true, email: true, displayName: true, phone: true, stripeAccountId: true, mpesaSettlementPhone: true, mpesaSettlementShortCode: true},
+  });
 
-  if (landlordError) throw landlordError;
   if (!landlord) {
     const error = new Error('Landlord account not found.');
     (error as any).statusCode = 422;
     throw error;
   }
 
-  const {data: property} = await supabase
-    .from('properties')
-    .select('id,title,unitNumber,location')
-    .eq('id', rentPayment.propertyId)
-    .maybeSingle();
+  const property = await db.query.properties.findFirst({
+    where: eq(schema.properties.id, payment.propertyId),
+    columns: {id: true, title: true, unitNumber: true, location: true},
+  });
 
   return {
     payment: rentPayment,
-    landlord: landlord as UserProfileRecord,
-    property: property as {id: string; title?: string; unitNumber?: string; location?: string} | null,
+    landlord: landlord as unknown as UserProfileRecord,
+    property: property ?? null,
   };
 };
 
+/**
+ * fallbackPayload is unused: it existed to retry against Supabase/PostgREST's schema
+ * cache ("column not found") errors, which can't happen against our own Drizzle
+ * schema. Kept as a parameter only so the many call sites don't need to change.
+ */
 const updateRentPayment = async (
   rentPaymentId: string,
   payload: Record<string, unknown>,
-  fallbackPayload: Record<string, unknown> = {},
+  _fallbackPayload: Record<string, unknown> = {},
 ) => {
-  const {supabase} = requireSupabase();
-  const {error} = await supabase.from('rentPayments').update(payload).eq('id', rentPaymentId);
-  if (!error) return;
-
-  if (error.code === 'PGRST204' && Object.keys(fallbackPayload).length > 0) {
-    const {error: fallbackError} = await supabase.from('rentPayments').update(fallbackPayload).eq('id', rentPaymentId);
-    if (fallbackError) throw fallbackError;
-    return;
-  }
-
-  throw error;
+  await db
+    .update(schema.rentPayments)
+    .set(payload as Partial<typeof schema.rentPayments.$inferInsert>)
+    .where(eq(schema.rentPayments.id, rentPaymentId));
 };
 
 const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
@@ -475,25 +449,28 @@ const sendPushNotification = async (targetUserId: string, title: string, message
   return response.json();
 };
 
-const insertNotification = async (payload: Record<string, unknown>) => {
-  const {supabase} = requireSupabase();
-  const {error} = await supabase.from('notifications').insert([payload]);
-  if (error) throw error;
+const insertNotification = async (payload: {
+  recipientEmail: string;
+  platformId?: string | null;
+  type?: string | null;
+  title: string;
+  message?: string | null;
+  propertyId?: string | null;
+  read?: boolean;
+}) => {
+  await db.insert(schema.notifications).values(payload);
 
-  if (payload.recipientEmail) {
-    const { data: user } = await supabase
-      .from('users')
-      .select('uid')
-      .eq('email', payload.recipientEmail)
-      .maybeSingle();
+  const user = await db.query.users.findFirst({
+    where: sql`lower(${schema.users.email}) = ${payload.recipientEmail.toLowerCase()}`,
+    columns: {uid: true},
+  });
 
-    if (user?.uid) {
-      const title = String(payload.title || 'New Notification');
-      const message = String(payload.message || 'You have a new update.');
-      await sendPushNotification(user.uid, title, message).catch(err => {
-        console.error('[OneSignal] Failed to send push:', err);
-      });
-    }
+  if (user?.uid) {
+    const title = String(payload.title || 'New Notification');
+    const message = String(payload.message || 'You have a new update.');
+    await sendPushNotification(user.uid, title, message).catch(err => {
+      console.error('[OneSignal] Failed to send push:', err);
+    });
   }
 };
 
@@ -604,15 +581,12 @@ const markRentPaid = async ({
 };
 
 const getTenantProfileForPayment = async (payment: RentPaymentRecord) => {
-  const {supabase} = requireSupabase();
   const tenantId = String(payment.tenantId);
-  const query = tenantId.includes('@')
-    ? supabase.from('users').select('uid,email,displayName,phone,platformId').ilike('email', tenantId).maybeSingle()
-    : supabase.from('users').select('uid,email,displayName,phone,platformId').eq('uid', tenantId).maybeSingle();
-
-  const {data, error} = await query;
-  if (error) throw error;
-  return data as UserProfileRecord | null;
+  const columns = {uid: true, email: true, displayName: true, phone: true, platformId: true} as const;
+  const tenant = tenantId.includes('@')
+    ? await db.query.users.findFirst({where: ilike(schema.users.email, tenantId), columns})
+    : await db.query.users.findFirst({where: eq(schema.users.uid, tenantId), columns});
+  return (tenant as unknown as UserProfileRecord) ?? null;
 };
 
 const createStripeCheckout = asyncHandler(async (req, res) => {
@@ -699,29 +673,24 @@ const fulfillStripeCheckout = async (sessionId: string) => {
 
   const subscriptionPaymentId = session.metadata?.subscriptionPaymentId;
   if (subscriptionPaymentId) {
-    const {supabase} = requireSupabase();
-    const {data: subRow, error: subError} = await supabase
-      .from('landlordSubscriptionPayments')
-      .select('id,landlordId,plan,amount,status')
-      .eq('id', subscriptionPaymentId)
-      .maybeSingle();
+    const subRow = await db.query.landlordSubscriptionPayments.findFirst({
+      where: eq(schema.landlordSubscriptionPayments.id, subscriptionPaymentId),
+      columns: {id: true, landlordId: true, plan: true, amount: true, status: true},
+    });
 
-    if (subError) throw subError;
     if (!subRow || subRow.status === 'confirmed') return;
 
     const parsed = parseSubscriptionPlan(subRow.plan);
     if (!parsed) throw new Error(`Invalid subscription plan key: ${subRow.plan}`);
 
-    const {data: landlord} = await supabase
-      .from('users')
-      .select('uid,email,displayName')
-      .eq('uid', subRow.landlordId)
-      .maybeSingle();
+    const landlord = await db.query.users.findFirst({
+      where: eq(schema.users.uid, subRow.landlordId),
+      columns: {uid: true, email: true, displayName: true},
+    });
 
     if (!landlord) throw new Error('Landlord profile not found for subscription payment');
 
     await activateLandlordSubscription(
-      supabase,
       {sendEmail, insertNotification},
       {
         subscriptionPaymentId: subRow.id,
@@ -959,48 +928,33 @@ const getPesapalTransactionStatus = async (orderTrackingId: string) =>
   );
 
 const findSubscriptionPaymentByPesapalReference = async (
-  sb: NonNullable<typeof supabase>,
   orderTrackingId: string,
   merchantReference?: string,
 ) => {
-  const select = 'id,landlordId,plan,amount,status,paymentReference';
-  const {data, error} = await sb
-    .from('landlordSubscriptionPayments')
-    .select(select)
-    .eq('providerCheckoutRequestId', orderTrackingId)
-    .maybeSingle();
-  if (error) throw error;
-  if (data || !merchantReference) return data;
+  const columns = {id: true, landlordId: true, plan: true, amount: true, status: true, paymentReference: true} as const;
+  const byCheckoutId = await db.query.landlordSubscriptionPayments.findFirst({
+    where: eq(schema.landlordSubscriptionPayments.providerCheckoutRequestId, orderTrackingId),
+    columns,
+  });
+  if (byCheckoutId || !merchantReference) return byCheckoutId ?? null;
 
-  const fallback = await sb
-    .from('landlordSubscriptionPayments')
-    .select(select)
-    .eq('paymentReference', merchantReference)
-    .maybeSingle();
-  if (fallback.error) throw fallback.error;
-  return fallback.data;
+  const byMerchantRef = await db.query.landlordSubscriptionPayments.findFirst({
+    where: eq(schema.landlordSubscriptionPayments.paymentReference, merchantReference),
+    columns,
+  });
+  return byMerchantRef ?? null;
 };
 
-const findRentPaymentByPesapalReference = async (
-  sb: NonNullable<typeof supabase>,
-  orderTrackingId: string,
-  merchantReference?: string,
-) => {
-  const {data, error} = await sb
-    .from('rentPayments')
-    .select('*')
-    .eq('providerCheckoutRequestId', orderTrackingId)
-    .maybeSingle();
-  if (error) throw error;
-  if (data || !merchantReference) return data;
+const findRentPaymentByPesapalReference = async (orderTrackingId: string, merchantReference?: string) => {
+  const byCheckoutId = await db.query.rentPayments.findFirst({
+    where: eq(schema.rentPayments.providerCheckoutRequestId, orderTrackingId),
+  });
+  if (byCheckoutId || !merchantReference) return byCheckoutId ?? null;
 
-  const fallback = await sb
-    .from('rentPayments')
-    .select('*')
-    .eq('providerMerchantRequestId', merchantReference)
-    .maybeSingle();
-  if (fallback.error) throw fallback.error;
-  return fallback.data;
+  const byMerchantRef = await db.query.rentPayments.findFirst({
+    where: eq(schema.rentPayments.providerMerchantRequestId, merchantReference),
+  });
+  return byMerchantRef ?? null;
 };
 
 const pesapalStatusFlags = (status: PesapalTransactionStatus) => {
@@ -1014,14 +968,12 @@ const pesapalStatusFlags = (status: PesapalTransactionStatus) => {
 };
 
 const processPesapalTransaction = async (orderTrackingId: string, merchantReference?: string) => {
-  const {supabase} = requireSupabase();
   const status = await getPesapalTransactionStatus(orderTrackingId);
   const resolvedMerchantReference = merchantReference || status.merchant_reference;
   const {completed, rejected, statusDescription} = pesapalStatusFlags(status);
   const providerReference = status.confirmation_code || orderTrackingId;
 
   const subPayment = await findSubscriptionPaymentByPesapalReference(
-    supabase,
     orderTrackingId,
     resolvedMerchantReference,
   );
@@ -1031,16 +983,13 @@ const processPesapalTransaction = async (orderTrackingId: string, merchantRefere
       const parsed = parseSubscriptionPlan(subPayment.plan);
       if (!parsed) throw new Error(`Invalid subscription plan key: ${subPayment.plan}`);
 
-      const {data: landlord, error: landlordError} = await supabase
-        .from('users')
-        .select('uid,email,displayName')
-        .eq('uid', subPayment.landlordId)
-        .maybeSingle();
-      if (landlordError) throw landlordError;
+      const landlord = await db.query.users.findFirst({
+        where: eq(schema.users.uid, subPayment.landlordId),
+        columns: {uid: true, email: true, displayName: true},
+      });
       if (!landlord) throw new Error('Landlord profile not found for subscription payment');
 
       await activateLandlordSubscription(
-        supabase,
         {sendEmail, insertNotification},
         {
           subscriptionPaymentId: subPayment.id,
@@ -1055,20 +1004,20 @@ const processPesapalTransaction = async (orderTrackingId: string, merchantRefere
         },
       );
     } else if (rejected && subPayment.status !== 'confirmed') {
-      await supabase
-        .from('landlordSubscriptionPayments')
-        .update({
+      await db
+        .update(schema.landlordSubscriptionPayments)
+        .set({
           status: 'rejected',
           paymentProvider: 'pesapal',
           paymentReference: status.description || statusDescription || 'failed',
         })
-        .eq('id', subPayment.id);
+        .where(eq(schema.landlordSubscriptionPayments.id, subPayment.id));
     }
 
     return {kind: 'subscription' as const, completed, rejected, status};
   }
 
-  const payment = await findRentPaymentByPesapalReference(supabase, orderTrackingId, resolvedMerchantReference);
+  const payment = await findRentPaymentByPesapalReference(orderTrackingId, resolvedMerchantReference);
   if (!payment) return {kind: 'unknown' as const, completed, rejected, status};
 
   const rentPayment = payment as RentPaymentRecord;
@@ -1359,28 +1308,22 @@ const handleMpesaCallback = asyncHandler(async (req, res) => {
   const metadataItems = callback.CallbackMetadata?.Item;
   const receiptNumber = callbackMetadataValue(metadataItems, 'MpesaReceiptNumber');
 
-  const {supabase} = requireSupabase();
-  const {data: subPayment, error: subError} = await supabase
-    .from('landlordSubscriptionPayments')
-    .select('id,landlordId,plan,amount,status')
-    .eq('providerCheckoutRequestId', checkoutRequestId)
-    .maybeSingle();
-
-  if (subError) throw subError;
+  const subPayment = await db.query.landlordSubscriptionPayments.findFirst({
+    where: eq(schema.landlordSubscriptionPayments.providerCheckoutRequestId, checkoutRequestId),
+    columns: {id: true, landlordId: true, plan: true, amount: true, status: true},
+  });
 
   if (subPayment) {
     if (callback.ResultCode === 0 && subPayment.status !== 'confirmed') {
       const parsed = parseSubscriptionPlan(subPayment.plan);
       if (parsed) {
-        const {data: landlord} = await supabase
-          .from('users')
-          .select('uid,email,displayName')
-          .eq('uid', subPayment.landlordId)
-          .maybeSingle();
+        const landlord = await db.query.users.findFirst({
+          where: eq(schema.users.uid, subPayment.landlordId),
+          columns: {uid: true, email: true, displayName: true},
+        });
 
         if (landlord) {
           await activateLandlordSubscription(
-            supabase,
             {sendEmail, insertNotification},
             {
               subscriptionPaymentId: subPayment.id,
@@ -1397,29 +1340,26 @@ const handleMpesaCallback = asyncHandler(async (req, res) => {
         }
       }
     } else if (callback.ResultCode !== 0) {
-      await supabase
-        .from('landlordSubscriptionPayments')
-        .update({status: 'rejected', paymentReference: callback.ResultDesc || 'failed'})
-        .eq('id', subPayment.id);
+      await db
+        .update(schema.landlordSubscriptionPayments)
+        .set({status: 'rejected', paymentReference: callback.ResultDesc || 'failed'})
+        .where(eq(schema.landlordSubscriptionPayments.id, subPayment.id));
     }
 
     res.json({ResultCode: 0, ResultDesc: 'Accepted'});
     return;
   }
 
-  const {data: payment, error} = await supabase
-    .from('rentPayments')
-    .select('*')
-    .eq('providerCheckoutRequestId', checkoutRequestId)
-    .maybeSingle();
+  const payment = await db.query.rentPayments.findFirst({
+    where: eq(schema.rentPayments.providerCheckoutRequestId, checkoutRequestId),
+  });
 
-  if (error) throw error;
   if (!payment) {
     res.json({ResultCode: 0, ResultDesc: 'Accepted'});
     return;
   }
 
-  const rentPayment = payment as RentPaymentRecord;
+  const rentPayment = payment as unknown as RentPaymentRecord;
   const {landlord, property} = await fetchPaymentContext(rentPayment.id);
   const tenant = await getTenantProfileForPayment(rentPayment);
 
@@ -1641,6 +1581,9 @@ app.use(
   }),
 );
 
+// Better-Auth parses its own request body, so it's mounted before express.json() too.
+app.all('/api/auth/*', toNodeHandler(auth));
+
 // Stripe requires the raw body for signature verification, so this route stays before express.json().
 app.post('/api/webhooks/stripe', webhookLimiter, express.raw({type: 'application/json'}), stripeWebhookHandler);
 
@@ -1649,34 +1592,40 @@ app.use('/api', publicLimiter);
 
 app.get('/api/health', healthHandler);
 app.get('/api/legal', (_req, res) => res.json(LEGAL_DOCUMENTS));
+
+/** Public listings — matches the old "Authenticated users read available properties"
+ * RLS policy's `status = 'available'` branch, which was open to anyone (see db/authz.ts
+ * canViewProperty). Logged-out hunters browse this same feed. */
+app.get('/api/public/properties/available', publicLimiter, asyncHandler(async (_req, res) => {
+  const rows = await db.query.properties.findMany({
+    where: eq(schema.properties.status, 'available'),
+    orderBy: desc(schema.properties.createdAt),
+  });
+  res.json(rows.map((p) => ({...p, price: Number(p.price)})));
+}));
 app.post(
   '/api/waitlist',
   waitlistLimiter,
   validateBody(waitlistSignupSchema),
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
     const body = getValidatedBody<z.infer<typeof waitlistSignupSchema>>(req);
     const email = body.email.toLowerCase();
     const unsubscribeToken = randomUUID();
-    const now = new Date().toISOString();
-    const {data, error} = await sb
-      .from('waitlistSignups')
-      .upsert(
-        {
-          email,
-          source: body.source,
-          status: 'subscribed',
-          unsubscribeToken,
-          consentAt: now,
-          unsubscribedAt: null,
-          updatedAt: now,
-        },
-        {onConflict: 'email'},
-      )
-      .select('email,unsubscribeToken')
-      .single();
-
-    if (error) throw error;
+    const now = new Date();
+    const values = {
+      email,
+      source: body.source,
+      status: 'subscribed' as const,
+      unsubscribeToken,
+      consentAt: now,
+      unsubscribedAt: null,
+      updatedAt: now,
+    };
+    const [data] = await db
+      .insert(schema.waitlistSignups)
+      .values(values)
+      .onConflictDoUpdate({target: schema.waitlistSignups.email, set: values})
+      .returning({email: schema.waitlistSignups.email, unsubscribeToken: schema.waitlistSignups.unsubscribeToken});
 
     const unsubscribeUrl = `${appBaseUrl}/?unsubscribe=${data.unsubscribeToken}`;
     try {
@@ -1702,21 +1651,13 @@ app.post(
   waitlistLimiter,
   validateBody(waitlistUnsubscribeSchema),
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
     const body = getValidatedBody<z.infer<typeof waitlistUnsubscribeSchema>>(req);
-    const now = new Date().toISOString();
-    let query = sb.from('waitlistSignups').update({
-      status: 'unsubscribed',
-      unsubscribedAt: now,
-      updatedAt: now,
-    });
+    const now = new Date();
+    const where = body.token
+      ? eq(schema.waitlistSignups.unsubscribeToken, body.token)
+      : eq(schema.waitlistSignups.email, body.email!.toLowerCase());
 
-    query = body.token
-      ? query.eq('unsubscribeToken', body.token)
-      : query.eq('email', body.email!.toLowerCase());
-
-    const {error} = await query;
-    if (error) throw error;
+    await db.update(schema.waitlistSignups).set({status: 'unsubscribed', unsubscribedAt: now, updatedAt: now}).where(where);
 
     res.json({status: 'unsubscribed'});
   }),
@@ -1743,6 +1684,1031 @@ bffRouter.get('/session', requireAuth, asyncHandler(async (req, res) => {
     profile: req.profile,
   });
 }));
+
+// canViewNotification (db/authz.ts) just checks recipientEmail === actor's email,
+// so this is naturally scoped to the caller's own notifications.
+bffRouter.get('/notifications/unread-count', requireAuth, asyncHandler(async (req, res) => {
+  const email = req.profile!.email.toLowerCase();
+  const rows = await db
+    .select({id: schema.notifications.id})
+    .from(schema.notifications)
+    .where(and(sql`lower(${schema.notifications.recipientEmail}) = ${email}`, eq(schema.notifications.read, false)));
+  res.json({count: rows.length});
+}));
+
+/**
+ * Self-service profile update, shared by every role's "edit profile" form. Deliberately
+ * excludes role/isAdmin/isSuperAdmin/email/platformId — canWriteUser (db/authz.ts) would
+ * reject a self-escalation attempt anyway, but this schema keeps such fields from ever
+ * reaching that check in the first place.
+ */
+const selfProfileUpdateSchema = z
+  .object({
+    displayName: z.string().min(1).max(120).optional(),
+    phone: z.string().max(20).nullable().optional(),
+    address: z.string().max(280).nullable().optional(),
+    avatarUrl: z.string().url().nullable().optional(),
+    bankName: z.string().max(120).nullable().optional(),
+    bankAccountNumber: z.string().max(40).nullable().optional(),
+    bankAccountName: z.string().max(120).nullable().optional(),
+    rentPayoutMethod: z.enum(['cash', 'mpesa', 'bank']).nullable().optional(),
+    cashPayoutNotes: z.string().max(280).nullable().optional(),
+    mpesaSettlementPhone: z.string().max(20).nullable().optional(),
+    mpesaSettlementShortCode: z.string().max(20).nullable().optional(),
+  })
+  .strict();
+
+bffRouter.patch(
+  '/me',
+  requireAuth,
+  validateBody(selfProfileUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof selfProfileUpdateSchema>>(req);
+    await db.update(schema.users).set(body).where(eq(schema.users.uid, req.profile!.uid));
+    res.json({updated: true});
+  }),
+);
+
+bffRouter.patch(
+  '/notifications/:id/read',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const notification = await db.query.notifications.findFirst({
+      where: eq(schema.notifications.id, req.params.id),
+      columns: {id: true, recipientEmail: true},
+    });
+    if (!notification) {
+      res.status(404).json({error: 'Notification not found'});
+      return;
+    }
+    if (!canUpdateNotification(actor, notification)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    await db.update(schema.notifications).set({read: true}).where(eq(schema.notifications.id, req.params.id));
+    res.json({updated: true});
+  }),
+);
+
+/**
+ * Consolidates the tenant dashboard's old property + landlord + maintenanceRequests +
+ * rentPayments + notifications fetches (and their four Realtime channels) into one
+ * polled endpoint. tenantId columns historically hold either the tenant's email or uid
+ * (see db/authz.ts), so both are matched, exactly like the old tenantRentOrFilter.
+ */
+bffRouter.get(
+  '/tenant/dashboard',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const uid = req.profile!.uid;
+    const email = req.profile!.email.toLowerCase();
+    const tenantMatch = (column: typeof schema.properties.tenantId | typeof schema.rentPayments.tenantId) =>
+      or(eq(column, email), eq(column, uid));
+
+    const property = (await db.query.properties.findFirst({where: tenantMatch(schema.properties.tenantId)})) ?? null;
+
+    let landlord = null;
+    if (property) {
+      const landlordRow = await db.query.users.findFirst({
+        where: eq(schema.users.uid, property.landlordId),
+        columns: {
+          uid: true, displayName: true, email: true, phone: true, bankName: true,
+          bankAccountNumber: true, bankAccountName: true, rentRecipientId: true,
+          rentPayoutMethod: true, mpesaSettlementPhone: true,
+        },
+      });
+      if (landlordRow?.rentRecipientId && landlordRow.rentRecipientId !== landlordRow.uid) {
+        landlord = (await db.query.users.findFirst({
+          where: eq(schema.users.uid, landlordRow.rentRecipientId),
+          columns: {
+            uid: true, displayName: true, email: true, phone: true, bankName: true,
+            bankAccountNumber: true, bankAccountName: true, rentPayoutMethod: true, mpesaSettlementPhone: true,
+          },
+        })) ?? landlordRow;
+      } else {
+        landlord = landlordRow ?? null;
+      }
+    }
+
+    const requests = await db.query.maintenanceRequests.findMany({where: eq(schema.maintenanceRequests.tenantId, uid)});
+
+    const payments = await db.query.rentPayments.findMany({
+      where: tenantMatch(schema.rentPayments.tenantId),
+      orderBy: desc(schema.rentPayments.dueDate),
+    });
+
+    const notifications = await db.query.notifications.findMany({
+      where: sql`lower(${schema.notifications.recipientEmail}) = ${email}`,
+      orderBy: desc(schema.notifications.createdAt),
+    });
+
+    res.json({property, landlord, requests, payments, notifications});
+  }),
+);
+
+const createMaintenanceRequestSchema = z
+  .object({
+    propertyId: z.string().uuid(),
+    landlordId: z.string().uuid(),
+    title: z.string().min(1).max(160),
+    description: z.string().min(1).max(2000),
+    priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  })
+  .strict();
+
+bffRouter.post(
+  '/tenant/maintenance-requests',
+  requireAuth,
+  validateBody(createMaintenanceRequestSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof createMaintenanceRequestSchema>>(req);
+    const actor = toActor(req.profile!);
+
+    if (!canCreateMaintenanceRequest(actor, actor.id)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const [request] = await db
+      .insert(schema.maintenanceRequests)
+      .values({
+        tenantId: actor.id,
+        propertyId: body.propertyId,
+        landlordId: body.landlordId,
+        title: body.title,
+        description: body.description,
+        priority: body.priority,
+        status: 'pending',
+      })
+      .returning();
+
+    res.status(201).json(request);
+  }),
+);
+
+/** Only returns contact info if the landlord owns at least one available property —
+ * matches the "users" SELECT policy's property-relationship clause (db/authz.ts). */
+bffRouter.get(
+  '/landlords/:uid/public-contact',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const hasAvailableProperty = await db.query.properties.findFirst({
+      where: and(eq(schema.properties.landlordId, req.params.uid), eq(schema.properties.status, 'available')),
+      columns: {id: true},
+    });
+    if (!hasAvailableProperty) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    const landlord = await db.query.users.findFirst({
+      where: eq(schema.users.uid, req.params.uid),
+      columns: {uid: true, displayName: true, phone: true, email: true},
+    });
+    if (!landlord) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    res.json(landlord);
+  }),
+);
+
+const createBookingSchema = z
+  .object({
+    propertyId: z.string().uuid(),
+    landlordId: z.string().uuid(),
+    platformId: z.string().uuid().nullable().optional(),
+    startDate: z.string(),
+    endDate: z.string(),
+    totalPrice: z.number().min(0),
+  })
+  .strict();
+
+bffRouter.post(
+  '/hunter/bookings',
+  requireAuth,
+  validateBody(createBookingSchema),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const body = getValidatedBody<z.infer<typeof createBookingSchema>>(req);
+
+    if (!canCreateBooking(actor, actor.id)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const [booking] = await db
+      .insert(schema.bookings)
+      .values({...body, hunterId: actor.id, totalPrice: String(body.totalPrice), status: 'pending'})
+      .returning();
+
+    const property = await db.query.properties.findFirst({where: eq(schema.properties.id, body.propertyId), columns: {title: true}});
+    const landlord = await db.query.users.findFirst({where: eq(schema.users.uid, body.landlordId), columns: {email: true}});
+    if (landlord?.email) {
+      await insertNotification({
+        recipientEmail: landlord.email.toLowerCase(),
+        platformId: body.platformId ?? null,
+        type: 'booking',
+        title: 'New booking request',
+        message: `${req.profile!.displayName || req.profile!.email} requested ${property?.title ?? 'a property'}. Total KES ${body.totalPrice.toLocaleString()}. Confirm after payment.`,
+        propertyId: body.propertyId,
+        read: false,
+      });
+    }
+
+    res.status(201).json({...booking, totalPrice: Number(booking.totalPrice)});
+  }),
+);
+
+/**
+ * Resolves the property/building ids a landlord's account can reach: rows they own
+ * directly, plus rows for properties they've been added as a manager on. The old
+ * client fetched these tables unfiltered and relied on Postgres RLS to narrow the
+ * result set to exactly this — see db/authz.ts for the ported policy logic.
+ */
+async function landlordReach(actorId: string) {
+  const managed = await db
+    .select({propertyId: schema.propertyManagers.propertyId})
+    .from(schema.propertyManagers)
+    .where(eq(schema.propertyManagers.userId, actorId));
+  const managedPropertyIds = managed.map((m) => m.propertyId);
+
+  let managedBuildingIds: string[] = [];
+  if (managedPropertyIds.length > 0) {
+    const rows = await db
+      .select({buildingId: schema.properties.buildingId})
+      .from(schema.properties)
+      .where(inArray(schema.properties.id, managedPropertyIds));
+    managedBuildingIds = rows.map((r) => r.buildingId).filter((id): id is string => Boolean(id));
+  }
+
+  return {managedPropertyIds, managedBuildingIds};
+}
+
+/**
+ * Consolidates the landlord dashboard's old buildings + properties + maintenanceRequests
+ * + rentPayments + bookings + expenses + invitations + notifications fetches (and their
+ * seven Realtime channels) into one polled endpoint, plus the automatic rent-invoice sync
+ * that used to run client-side (see server/rentInvoiceSync.ts).
+ */
+bffRouter.get(
+  '/landlord/dashboard',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const {managedPropertyIds, managedBuildingIds} = await landlordReach(actor.id);
+    const propertyReach = or(eq(schema.properties.landlordId, actor.id), inArray(schema.properties.id, managedPropertyIds));
+
+    const buildings = await db
+      .select()
+      .from(schema.buildings)
+      .where(or(eq(schema.buildings.landlordId, actor.id), inArray(schema.buildings.id, managedBuildingIds)));
+
+    const properties = await db.select().from(schema.properties).where(propertyReach);
+    const propertyIds = properties.map((p) => p.id);
+
+    const requests = propertyIds.length
+      ? await db.query.maintenanceRequests.findMany({
+          where: or(eq(schema.maintenanceRequests.landlordId, actor.id), inArray(schema.maintenanceRequests.propertyId, propertyIds)),
+        })
+      : await db.query.maintenanceRequests.findMany({where: eq(schema.maintenanceRequests.landlordId, actor.id)});
+
+    const paymentsWhere = propertyIds.length
+      ? or(eq(schema.rentPayments.landlordId, actor.id), inArray(schema.rentPayments.propertyId, propertyIds))
+      : eq(schema.rentPayments.landlordId, actor.id);
+
+    let rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
+
+    if (actor.role !== 'admin') {
+      await syncAutomaticRentInvoices(properties as any, rentPaymentRows as any, actor.id, actor.platformId);
+      rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
+    }
+    const payments = rentPaymentRows.map((p) => ({...p, amount: Number(p.amount)}));
+
+    const bookings = await db.query.bookings.findMany({
+      where: propertyIds.length
+        ? or(eq(schema.bookings.landlordId, actor.id), inArray(schema.bookings.propertyId, propertyIds))
+        : eq(schema.bookings.landlordId, actor.id),
+      orderBy: desc(schema.bookings.startDate),
+    });
+
+    const expenses = await db.query.expenses.findMany({
+      where: propertyIds.length
+        ? or(eq(schema.expenses.landlordId, actor.id), inArray(schema.expenses.propertyId, propertyIds))
+        : eq(schema.expenses.landlordId, actor.id),
+      orderBy: desc(schema.expenses.expenseDate),
+    });
+
+    const invitations =
+      actor.role === 'admin'
+        ? await db.query.invitations.findMany({where: eq(schema.invitations.platformId, actor.platformId ?? '')})
+        : await db.query.invitations.findMany({where: eq(schema.invitations.landlordId, actor.id)});
+
+    const notifications = await db.query.notifications.findMany({
+      where: sql`lower(${schema.notifications.recipientEmail}) = ${actor.email.toLowerCase()}`,
+      orderBy: desc(schema.notifications.createdAt),
+    });
+
+    res.json({buildings, properties, requests, payments, bookings, expenses, invitations, notifications});
+  }),
+);
+
+bffRouter.post(
+  '/landlord/rent-invoices/sync',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const {managedPropertyIds} = await landlordReach(actor.id);
+    const properties = await db
+      .select()
+      .from(schema.properties)
+      .where(or(eq(schema.properties.landlordId, actor.id), inArray(schema.properties.id, managedPropertyIds)));
+    const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.landlordId, actor.id)});
+    const result = await syncAutomaticRentInvoices(properties as any, payments as any, actor.id, actor.platformId);
+    res.json(result);
+  }),
+);
+
+const buildingSchema = z.object({name: z.string().min(1).max(160), address: z.string().max(280).optional()}).strict();
+const buildingCreateSchema = buildingSchema.extend({
+  landlordId: z.string().uuid().optional(),
+  platformId: z.string().uuid().nullable().optional(),
+}).strict();
+
+/** Landlords create buildings for themselves; an admin may pass an explicit landlordId
+ * (and platformId) to create one on a managed landlord's behalf — mirrors AdminDashboard's
+ * "add asset group" flow, which always specifies the target landlord. */
+bffRouter.post(
+  '/landlord/buildings',
+  requireAuth,
+  validateBody(buildingCreateSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof buildingCreateSchema>>(req);
+    const actor = toActor(req.profile!);
+    const landlordId = body.landlordId ?? actor.id;
+    const platformId = body.landlordId ? (body.platformId ?? null) : (actor.platformId ?? null);
+
+    if (landlordId !== actor.id && !isAdminInPlatform(actor, platformId)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const [building] = await db
+      .insert(schema.buildings)
+      .values({name: body.name, address: body.address ?? null, landlordId, platformId})
+      .returning();
+    res.status(201).json(building);
+  }),
+);
+
+bffRouter.patch(
+  '/landlord/buildings/:id',
+  requireAuth,
+  validateBody(buildingSchema.partial()),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const building = await db.query.buildings.findFirst({where: eq(schema.buildings.id, req.params.id)});
+    if (!building) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageBuilding(actor, building))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    const body = getValidatedBody<z.infer<typeof buildingSchema>>(req);
+    const [updated] = await db.update(schema.buildings).set(body).where(eq(schema.buildings.id, req.params.id)).returning();
+    res.json(updated);
+  }),
+);
+
+bffRouter.delete(
+  '/landlord/buildings/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const building = await db.query.buildings.findFirst({where: eq(schema.buildings.id, req.params.id)});
+    if (!building) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageBuilding(actor, building))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    await db.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
+    res.json({deleted: true});
+  }),
+);
+
+const propertyInputSchema = z.object({
+  buildingId: z.string().uuid().nullable().optional(),
+  unitNumber: z.string().max(60).nullable().optional(),
+  title: z.string().min(1).max(200),
+  description: z.string().max(4000).nullable().optional(),
+  type: z.enum(['residential', 'commercial', 'bnb']),
+  price: z.number().min(0),
+  location: z.string().min(1).max(280),
+  amenities: z.array(z.string()).default([]),
+  images: z.array(z.string()).default([]),
+});
+
+const propertyCreateBatchSchema = z
+  .object({
+    properties: z.array(propertyInputSchema).min(1).max(200),
+    landlordId: z.string().uuid().optional(),
+    platformId: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+/** Landlords create properties for themselves; an admin may pass an explicit landlordId
+ * (and platformId) to create on a managed landlord's behalf — mirrors AdminDashboard's
+ * "add property"/"bulk add" flows, which always specify the target landlord. */
+bffRouter.post(
+  '/landlord/properties',
+  requireAuth,
+  validateBody(propertyCreateBatchSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof propertyCreateBatchSchema>>(req);
+    const actor = toActor(req.profile!);
+    const landlordId = body.landlordId ?? actor.id;
+    const platformId = body.landlordId ? (body.platformId ?? null) : (actor.platformId ?? null);
+
+    if (landlordId !== actor.id && !isAdminInPlatform(actor, platformId)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const inserted = await db
+      .insert(schema.properties)
+      .values(
+        body.properties.map((p) => ({
+          ...p,
+          landlordId,
+          platformId,
+          status: 'available' as const,
+          price: String(p.price),
+        })),
+      )
+      .returning();
+    res.status(201).json(inserted);
+  }),
+);
+
+const propertyUpdateSchema = propertyInputSchema
+  .partial()
+  .extend({
+    status: z.enum(['available', 'rented', 'booked']).optional(),
+    tenantId: z.string().max(320).nullable().optional(),
+    landlordId: z.string().uuid().optional(),
+    price: z.number().min(0).optional(),
+  })
+  .strict();
+
+bffRouter.patch(
+  '/landlord/properties/:id',
+  requireAuth,
+  validateBody(propertyUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const property = await db.query.properties.findFirst({where: eq(schema.properties.id, req.params.id)});
+    if (!property) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageProperty(actor, property))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const body = getValidatedBody<z.infer<typeof propertyUpdateSchema>>(req);
+    const [updated] = await db
+      .update(schema.properties)
+      .set({...body, price: body.price !== undefined ? String(body.price) : undefined})
+      .where(eq(schema.properties.id, req.params.id))
+      .returning();
+
+    if (updated.status === 'rented' && updated.tenantId) {
+      const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.landlordId, actor.id)});
+      await ensureRentInvoiceForProperty(updated as any, updated.tenantId, actor.id, actor.platformId, payments as any);
+    }
+
+    res.json(updated);
+  }),
+);
+
+bffRouter.delete(
+  '/landlord/properties/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const property = await db.query.properties.findFirst({where: eq(schema.properties.id, req.params.id)});
+    if (!property) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageProperty(actor, property))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    await db.delete(schema.properties).where(eq(schema.properties.id, req.params.id));
+    res.json({deleted: true});
+  }),
+);
+
+const addManagerSchema = z.object({email: emailSchema, role: z.enum(['manager', 'co-owner']).default('manager')}).strict();
+
+/** Ports the add_property_manager Postgres RPC (supabase-setup.sql) — only the actual
+ * landlord who owns the property may add managers to it, matching the RPC's own check. */
+bffRouter.post(
+  '/landlord/properties/:id/managers',
+  requireAuth,
+  validateBody(addManagerSchema),
+  asyncHandler(async (req, res) => {
+    const actor = req.profile!;
+    const body = getValidatedBody<z.infer<typeof addManagerSchema>>(req);
+    const property = await db.query.properties.findFirst({where: eq(schema.properties.id, req.params.id)});
+    if (!property) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (property.landlordId !== actor.uid && !actor.isSuperAdmin) {
+      res.status(403).json({error: 'You do not have permission to add managers to this property.'});
+      return;
+    }
+    const targetUser = await db.query.users.findFirst({where: ilike(schema.users.email, body.email)});
+    if (!targetUser) {
+      res.status(404).json({error: 'No user found with that email address.'});
+      return;
+    }
+    await db
+      .insert(schema.propertyManagers)
+      .values({propertyId: property.id, userId: targetUser.uid, landlordId: property.landlordId, role: body.role})
+      .onConflictDoNothing();
+    res.status(201).json({added: true});
+  }),
+);
+
+const assignTenantSchema = z.object({propertyId: z.string().uuid(), email: emailSchema}).strict();
+
+bffRouter.post(
+  '/landlord/tenants/assign',
+  requireAuth,
+  validateBody(assignTenantSchema),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const body = getValidatedBody<z.infer<typeof assignTenantSchema>>(req);
+    const property = await db.query.properties.findFirst({where: eq(schema.properties.id, body.propertyId)});
+    if (!property) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageProperty(actor, property))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const tenantEmail = body.email.toLowerCase();
+    const [updated] = await db
+      .update(schema.properties)
+      .set({tenantId: tenantEmail, status: 'rented'})
+      .where(eq(schema.properties.id, body.propertyId))
+      .returning();
+
+    const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.landlordId, actor.id)});
+    await ensureRentInvoiceForProperty(updated as any, tenantEmail, actor.id, actor.platformId, payments as any, true);
+
+    res.json({assigned: true, property: updated});
+  }),
+);
+
+const tenantEmailParamSchema = z.object({email: emailSchema}).strict();
+
+/** Unassigns a tenant from every property matching this landlord's account and cancels
+ * their unpaid invoices, without deleting the invitation (tenant registry entry). */
+bffRouter.post(
+  '/landlord/tenants/:email/unassign',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = tenantEmailParamSchema.safeParse({email: req.params.email});
+    if (!parsed.success) {
+      res.status(400).json({error: 'Invalid email'});
+      return;
+    }
+    const actor = req.profile!;
+    const email = parsed.data.email.toLowerCase();
+
+    await db
+      .update(schema.properties)
+      .set({tenantId: null, status: 'available'})
+      .where(and(ilike(schema.properties.tenantId, email), eq(schema.properties.landlordId, actor.uid)));
+    await db
+      .delete(schema.rentPayments)
+      .where(and(ilike(schema.rentPayments.tenantId, email), eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
+
+    res.json({unassigned: true});
+  }),
+);
+
+bffRouter.delete(
+  '/landlord/tenants/:email',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = tenantEmailParamSchema.safeParse({email: req.params.email});
+    if (!parsed.success) {
+      res.status(400).json({error: 'Invalid email'});
+      return;
+    }
+    const actor = req.profile!;
+    const email = parsed.data.email.toLowerCase();
+
+    await db.delete(schema.invitations).where(and(ilike(schema.invitations.email, email), eq(schema.invitations.landlordId, actor.uid)));
+    await db
+      .update(schema.properties)
+      .set({tenantId: null, status: 'available'})
+      .where(and(ilike(schema.properties.tenantId, email), eq(schema.properties.landlordId, actor.uid)));
+    await db
+      .delete(schema.rentPayments)
+      .where(and(ilike(schema.rentPayments.tenantId, email), eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
+
+    res.json({deleted: true});
+  }),
+);
+
+bffRouter.patch(
+  '/landlord/maintenance-requests/:id',
+  requireAuth,
+  validateBody(z.object({status: z.enum(['pending', 'in-progress', 'resolved'])}).strict()),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const request = await db.query.maintenanceRequests.findFirst({where: eq(schema.maintenanceRequests.id, req.params.id)});
+    if (!request) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canUpdateMaintenanceRequest(actor, request))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    const {status} = getValidatedBody<{status: 'pending' | 'in-progress' | 'resolved'}>(req);
+    const [updated] = await db
+      .update(schema.maintenanceRequests)
+      .set({status})
+      .where(eq(schema.maintenanceRequests.id, req.params.id))
+      .returning();
+    res.json(updated);
+  }),
+);
+
+const expenseInputSchema = z
+  .object({
+    propertyId: z.string().uuid().nullable().optional(),
+    category: z.string().min(1).max(80),
+    description: z.string().min(1).max(500),
+    amount: z.number().min(0),
+    expenseDate: z.string(),
+    receiptUrl: z.string().url().nullable().optional(),
+  })
+  .strict();
+
+bffRouter.post(
+  '/landlord/expenses',
+  requireAuth,
+  validateBody(expenseInputSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof expenseInputSchema>>(req);
+    const actor = req.profile!;
+    const [expense] = await db
+      .insert(schema.expenses)
+      .values({...body, amount: String(body.amount), landlordId: actor.uid, platformId: actor.platformId ?? null})
+      .returning();
+    res.status(201).json(expense);
+  }),
+);
+
+bffRouter.post(
+  '/notifications/mark-all-read',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const email = req.profile!.email.toLowerCase();
+    await db
+      .update(schema.notifications)
+      .set({read: true})
+      .where(and(sql`lower(${schema.notifications.recipientEmail}) = ${email}`, eq(schema.notifications.read, false)));
+    res.json({updated: true});
+  }),
+);
+
+/** supabase-setup.sql never granted a DELETE policy on notifications to anyone but the
+ * service role — not even the recipient — so this preserves that: nobody but a super
+ * admin can delete one. The old client-side delete button always failed under RLS. */
+bffRouter.delete(
+  '/notifications/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!req.profile!.isSuperAdmin) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    await db.delete(schema.notifications).where(eq(schema.notifications.id, req.params.id));
+    res.json({deleted: true});
+  }),
+);
+
+/**
+ * Consolidates the admin dashboard's old users + properties + invitations + rentPayments
+ * + buildings (+ platforms, for super admins) fetches and their five-table Realtime
+ * channel into one polled endpoint. Filtering mirrors the old client exactly, including
+ * its narrower-than-RLS choice for plain admins (see comments below).
+ */
+bffRouter.get(
+  '/admin/dashboard',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const listLimit = 200;
+    const platformIdParam = typeof req.query.platformId === 'string' ? req.query.platformId : undefined;
+
+    // Super admins may pick any platform (or 'all'); plain admins are always pinned to
+    // their own platform ('none' meaning "no platform assigned").
+    const filterId = isSuperAdmin(actor) ? (platformIdParam && platformIdParam !== 'all' ? platformIdParam : null) : actor.platformId || 'none';
+
+    // Loosely typed on purpose: this closes over columns from five different tables
+    // (users/properties/invitations/rentPayments/buildings) that all happen to share
+    // the same platformId/landlordId column shape.
+    const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
+    const withLandlordScope = (col: any, base: any) => (isSuperAdmin(actor) ? base : and(base, eq(col, actor.id)));
+
+    let users = await db.query.users.findMany({
+      where: platformWhere(schema.users.platformId),
+      orderBy: desc(schema.users.createdAt),
+      limit: listLimit,
+    });
+
+    // Plain admins only see users they've personally invited (as "landlordId" on the
+    // invitation), plus themselves — narrower than what RLS would have allowed, but
+    // this replicates the old client's own (more restrictive) query exactly.
+    if (!isSuperAdmin(actor)) {
+      const myInvites = await db.query.invitations.findMany({
+        where: eq(schema.invitations.landlordId, actor.id),
+        columns: {email: true},
+      });
+      const allowedEmails = new Set(myInvites.map((i) => i.email.toLowerCase()));
+      allowedEmails.add(actor.email.toLowerCase());
+      users = users.filter((u) => allowedEmails.has(u.email.toLowerCase()));
+    }
+
+    const properties = await db.query.properties.findMany({
+      where: withLandlordScope(schema.properties.landlordId, platformWhere(schema.properties.platformId)),
+      orderBy: desc(schema.properties.createdAt),
+      limit: listLimit,
+    });
+
+    const invitationRows = await db.query.invitations.findMany({
+      where: withLandlordScope(schema.invitations.landlordId, platformWhere(schema.invitations.platformId)),
+      orderBy: desc(schema.invitations.createdAt),
+      limit: listLimit,
+    });
+    const registeredEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    const invitations = invitationRows.filter((inv) => !registeredEmails.has(inv.email.toLowerCase()));
+
+    const paymentRows = await db.query.rentPayments.findMany({
+      where: withLandlordScope(schema.rentPayments.landlordId, platformWhere(schema.rentPayments.platformId)),
+      orderBy: desc(schema.rentPayments.dueDate),
+      limit: listLimit,
+    });
+    const payments = paymentRows.map((p) => ({...p, amount: Number(p.amount)}));
+
+    const buildings = await db.query.buildings.findMany({
+      where: withLandlordScope(schema.buildings.landlordId, platformWhere(schema.buildings.platformId)),
+      orderBy: desc(schema.buildings.createdAt),
+      limit: listLimit,
+    });
+
+    const platforms = isSuperAdmin(actor) ? await db.query.platforms.findMany() : [];
+
+    res.json({users, properties, invitations, payments, buildings, platforms});
+  }),
+);
+
+bffRouter.get(
+  '/admin/audit-logs',
+  requireAuth,
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const userId = typeof req.query.userId === 'string' ? req.query.userId : undefined;
+    const rows = await db.query.auditLogs.findMany({
+      where: userId && userId !== 'all' ? eq(schema.auditLogs.userId, userId) : undefined,
+      orderBy: desc(schema.auditLogs.createdAt),
+      limit: 200,
+    });
+    res.json(rows);
+  }),
+);
+
+const updateRoleSchema = z.object({role: z.enum(['landlord', 'tenant', 'hunter', 'admin', 'superadmin'])}).strict();
+
+bffRouter.patch(
+  '/admin/users/:uid/role',
+  requireAuth,
+  requireAdmin,
+  validateBody(updateRoleSchema),
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const {role} = getValidatedBody<z.infer<typeof updateRoleSchema>>(req);
+    const target = await db.query.users.findFirst({where: eq(schema.users.uid, req.params.uid)});
+    if (!target) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+
+    const isSuper = role === 'superadmin';
+    const roleValue = isSuper ? 'admin' : role;
+    const nextIsAdmin = roleValue === 'admin' || isSuper;
+
+    if (!canWriteUser(actor, {uid: target.uid, platformId: target.platformId, isAdmin: nextIsAdmin, isSuperAdmin: isSuper, role: roleValue})) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const [updated] = await db
+      .update(schema.users)
+      .set({role: roleValue, isAdmin: nextIsAdmin, isSuperAdmin: isSuper})
+      .where(eq(schema.users.uid, req.params.uid))
+      .returning();
+    res.json(updated);
+  }),
+);
+
+/** Admin-only cascading delete: unlike the landlord version (which just unassigns
+ * units), this also deletes every property in the building and the accounts of any
+ * tenants assigned to them — matches AdminDashboard's more destructive confirmation. */
+bffRouter.delete(
+  '/admin/buildings/:id',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    const building = await db.query.buildings.findFirst({where: eq(schema.buildings.id, req.params.id)});
+    if (!building) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    if (!(await canManageBuilding(actor, building))) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+
+    const props = await db.query.properties.findMany({
+      where: eq(schema.properties.buildingId, req.params.id),
+      columns: {id: true, tenantId: true},
+    });
+
+    const tenantEmails = props.map((p) => p.tenantId).filter((t): t is string => Boolean(t) && t!.includes('@'));
+    if (tenantEmails.length > 0) {
+      const tenantUsers = await db.query.users.findMany({
+        where: inArray(schema.users.email, tenantEmails),
+        columns: {uid: true},
+      });
+      for (const u of tenantUsers) {
+        await db.delete(schema.authUser).where(eq(schema.authUser.id, u.uid));
+      }
+    }
+
+    if (props.length > 0) {
+      await db.delete(schema.properties).where(inArray(schema.properties.id, props.map((p) => p.id)));
+    }
+    await db.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
+
+    res.json({deleted: true});
+  }),
+);
+
+const createPlatformSchema = z
+  .object({name: z.string().min(1).max(160), slug: z.string().min(1).max(80), ownerEmail: emailSchema})
+  .strict();
+
+bffRouter.post(
+  '/admin/platforms',
+  requireAuth,
+  requireSuperAdmin,
+  validateBody(createPlatformSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof createPlatformSchema>>(req);
+    const ownerEmail = body.ownerEmail.toLowerCase();
+
+    const [platform] = await db
+      .insert(schema.platforms)
+      .values({name: body.name, slug: body.slug, ownerEmail})
+      .returning();
+
+    await db
+      .insert(schema.invitations)
+      .values({email: ownerEmail, displayName: `${body.name} Owner`, role: 'admin', platformId: platform.id})
+      .onConflictDoUpdate({
+        target: schema.invitations.email,
+        set: {displayName: `${body.name} Owner`, role: 'admin', platformId: platform.id},
+      });
+
+    res.status(201).json(platform);
+  }),
+);
+
+bffRouter.patch(
+  '/admin/platforms/:id/status',
+  requireAuth,
+  requireSuperAdmin,
+  validateBody(z.object({status: z.enum(['active', 'suspended'])}).strict()),
+  asyncHandler(async (req, res) => {
+    const {status} = getValidatedBody<{status: 'active' | 'suspended'}>(req);
+    const [updated] = await db
+      .update(schema.platforms)
+      .set({status})
+      .where(eq(schema.platforms.id, req.params.id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    res.json(updated);
+  }),
+);
+
+const auditLogSchema = z
+  .object({
+    action: z.string().min(1).max(60),
+    resource: z.string().max(60).nullable().optional(),
+    resourceId: z.string().max(200).nullable().optional(),
+    metadata: z.record(z.string(), z.any()).nullable().optional(),
+  })
+  .strict();
+
+/** canInsertAuditLog (db/authz.ts) requires userId === actor.id, so this is always a
+ * self-insert — matches the original "Users insert own audit logs" RLS policy exactly. */
+bffRouter.post(
+  '/audit-logs',
+  requireAuth,
+  validateBody(auditLogSchema),
+  asyncHandler(async (req, res) => {
+    const body = getValidatedBody<z.infer<typeof auditLogSchema>>(req);
+    const actor = req.profile!;
+    await db.insert(schema.auditLogs).values({
+      userId: actor.uid,
+      userEmail: actor.email,
+      platformId: actor.platformId ?? null,
+      action: body.action,
+      resource: body.resource ?? null,
+      resourceId: body.resourceId ?? null,
+      metadata: body.metadata ?? null,
+    });
+    res.status(201).json({logged: true});
+  }),
+);
+
+/** Non-sensitive branding fields only — see canReadPlatformBranding (db/authz.ts) for
+ * why this is deliberately more permissive than the platforms table's own RLS policy. */
+bffRouter.get(
+  '/platforms/:id/branding',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const actor = toActor(req.profile!);
+    if (!canReadPlatformBranding(actor, req.params.id)) {
+      res.status(403).json({error: 'Forbidden'});
+      return;
+    }
+    const platform = await db.query.platforms.findFirst({
+      where: eq(schema.platforms.id, req.params.id),
+      columns: {name: true, brandLogoUrl: true, brandPrimaryColor: true, brandSecondaryColor: true},
+    });
+    if (!platform) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    res.json(platform);
+  }),
+);
+
+const passwordResetCompleteSchema = z.object({newPassword: z.string().min(8).max(128)}).strict();
+
+/**
+ * Forced first-login password change (see users.mustChangePassword, set by
+ * server/adminHandlers.ts when an admin/landlord provisions an account with a
+ * temp password). Uses Better-Auth's setPassword — unlike changePassword, it
+ * doesn't require the caller to already know a current password, matching the
+ * old Supabase `auth.updateUser({ password })` behavior this replaces.
+ */
+bffRouter.post(
+  '/me/password-reset-complete',
+  requireAuth,
+  validateBody(passwordResetCompleteSchema),
+  asyncHandler(async (req, res) => {
+    const {newPassword} = getValidatedBody<z.infer<typeof passwordResetCompleteSchema>>(req);
+    await auth.api.setPassword({body: {newPassword}, headers: fromNodeHeaders(req.headers)});
+    await db.update(schema.users).set({mustChangePassword: false}).where(eq(schema.users.uid, req.profile!.uid));
+    res.json({updated: true});
+  }),
+);
 bffRouter.post(
   '/payments/stripe/checkout-session',
   paymentLimiter,
@@ -1763,10 +2729,7 @@ bffRouter.post(
   '/users/provision',
   requireAuth,
   validateBody(provisionUserSchema),
-  asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
-    await handleProvisionUser(sb)(req, res);
-  }),
+  asyncHandler(handleProvisionUser),
 );
 
 bffRouter.patch(
@@ -1774,21 +2737,10 @@ bffRouter.patch(
   requireAuth,
   requireAdmin,
   validateBody(suspendUserSchema),
-  asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
-    await handleSuspendUser(sb)(req, res);
-  }),
+  asyncHandler(handleSuspendUser),
 );
 
-bffRouter.delete(
-  '/users/:uid',
-  requireAuth,
-  requireAdmin,
-  asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
-    await handleDeleteUser(sb)(req, res);
-  }),
-);
+bffRouter.delete('/users/:uid', requireAuth, requireAdmin, asyncHandler(handleDeleteUser));
 
 bffRouter.put(
   '/platforms/:id/branding',
@@ -1796,7 +2748,6 @@ bffRouter.put(
   requireAdmin,
   validateBody(updatePlatformBrandingSchema),
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
     const actor = req.profile!;
     const platformId = req.params.id;
     if (!actor.isSuperAdmin && actor.platformId !== platformId) {
@@ -1804,8 +2755,7 @@ bffRouter.put(
       return;
     }
     const body = req.validatedBody as z.infer<typeof updatePlatformBrandingSchema>;
-    const {error} = await sb.from('platforms').update(body).eq('id', platformId);
-    if (error) throw error;
+    await db.update(schema.platforms).set(body).where(eq(schema.platforms.id, platformId));
     res.json({updated: true});
   }),
 );
@@ -1814,11 +2764,10 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
   const body = getValidatedBody<z.infer<typeof landlordSubscriptionCheckoutSchema>>(req);
   const actor = req.profile!;
   const amount = getSubscriptionAmount(body.tier as SubscriptionTier, body.billing as BillingPeriod);
-  const {supabase: sb} = requireSupabase();
 
-  await saveLandlordPayoutProfile(sb, actor.uid, body);
+  await saveLandlordPayoutProfile(actor.uid, body);
 
-  const pending = await createPendingSubscriptionPayment(sb, {
+  const pending = await createPendingSubscriptionPayment({
     landlordId: actor.uid,
     tier: body.tier as SubscriptionTier,
     billing: body.billing as BillingPeriod,
@@ -1865,13 +2814,13 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
       },
     });
 
-    await sb
-      .from('landlordSubscriptionPayments')
-      .update({
+    await db
+      .update(schema.landlordSubscriptionPayments)
+      .set({
         paymentProvider: 'stripe',
         providerCheckoutRequestId: session.id,
       })
-      .eq('id', pending.id);
+      .where(eq(schema.landlordSubscriptionPayments.id, pending.id));
 
     res.json({
       status: 'redirect',
@@ -1897,14 +2846,14 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
       throw err;
     });
 
-    await sb
-      .from('landlordSubscriptionPayments')
-      .update({
+    await db
+      .update(schema.landlordSubscriptionPayments)
+      .set({
         paymentProvider: 'pesapal',
         providerCheckoutRequestId: order.order_tracking_id,
         paymentReference: order.merchant_reference || merchantReference,
       })
-      .eq('id', pending.id);
+      .where(eq(schema.landlordSubscriptionPayments.id, pending.id));
 
     res.json({
       status: 'redirect',
@@ -1971,13 +2920,13 @@ const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
     return;
   }
 
-  await sb
-    .from('landlordSubscriptionPayments')
-    .update({
+  await db
+    .update(schema.landlordSubscriptionPayments)
+    .set({
       paymentProvider: 'mpesa',
       providerCheckoutRequestId: stkBody.CheckoutRequestID,
     })
-    .eq('id', pending.id);
+    .where(eq(schema.landlordSubscriptionPayments.id, pending.id));
 
   res.json({
     status: 'initiated',
@@ -2000,30 +2949,21 @@ bffRouter.post(
   requireAuth,
   validateBody(manualRentPaidSchema),
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
     const paymentId = req.params.paymentId;
     const {note} = getValidatedBody<z.infer<typeof manualRentPaidSchema>>(req);
     const actor = req.profile!;
 
     console.log(`[Manual Payment] Attempt by ${actor.email} for payment ${paymentId}`);
 
-    const {data: payment, error: paymentError} = await sb
-      .from('rentPayments')
-      .select('*')
-      .eq('id', paymentId)
-      .maybeSingle();
+    const payment = await db.query.rentPayments.findFirst({where: eq(schema.rentPayments.id, paymentId)});
 
-    if (paymentError) {
-      console.error(`[Manual Payment] Database error fetching payment ${paymentId}:`, paymentError);
-      throw paymentError;
-    }
     if (!payment) {
       console.warn(`[Manual Payment] Payment ${paymentId} not found.`);
       res.status(404).json({error: 'Rent payment not found'});
       return;
     }
 
-    const rentPayment = payment as RentPaymentRecord;
+    const rentPayment = payment as unknown as RentPaymentRecord;
     const isOwner = rentPayment.landlordId === actor.uid;
     const isTenant = rentPayment.tenantId === actor.uid;
     const isPlatformAdmin =
@@ -2038,20 +2978,19 @@ bffRouter.post(
 
     if (isTenant && !isOwner && !actor.isSuperAdmin && !isPlatformAdmin) {
       // Tenant is submitting receipt for verification
-      const existingMeta = (rentPayment as any).paymentMetadata || {};
-      const {error: updateError} = await sb
-        .from('rentPayments')
-        .update({
+      const existingMeta = (payment.paymentMetadata as Record<string, unknown>) || {};
+      await db
+        .update(schema.rentPayments)
+        .set({
           status: 'verifying',
-          paymentMetadata: { 
-            ...existingMeta, 
-            submittedReceipt: note ?? null, 
-            submittedAt: new Date().toISOString() 
-          }
+          paymentMetadata: {
+            ...existingMeta,
+            submittedReceipt: note ?? null,
+            submittedAt: new Date().toISOString(),
+          },
         })
-        .eq('id', paymentId);
-        
-      if (updateError) throw updateError;
+        .where(eq(schema.rentPayments.id, paymentId));
+
       console.log(`[Manual Payment] Tenant ${actor.email} submitted payment ${paymentId} for verification`);
       res.json({status: 'verifying', paymentId: rentPayment.id});
       return;
@@ -2080,8 +3019,7 @@ bffRouter.post(
   requireAuth,
   validateBody(z.object({ rentPaymentId: uuidSchema })),
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
-    await handleSendRentReminder(req, res, { supabase: sb, sendEmail, insertNotification });
+    await handleSendRentReminder(req, res, { sendEmail, insertNotification });
   }),
 );
 
@@ -2089,7 +3027,6 @@ bffRouter.post(
   '/admin/init-platform',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const {supabase: sb} = requireSupabase();
     const actor = req.profile!;
 
     if (actor.role !== 'admin') {
@@ -2102,20 +3039,18 @@ bffRouter.post(
       return;
     }
 
-    const {data: platform, error: platformError} = await sb
-      .from('platforms')
-      .insert([{name: `${actor.displayName}'s Platform`, status: 'active'}])
-      .select('id')
-      .single();
+    // slug is unique+required; derive one from the admin's name plus a uid fragment
+    // so it can't collide (platforms.slug has no default, unlike supabase-setup.sql
+    // implied — this insert would have violated NOT NULL there too).
+    const slugBase = actor.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'platform';
+    const slug = `${slugBase}-${actor.uid.slice(0, 8)}`;
 
-    if (platformError) throw platformError;
+    const [platform] = await db
+      .insert(schema.platforms)
+      .values({name: `${actor.displayName}'s Platform`, slug, status: 'active'})
+      .returning({id: schema.platforms.id});
 
-    const {error: userError} = await sb
-      .from('users')
-      .update({platformId: platform.id})
-      .eq('uid', actor.uid);
-
-    if (userError) throw userError;
+    await db.update(schema.users).set({platformId: platform.id}).where(eq(schema.users.uid, actor.uid));
 
     res.json({status: 'created', platformId: platform.id});
   }),
@@ -2192,8 +3127,7 @@ if (process.env.VERCEL !== '1') {
 cron.schedule('0 8 * * *', async () => {
   console.log('[Cron] Running automated rent reminders...');
   try {
-    const { supabase: sb } = requireSupabase();
-    await processAutomatedRentReminders({ supabase: sb, sendEmail, insertNotification });
+    await processAutomatedRentReminders({ sendEmail, insertNotification });
     console.log('[Cron] Automated rent reminders processed.');
   } catch (err) {
     console.error('[Cron] Error processing automated rent reminders:', err);

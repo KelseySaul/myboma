@@ -1,7 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import { supabase } from '../supabase';
-import { provisionUser, updateUserStatus, deleteUserAccount } from '../lib/api';
+import {
+  provisionUser,
+  updateUserStatus,
+  deleteUserAccount,
+  getAdminDashboard,
+  getAuditLogs,
+  updateUserRole,
+  createBuilding,
+  updateBuilding,
+  adminDeleteBuildingCascade,
+  createProperties,
+  updateProperty,
+  deleteProperty,
+  createPlatform,
+  togglePlatformStatus as togglePlatformStatusRequest,
+  updateMyProfile,
+} from '../lib/api';
 import { UserProfile, UserRole } from '../App';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -188,139 +204,58 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const fetchAuditLogs = useCallback(async () => {
     if (!profile.isSuperAdmin) return;
     setAuditLoading(true);
-    let q = supabase
-      .from('audit_logs')
-      .select('*')
-      .order('createdAt', { ascending: false })
-      .limit(200);
-    if (auditUserId !== 'all') {
-      q = q.eq('userId', auditUserId);
+    try {
+      const data = await getAuditLogs(auditUserId);
+      setAuditLogs(data as AuditLog[]);
+    } catch (err) {
+      console.error('Failed to load audit logs:', err);
+    } finally {
+      setAuditLoading(false);
     }
-    const { data, error } = await q;
-    if (!error && data) setAuditLogs(data as AuditLog[]);
-    setAuditLoading(false);
   }, [profile.isSuperAdmin, auditUserId]);
 
-  useEffect(() => {
-    let isActive = true;
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    const fetchAndSubscribe = async () => {
-      setLoading(true);
-
-      const listLimit = 200;
-      let userQuery = supabase.from('users').select('*').order('createdAt', { ascending: false }).limit(listLimit);
-      let propQuery = supabase.from('properties').select('*').order('createdAt', { ascending: false }).limit(listLimit);
-      let invQuery  = supabase.from('invitations').select('*').order('createdAt', { ascending: false }).limit(listLimit);
-      let payQuery  = supabase.from('rentPayments').select('*').order('dueDate', { ascending: false }).limit(listLimit);
-      let bldQuery  = supabase.from('buildings').select('*').order('createdAt', { ascending: false }).limit(listLimit);
-
-      const filterId = profile.isSuperAdmin
-        ? (selectedPlatformId === 'all' ? null : selectedPlatformId)
-        : (profile.platformId || 'none');
-
-      if (filterId) {
-        if (filterId === 'none') {
-          userQuery = userQuery.is('platformId', null);
-          propQuery = propQuery.is('platformId', null);
-          invQuery  = invQuery.is('platformId', null);
-          payQuery  = payQuery.is('platformId', null);
-          bldQuery  = bldQuery.is('platformId', null);
-        } else {
-          userQuery = userQuery.eq('platformId', filterId);
-          propQuery = propQuery.eq('platformId', filterId);
-          invQuery  = invQuery.eq('platformId', filterId);
-          payQuery  = payQuery.eq('platformId', filterId);
-          bldQuery  = bldQuery.eq('platformId', filterId);
-        }
-      }
-
-      if (!profile.isSuperAdmin) {
-        propQuery = propQuery.eq('landlordId', profile.uid);
-        bldQuery = bldQuery.eq('landlordId', profile.uid);
-        invQuery = invQuery.eq('landlordId', profile.uid);
-        payQuery = payQuery.eq('landlordId', profile.uid);
-
-        const { data: myInvites } = await supabase.from('invitations').select('email').eq('landlordId', profile.uid);
-        const allowedEmails = myInvites ? myInvites.map(i => (i.email || '').toLowerCase()) : [];
-        if (profile.email) allowedEmails.push(profile.email.toLowerCase());
-        
-        if (allowedEmails.length > 0) {
-          userQuery = userQuery.in('email', allowedEmails);
-        }
-      }
-
-      const [{ data: userData }, { data: propData }, { data: invData }, { data: payData }, { data: bldData }] = await Promise.all([
-        userQuery, propQuery, invQuery, payQuery, bldQuery
-      ]);
-
-      const currentUsers = userData || [];
-      if (userData) {
-        setUsers(userData);
-        setUserPage(1);
-      }
-      if (propData) setProperties(propData);
-      if (invData) {
-        const registeredEmails = new Set(currentUsers.map((u: any) => (u.email || '').toLowerCase()));
-        const activeInvites = invData.filter((inv: any) => !registeredEmails.has((inv.email || '').toLowerCase()));
-        setInvitations(activeInvites);
-      }
-      if (payData)  setRentPayments(payData);
-      if (bldData)  setBuildings(bldData);
-
-      if (profile.isSuperAdmin) {
-        const { data: platData } = await supabase.from('platforms').select('*');
-        if (!isActive) return;
-        if (platData) setPlatforms(platData);
-      }
-
+  // Polls the consolidated admin dashboard endpoint — replaces the old five-table
+  // Supabase Realtime channel. Filtering (platform scope, admin-vs-superadmin reach)
+  // is now applied server-side; see /admin/dashboard in app.ts.
+  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
+  fetchDashboard.current = async () => {
+    try {
+      const platformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? undefined : selectedPlatformId) : undefined;
+      const data = await getAdminDashboard(platformId);
+      setUsers(data.users as UserProfile[]);
+      setUserPage(1);
+      setProperties(data.properties);
+      setInvitations(data.invitations);
+      setRentPayments(data.payments);
+      setBuildings(data.buildings);
+      if (profile.isSuperAdmin) setPlatforms(data.platforms as Platform[]);
+    } catch (err) {
+      console.error('Admin dashboard fetch failed:', err);
+      toast.error('Could not load dashboard data');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchAndSubscribe();
-
-    const channel = supabase.channel(`global-admin-${channelToken}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, fetchAndSubscribe)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, fetchAndSubscribe)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'platforms' }, fetchAndSubscribe)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rentPayments' }, fetchAndSubscribe)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'buildings' }, fetchAndSubscribe)
-      .subscribe();
-
-    return () => {
-      isActive = false;
-      supabase.removeChannel(channel);
-    };
+  useEffect(() => {
+    setLoading(true);
+    fetchDashboard.current();
+    const interval = setInterval(() => fetchDashboard.current(), 30000);
+    return () => clearInterval(interval);
   }, [profile.platformId, profile.isSuperAdmin, selectedPlatformId]);
 
   useEffect(() => {
     fetchAuditLogs();
-  }, [fetchAuditLogs]);
-
-  useEffect(() => {
     if (!profile.isSuperAdmin) return;
-    const channel = supabase
-      .channel('audit-logs-live')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => {
-        fetchAuditLogs();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [profile.isSuperAdmin, fetchAuditLogs]);
+    const interval = setInterval(fetchAuditLogs, 30000);
+    return () => clearInterval(interval);
+  }, [fetchAuditLogs]);
 
   const handleUpdateRole = async () => {
     if (!selectedUserForRole) return;
     try {
-      const isSuper = updateRoleForm.role === 'superadmin';
-      const roleValue = isSuper ? 'admin' : updateRoleForm.role;
-      
-      const { error } = await supabase.from('users').update({ 
-        role: roleValue,
-        isSuperAdmin: isSuper,
-        isAdmin: roleValue === 'admin' || isSuper
-      }).eq('uid', selectedUserForRole.uid);
-      
-      if (error) throw error;
+      const updated = await updateUserRole(selectedUserForRole.uid, updateRoleForm.role as any);
+      setUsers(prev => prev.map(u => u.uid === updated.uid ? (updated as UserProfile) : u));
       toast.success('Role updated successfully');
       setIsUpdateRoleOpen(false);
       setSelectedUserForRole(null);
@@ -455,13 +390,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
     try {
       const targetPlatformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? null : selectedPlatformId) : profile.platformId;
-      const { error } = await supabase.from('buildings').insert([{
+      const created = await createBuilding({
         name: buildingForm.name,
         address: buildingForm.address,
         landlordId: buildingForm.landlordId,
-        platformId: targetPlatformId
-      }]);
-      if (error) throw error;
+        platformId: targetPlatformId,
+      });
+      setBuildings(prev => [...prev, created]);
       toast.success("Building added successfully!");
       setIsAddBuildingOpen(false);
       setBuildingForm({ name: '', address: '', landlordId: '' });
@@ -473,18 +408,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const handleUpdateBuilding = async () => {
     if (!editBuildingForm.name) return;
     try {
-      const { data, error } = await supabase
-        .from('buildings')
-        .update({
-          name: editBuildingForm.name,
-          address: editBuildingForm.address,
-        })
-        .eq('id', editBuildingForm.id)
-        .select('*');
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? data[0] : b));
-      }
+      const updated = await updateBuilding(editBuildingForm.id, {
+        name: editBuildingForm.name,
+        address: editBuildingForm.address,
+      });
+      setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? updated : b));
       toast.success("Asset group updated!");
       setIsEditBuildingOpen(false);
     } catch (err: any) {
@@ -492,30 +420,12 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
+  // Server-side cascade: also deletes every property in the building and the accounts
+  // of any tenants assigned to them — see /admin/buildings/:id in app.ts.
   const handleDeleteBuilding = async (id: string) => {
     if (!confirm("Are you sure you want to delete this asset group? ALL units inside and their associated tenant accounts will be PERMANENTLY deleted.")) return;
     try {
-      // 1. Fetch properties in this building
-      const { data: bldProps } = await supabase.from('properties').select('id, tenantId').eq('buildingId', id);
-      
-      if (bldProps && bldProps.length > 0) {
-        // 2. Find tenants to delete
-        const tenantEmails = bldProps.map(p => p.tenantId).filter(email => email);
-        
-        if (tenantEmails.length > 0) {
-           const { data: tenantUsers } = await supabase.from('users').select('uid').in('email', tenantEmails);
-           if (tenantUsers) {
-              await Promise.all(tenantUsers.map(user => deleteUserAccount(user.uid)));
-           }
-        }
-        
-        // 3. Delete the properties
-        const propIds = bldProps.map(p => p.id);
-        await supabase.from('properties').delete().in('id', propIds);
-      }
-
-      const { error } = await supabase.from('buildings').delete().eq('id', id);
-      if (error) throw error;
+      await adminDeleteBuildingCascade(id);
       setBuildings(prev => prev.filter(b => b.id !== id));
       setProperties(prev => prev.filter(p => p.buildingId !== id));
       toast.success("Asset group, units, and tenant accounts deleted successfully!");
@@ -548,19 +458,19 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         return;
       }
       const imagesArr = propertyForm.images ? propertyForm.images.split(',').map(url => url.trim()).filter(url => url) : [];
-      const { error } = await supabase.from('properties').insert([{
-        title: propertyForm.title,
-        description: propertyForm.description,
-        type: propertyForm.type,
-        price: Number(propertyForm.price),
-        location: propertyForm.location,
-        landlordId: propertyForm.landlordId,
-        platformId: targetPlatformId,
-        images: imagesArr,
-        status: 'available',
-        createdAt: new Date().toISOString()
-      }]);
-      if (error) throw error;
+      const created = await createProperties(
+        [{
+          title: propertyForm.title,
+          description: propertyForm.description,
+          type: propertyForm.type,
+          price: Number(propertyForm.price),
+          location: propertyForm.location,
+          images: imagesArr,
+        }],
+        propertyForm.landlordId,
+        targetPlatformId,
+      );
+      setProperties(prev => [...prev, ...created]);
       toast.success("Property added successfully!");
       setIsAddPropertyOpen(false);
       setPropertyForm({ title: '', description: '', type: 'residential', price: '', location: '', landlordId: '', images: '' });
@@ -604,8 +514,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       for (let i = 0; i < bulkAddForm.count; i++) {
         const unitNum = `${bulkAddForm.prefix}${Number(bulkAddForm.startNumber) + i}`;
         inserts.push({
-          landlordId: bulkAddForm.landlordId,
-          platformId: targetPlatformId,
           buildingId: bulkAddForm.buildingId,
           unitNumber: unitNum,
           title: `${building.name} - ${unitNum}`,
@@ -613,15 +521,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           type: bulkAddForm.type,
           price: Number(bulkAddForm.price),
           location: building.address,
-          status: 'available',
           amenities: bulkAddForm.amenities.split(',').map(a => a.trim()).filter(a => a),
           images: bulkAddForm.images.split(',').map(url => url.trim()).filter(url => url),
-          createdAt: new Date().toISOString(),
         });
       }
-      const { error } = await supabase.from('properties').insert(inserts);
-      if (error) throw error;
-      
+      const created = await createProperties(inserts, bulkAddForm.landlordId, targetPlatformId);
+      setProperties(prev => [...prev, ...created]);
+
       toast.success(`Successfully created ${bulkAddForm.count} units!`);
       setIsBulkAddOpen(false);
       setBulkAddForm({ landlordId: '', buildingId: 'none', type: 'residential', price: '', prefix: '', startNumber: 1, count: 10, amenities: '', images: '' });
@@ -708,8 +614,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const handleDeleteProperty = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this property?")) return;
     try {
-      const { error } = await supabase.from('properties').delete().eq('id', id);
-      if (error) throw error;
+      await deleteProperty(id);
       toast.success("Property deleted successfully!");
       setProperties(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
@@ -720,12 +625,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const handleAssignPropertyLandlord = async () => {
     if (!selectedPropertyToAssign || !assignLandlordId) return;
     try {
-      const { error } = await supabase
-        .from('properties')
-        .update({ landlordId: assignLandlordId })
-        .eq('id', selectedPropertyToAssign);
-      
-      if (error) throw error;
+      await updateProperty(selectedPropertyToAssign, { landlordId: assignLandlordId });
       toast.success("Landlord assigned successfully!");
       setProperties(prev => prev.map(p => p.id === selectedPropertyToAssign ? { ...p, landlordId: assignLandlordId } : p));
       setIsAssignLandlordOpen(false);
@@ -749,8 +649,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         landlordId: data.landlordId,
         images: Array.isArray(data.images) ? data.images : (data.images || '').split(',').map((url: any) => url.trim()).filter((url: any) => url)
       };
-      const { error } = await supabase.from('properties').update(payload).eq('id', id);
-      if (error) throw error;
+      await updateProperty(id, payload);
       toast.success("Property updated successfully!");
       setProperties(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
       setIsEditPropertyOpen(false);
@@ -770,54 +669,29 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       return;
     }
     try {
-      // 1. Insert and retrieve the new platform row
-      const { data: newPlat, error } = await supabase
-        .from('platforms')
-        .insert([{
-          name: newPlatform.name,
-          slug: newPlatform.slug,
-          ownerEmail: newPlatform.ownerEmail.toLowerCase()
-        }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      const createdPlat = newPlat as Platform;
+      // Server creates the platform + the admin invitation linked to it in one step.
+      const createdPlat = await createPlatform({
+        name: newPlatform.name,
+        slug: newPlatform.slug,
+        ownerEmail: newPlatform.ownerEmail.toLowerCase(),
+      }) as Platform;
 
-      // 2. If newPlatform.ownerEmail is specified, create an admin invitation linked to this platform
-      if (createdPlat && newPlatform.ownerEmail) {
-        const { error: inviteError } = await supabase
-          .from('invitations')
-          .insert([{
-            email: newPlatform.ownerEmail.toLowerCase(),
-            displayName: newPlatform.name + ' Owner',
-            role: 'admin',
-            platformId: createdPlat.id,
-            createdAt: new Date().toISOString()
-          }]);
-        
-        if (inviteError) {
-          console.error("Admin invitation insertion error:", inviteError);
-        }
-
-        try {
-          await provisionUser({
-            email: newPlatform.ownerEmail.toLowerCase(),
-            password: newPlatform.ownerPassword,
-            displayName: `${newPlatform.name} Owner`,
-            role: 'admin',
-            platformId: createdPlat.id,
-            mustChangePassword: true,
-          });
-        } catch (signUpError: any) {
-          console.error('Master Admin auth registration error:', signUpError);
-          toast.error(`Auth creation failed: ${signUpError.message}`);
-        }
+      try {
+        await provisionUser({
+          email: newPlatform.ownerEmail.toLowerCase(),
+          password: newPlatform.ownerPassword,
+          displayName: `${newPlatform.name} Owner`,
+          role: 'admin',
+          platformId: createdPlat.id,
+          mustChangePassword: true,
+        });
+      } catch (signUpError: any) {
+        console.error('Master Admin auth registration error:', signUpError);
+        toast.error(`Auth creation failed: ${signUpError.message}`);
       }
 
       toast.success("Platform provisioned successfully! Master Admin account created.");
-      
+
       // Update local state synchronously to react instantly
       setPlatforms(prev => [...prev, createdPlat]);
       setProvisionedPlatform(createdPlat);
@@ -830,8 +704,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
   const handleUpdateProfile = async () => {
     try {
-      const { error } = await supabase.from('users').update(adminProfile).eq('uid', profile.uid);
-      if (error) throw error;
+      await updateMyProfile(adminProfile);
       toast.success("Profile updated");
       setIsProfileOpen(false);
     } catch (error) {
@@ -839,6 +712,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
+  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -859,8 +733,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const togglePlatformStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
     try {
-      const { error } = await supabase.from('platforms').update({ status: newStatus }).eq('id', id);
-      if (error) throw error;
+      await togglePlatformStatusRequest(id, newStatus);
+      setPlatforms(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as Platform['status'] } : p));
       toast.success(`Platform ${newStatus}`);
     } catch (error: any) {
       toast.error(error.message);
