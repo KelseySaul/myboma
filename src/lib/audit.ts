@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { insertAuditLog } from './api';
 
 export type AuditAction =
   | 'LOGIN'
@@ -32,17 +32,12 @@ export async function logAudit(
   metadata?: AuditMeta
 ): Promise<void> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-
-    await supabase.from('audit_logs').insert([{
-      userId: session.user.id,
-      userEmail: session.user.email ?? '',
+    await insertAuditLog({
       action,
       resource: resource ?? null,
       resourceId: resourceId ?? null,
       metadata: metadata ?? null,
-    }]);
+    });
   } catch {
     // Silently ignore — audit logging should never break the UI
   }

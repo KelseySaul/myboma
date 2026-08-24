@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { UserProfile } from '../App';
-import { createPesapalRentCheckout, createStripeRentCheckout, initiateMpesaRentPayment } from '../lib/api';
+import {
+  createPesapalRentCheckout,
+  createStripeRentCheckout,
+  initiateMpesaRentPayment,
+  markRentPaymentManual,
+  getTenantDashboard,
+  createMaintenanceRequest,
+  markNotificationRead as markNotificationReadRequest,
+  updateMyProfile,
+} from '../lib/api';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
-import {
-  matchesTenant,
-  normalizeRentPayment,
-  tenantPropertyOrFilter,
-  tenantRentOrFilter,
-} from '../lib/rentUtils';
+import { normalizeRentPayment } from '../lib/rentUtils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -64,7 +68,7 @@ interface RentPayment {
   propertyId: string;
   landlordId: string;
   amount: number;
-  status: 'paid' | 'pending' | 'overdue';
+  status: 'paid' | 'pending' | 'overdue' | 'verifying';
   dueDate: string;
   paidAt?: string;
   receiptUrl?: string;
@@ -89,6 +93,8 @@ interface Landlord {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  rentPayoutMethod?: string;
+  mpesaSettlementPhone?: string;
 }
 
 interface Notification {
@@ -138,157 +144,33 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     priority: 'medium' as const,
   });
 
+  // Polls the consolidated tenant dashboard endpoint — replaces the old four
+  // Supabase Realtime channels (properties/maintenanceRequests/rentPayments/notifications).
   useEffect(() => {
-    let propSub: any = null;
-    let reqSub: any = null;
-    let paySub: any = null;
-    let noteSub: any = null;
     let isActive = true;
-    const channelToken = `${profile.uid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-    const fetchAndSubscribe = async () => {
-      const emailLower = profile.email.toLowerCase();
-
-      // Fetch assigned property
-      const { data: propDocs, error: propError } = await supabase
-        .from('properties')
-        .select('id,landlordId,title,location,status,tenantId')
-        .or(tenantPropertyOrFilter(profile));
-      if (propError) console.error('Tenant property fetch:', propError);
-      if (!isActive) return;
-
-      if (propDocs && propDocs.length > 0) {
-        const propData = propDocs[0] as Property;
-        setProperty(propData);
-        
-        const { data: landlordData } = await supabase
-          .from('users')
-          .select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName,rentRecipientId,rentPayoutMethod,mpesaSettlementPhone')
-          .eq('uid', propData.landlordId)
-          .single();
-          
-        if (landlordData) {
-          if (!isActive) return;
-          if (landlordData.rentRecipientId && landlordData.rentRecipientId !== landlordData.uid) {
-            const { data: recipientData } = await supabase
-              .from('users')
-              .select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName,rentPayoutMethod,mpesaSettlementPhone')
-              .eq('uid', landlordData.rentRecipientId)
-              .single();
-            if (recipientData) {
-              setLandlord(recipientData as Landlord);
-            } else {
-              setLandlord(landlordData as Landlord);
-            }
-          } else {
-            setLandlord(landlordData as Landlord);
-          }
-        }
+    const fetchDashboard = async () => {
+      try {
+        const data = await getTenantDashboard();
+        if (!isActive) return;
+        setProperty(data.property as Property | null);
+        setLandlord(data.landlord as Landlord | null);
+        setRequests(data.requests as MaintenanceRequest[]);
+        setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+        setNotifications(data.notifications as Notification[]);
+      } catch (err) {
+        console.error('Tenant dashboard fetch failed:', err);
+      } finally {
+        if (isActive) setLoading(false);
       }
-
-      // Real-time: Properties
-      propSub = supabase
-        .channel(`tenant-props-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'properties' }, async (payload) => {
-          const row = (payload.new || payload.old) as Property | undefined;
-          if (row && !matchesTenant(row.tenantId, profile)) return;
-          if (!isActive) return;
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            const propData = payload.new as Property;
-            setProperty(propData);
-            const { data: landlordData } = await supabase.from('users').select('uid,displayName,email,phone,bankName,bankAccountNumber,bankAccountName').eq('uid', propData.landlordId).single();
-            if (landlordData) setLandlord(landlordData as Landlord);
-          } else if (payload.eventType === 'DELETE') {
-            setProperty(null);
-            setLandlord(null);
-          }
-        })
-        .subscribe();
-
-      // Real-time: Maintenance Requests
-      const { data: reqs } = await supabase
-        .from('maintenanceRequests')
-        .select('id,tenantId,propertyId,landlordId,title,description,status,priority,createdAt')
-        .eq('tenantId', profile.uid);
-      if (!isActive) return;
-      if (reqs) setRequests(reqs);
-
-      reqSub = supabase
-        .channel(`tenant-reqs-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenanceRequests', filter: `tenantId=eq.${profile.uid}` }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setRequests(prev => [...prev, payload.new as MaintenanceRequest]);
-          } else if (payload.eventType === 'UPDATE') {
-            setRequests(prev => prev.map(r => r.id === payload.new.id ? payload.new as MaintenanceRequest : r));
-          } else if (payload.eventType === 'DELETE') {
-            setRequests(prev => prev.filter(r => r.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Real-time: Rent Payments
-      const { data: pays, error: paysError } = await supabase
-        .from('rentPayments')
-        .select('id,tenantId,propertyId,landlordId,amount,status,dueDate,paidAt,receiptUrl,providerReference,paymentProvider')
-        .or(tenantRentOrFilter(profile))
-        .order('dueDate', { ascending: false });
-      if (paysError) console.error('Tenant rent fetch:', paysError);
-      if (!isActive) return;
-      if (pays) setPayments(pays.map((row) => normalizeRentPayment(row as RentPayment)));
-
-      paySub = supabase
-        .channel(`tenant-pays-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'rentPayments' }, (payload) => {
-          if (!isActive) return;
-          const row = (payload.new || payload.old) as RentPayment | undefined;
-          if (row && !matchesTenant(row.tenantId, profile)) return;
-          if (payload.eventType === 'INSERT') {
-            setPayments((prev) => [...prev, normalizeRentPayment(payload.new as RentPayment)]);
-          } else if (payload.eventType === 'UPDATE') {
-            setPayments((prev) =>
-              prev.map((p) =>
-                p.id === payload.new.id ? normalizeRentPayment(payload.new as RentPayment) : p,
-              ),
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setPayments((prev) => prev.filter((p) => p.id !== payload.old.id));
-          }
-        })
-        .subscribe();
-
-      // Real-time: Notifications
-      const { data: notes } = await supabase
-        .from('notifications')
-        .select('id,title,message,type,createdAt,read')
-        .eq('recipientEmail', emailLower)
-        .order('createdAt', { ascending: false });
-      if (!isActive) return;
-      if (notes) setNotifications(notes);
-
-      noteSub = supabase
-        .channel(`tenant-notes-${channelToken}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipientEmail=eq.${emailLower}` }, (payload) => {
-          if (!isActive) return;
-          if (payload.eventType === 'INSERT') {
-            setNotifications(prev => [payload.new as Notification, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notification : n));
-          }
-        })
-        .subscribe();
-
-      setLoading(false);
     };
 
-    fetchAndSubscribe();
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 30000);
 
     return () => {
       isActive = false;
-      if (propSub) supabase.removeChannel(propSub);
-      if (reqSub) supabase.removeChannel(reqSub);
-      if (paySub) supabase.removeChannel(paySub);
-      if (noteSub) supabase.removeChannel(noteSub);
+      clearInterval(interval);
     };
   }, [profile.uid, profile.email]);
 
@@ -303,21 +185,15 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
         toast.error("You are not assigned to any property.");
         return;
       }
-      const { error } = await supabase
-        .from('maintenanceRequests')
-        .insert([{
-          tenantId: profile.uid,
-          propertyId: property.id,
-          landlordId: property.landlordId,
-          title: newRequest.title,
-          description: newRequest.description,
-          priority: newRequest.priority,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        }]);
-      
-      if (error) throw error;
+      const created = await createMaintenanceRequest({
+        propertyId: property.id,
+        landlordId: property.landlordId,
+        title: newRequest.title,
+        description: newRequest.description,
+        priority: newRequest.priority,
+      });
 
+      setRequests((prev) => [...prev, created as MaintenanceRequest]);
       toast.success("Maintenance request submitted!");
       setIsReportOpen(false);
       setNewRequest({ title: '', description: '', priority: 'medium' });
@@ -329,10 +205,8 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
   const markNotificationRead = async (id: string) => {
     try {
-      await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? {...n, read: true} : n)));
+      await markNotificationReadRequest(id);
     } catch (error) {
       console.error("Error marking notification read:", error);
     }
@@ -398,8 +272,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
   const handleUpdateProfile = async () => {
     try {
-      const { error } = await supabase.from('users').update(tenantProfile).eq('uid', profile.uid);
-      if (error) throw error;
+      await updateMyProfile(tenantProfile);
       toast.success("Profile updated");
       setIsProfileOpen(false);
     } catch (error) {
@@ -407,6 +280,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     }
   };
 
+  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -417,7 +291,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
       setTenantProfile({ ...tenantProfile, avatarUrl: publicUrl });
-      await supabase.from('users').update({ avatarUrl: publicUrl }).eq('uid', profile.uid);
+      await updateMyProfile({ avatarUrl: publicUrl });
     } catch (error) {
       toast.error("Failed to upload profile picture");
     } finally {
@@ -566,16 +440,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     }
     setIsSubmittingManual(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`/api/web/rent-payments/${selectedManualPaymentId}/mark-manual`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ note: `M-Pesa Receipt: ${manualPaymentForm.receiptCode}` })
-      });
-      if (!res.ok) throw new Error(await res.text());
+      await markRentPaymentManual(selectedManualPaymentId, `M-Pesa Receipt: ${manualPaymentForm.receiptCode}`);
       toast.success("Payment submitted for verification.");
       setIsManualPaymentOpen(false);
       setManualPaymentForm({ receiptCode: '' });

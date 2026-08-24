@@ -1,7 +1,8 @@
 import {randomUUID} from 'crypto';
-import type {SupabaseClient} from '@supabase/supabase-js';
+import {eq} from 'drizzle-orm';
 import type {Response} from 'express';
 import {z} from 'zod';
+import {db, schema} from '../db/client.ts';
 import {isSuperAdminEmail, SUPER_ADMIN_EMAILS} from '../config/superAdmin.ts';
 import type {AuthenticatedRequest} from './types.ts';
 import {
@@ -15,7 +16,7 @@ import {
   type SubscriptionTier,
 } from '../src/lib/landlordSubscription.ts';
 
-const tierSchema = z.enum(['test', 'starter', 'growth', 'pro', 'pro_plus']);
+const tierSchema = z.enum(['basic', 'starter', 'growth', 'pro', 'proplus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -82,7 +83,6 @@ export type SubscriptionActivationDeps = {
 };
 
 export const activateLandlordSubscription = async (
-  supabase: SupabaseClient,
   deps: SubscriptionActivationDeps,
   input: {
     subscriptionPaymentId: string;
@@ -128,51 +128,44 @@ export const activateLandlordSubscription = async (
     audience: 'admin',
   });
 
-  const {data: existing} = await supabase
-    .from('landlordSubscriptionPayments')
-    .select('id,status')
-    .eq('id', input.subscriptionPaymentId)
-    .maybeSingle();
+  const existing = await db.query.landlordSubscriptionPayments.findFirst({
+    where: eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId),
+    columns: {id: true, status: true},
+  });
 
   if (!existing) throw new Error('Subscription payment record not found');
   if (existing.status === 'confirmed') return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
 
-  const {error: paymentError} = await supabase
-    .from('landlordSubscriptionPayments')
-    .update({
+  await db
+    .update(schema.landlordSubscriptionPayments)
+    .set({
       status: 'confirmed',
       receiptNumber,
       receiptText: landlordReceipt,
       paymentReference: input.paymentReference,
-      periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString(),
+      periodStart,
+      periodEnd,
     })
-    .eq('id', input.subscriptionPaymentId);
+    .where(eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId));
 
-  if (paymentError) throw paymentError;
-
-  const {error: profileError} = await supabase
-    .from('users')
-    .update({
-      role: input.tier === 'pro_plus' ? 'admin' : 'landlord',
+  await db
+    .update(schema.users)
+    .set({
+      role: input.tier === 'proplus' ? 'admin' : 'landlord',
       subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
       subscriptionStatus: 'active',
-      subscriptionExpiresAt: periodEnd.toISOString(),
+      subscriptionExpiresAt: periodEnd,
     })
-    .eq('uid', input.landlordId);
-
-  if (profileError) throw profileError;
+    .where(eq(schema.users.uid, input.landlordId));
 
   // Sync the subscription to any landlords managed by this admin
-  const {error: syncError} = await supabase
-    .from('users')
-    .update({
+  await db
+    .update(schema.users)
+    .set({
       subscriptionStatus: 'active',
-      subscriptionExpiresAt: periodEnd.toISOString(),
+      subscriptionExpiresAt: periodEnd,
     })
-    .eq('managedByAdminId', input.landlordId);
-
-  if (syncError) console.error('Error syncing subscription to managed landlords:', syncError);
+    .where(eq(schema.users.managedByAdminId, input.landlordId));
 
   const summary = `${input.landlordName} subscribed to ${label} (${input.paymentReference}).`;
   await deps.insertNotification({
@@ -215,57 +208,48 @@ export const activateLandlordSubscription = async (
 };
 
 export const saveLandlordPayoutProfile = async (
-  supabase: SupabaseClient,
   landlordId: string,
   body: z.infer<typeof landlordSubscriptionCheckoutSchema>,
 ) => {
-  const {error} = await supabase
-    .from('users')
-    .update({
-      role: body.tier === 'pro_plus' ? 'admin' : 'landlord',
+  await db
+    .update(schema.users)
+    .set({
+      role: body.tier === 'proplus' ? 'admin' : 'landlord',
       rentPayoutMethod: body.rentPayoutMethod,
       subscriptionStatus: 'pending',
       cashPayoutNotes: body.cashPayoutNotes?.trim() || null,
       mpesaSettlementPhone:
-        body.rentPayoutMethod === 'mpesa' ? body.mpesaSettlementPhone?.trim() : null,
-      bankName: body.rentPayoutMethod === 'bank' ? body.bankName?.trim() : null,
-      bankAccountNumber: body.rentPayoutMethod === 'bank' ? body.bankAccountNumber?.trim() : null,
-      bankAccountName: body.rentPayoutMethod === 'bank' ? body.bankAccountName?.trim() : null,
+        body.rentPayoutMethod === 'mpesa' ? (body.mpesaSettlementPhone?.trim() ?? null) : null,
+      bankName: body.rentPayoutMethod === 'bank' ? (body.bankName?.trim() ?? null) : null,
+      bankAccountNumber: body.rentPayoutMethod === 'bank' ? (body.bankAccountNumber?.trim() ?? null) : null,
+      bankAccountName: body.rentPayoutMethod === 'bank' ? (body.bankAccountName?.trim() ?? null) : null,
     })
-    .eq('uid', landlordId);
-
-  if (error) throw error;
+    .where(eq(schema.users.uid, landlordId));
 };
 
-export const createPendingSubscriptionPayment = async (
-  supabase: SupabaseClient,
-  input: {
-    landlordId: string;
-    tier: SubscriptionTier;
-    billing: BillingPeriod;
-    amount: number;
-    paymentChannel: 'stripe' | 'mpesa' | 'pesapal';
-  },
-) => {
+export const createPendingSubscriptionPayment = async (input: {
+  landlordId: string;
+  tier: SubscriptionTier;
+  billing: BillingPeriod;
+  amount: number;
+  paymentChannel: 'stripe' | 'mpesa' | 'pesapal';
+}) => {
   const planKey = encodeSubscriptionPlan(input.tier, input.billing);
-  const {data, error} = await supabase
-    .from('landlordSubscriptionPayments')
-    .insert([
-      {
-        landlordId: input.landlordId,
-        plan: planKey,
-        amount: input.amount,
-        paymentChannel: input.paymentChannel,
-        paymentReference: 'pending',
-        status: 'pending',
-        receiptNumber: `PEND-${randomUUID().slice(0, 12).toUpperCase()}`,
-        periodStart: new Date().toISOString(),
-        periodEnd: new Date().toISOString(),
-      },
-    ])
-    .select('id,plan,amount')
-    .single();
+  const now = new Date();
+  const [row] = await db
+    .insert(schema.landlordSubscriptionPayments)
+    .values({
+      landlordId: input.landlordId,
+      plan: planKey,
+      amount: String(input.amount),
+      paymentChannel: input.paymentChannel,
+      paymentReference: 'pending',
+      status: 'pending',
+      receiptNumber: `PEND-${randomUUID().slice(0, 12).toUpperCase()}`,
+      periodStart: now,
+      periodEnd: now,
+    })
+    .returning({id: schema.landlordSubscriptionPayments.id, plan: schema.landlordSubscriptionPayments.plan, amount: schema.landlordSubscriptionPayments.amount});
 
-  if (error) throw error;
-  return data as {id: string; plan: string; amount: number};
+  return {id: row.id, plan: row.plan, amount: Number(row.amount)};
 };

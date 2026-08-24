@@ -25,6 +25,9 @@ export const assertAllowedRedirectUrl = (url: string | undefined, allowedOrigins
     throw error;
   }
   if (!allowedOrigins.has(origin)) {
+    if (process.env.NODE_ENV !== 'production' && origin.includes('172.')) {
+      return; // Allow local network IPs in dev
+    }
     const error = new Error('Redirect URL origin is not allowed.');
     (error as any).statusCode = 400;
     throw error;

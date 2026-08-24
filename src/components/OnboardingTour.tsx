@@ -257,75 +257,36 @@ export default function OnboardingTour({ role, onComplete }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[9999]"
+      className="fixed bottom-6 right-6 z-50 w-full max-w-[340px] pointer-events-none"
       role="dialog"
-      aria-modal="true"
       aria-label="Onboarding tour"
       style={{ animation: exiting ? 'tourFadeOut 0.35s ease forwards' : 'tourFadeIn 0.3s ease both' }}
     >
-      {/* Backdrop with cutout */}
-      {spotlightRect && clipPath ? (
-        <>
-          {/* SVG overlay with even-odd cutout */}
-          <svg
-            className="absolute inset-0 w-full h-full pointer-events-none"
-            style={{ width: W, height: H }}
-          >
-            <path
-              d={clipPath}
-              fill="rgba(0,0,0,0.7)"
-              fillRule="evenodd"
-            />
-          </svg>
-          {/* Glowing border around spotlight */}
-          <div
-            className="absolute pointer-events-none rounded-xl"
-            style={{
-              top: spotlightRect.top,
-              left: spotlightRect.left,
-              width: spotlightRect.width,
-              height: spotlightRect.height,
-              boxShadow: '0 0 0 3px rgba(99,102,241,0.8), 0 0 24px 6px rgba(99,102,241,0.3)',
-              animation: 'tourPulseRing 1.8s ease-in-out infinite',
-            }}
-          />
-        </>
-      ) : (
-        /* No spotlight — full dark backdrop */
+      {/* Glowing border around spotlight */}
+      {spotlightRect && (
         <div
-          className="absolute inset-0"
-          style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+          className="fixed pointer-events-none rounded-xl z-[49]"
+          style={{
+            top: spotlightRect.top,
+            left: spotlightRect.left,
+            width: spotlightRect.width,
+            height: spotlightRect.height,
+            boxShadow: '0 0 0 2px rgba(99,102,241,1), 0 0 20px 4px rgba(99,102,241,0.3)',
+            animation: 'tourPulseRing 1.8s ease-in-out infinite',
+          }}
         />
       )}
 
-      {/* Tap backdrop to advance */}
-      <div className="absolute inset-0" onClick={next} />
-
-      {/* Tour card — anchored near spotlight or centred */}
+      {/* Tour card — Floating at bottom right */}
       <div
         ref={cardRef}
-        className="absolute left-1/2 w-[calc(100vw-2rem)] max-w-sm pointer-events-none"
+        className="w-full pointer-events-auto"
         style={{
-          left: '50%',
-          ...(spotlightRect
-            ? {
-                transform: 'translate(-50%, 0)',
-                ...(cardPos === 'bottom'
-                  ? { top: spotlightRect.top + spotlightRect.height + 16 }
-                  : { bottom: H - spotlightRect.top + 16 })
-              }
-            : {
-                top: '50%',
-                transform: 'translate(-50%, -50%)',
-              }),
           animation: animating
-            ? (spotlightRect ? 'tourCardOutSpotlight 0.18s ease forwards' : 'tourCardOutCenter 0.18s ease forwards')
+            ? 'tourFadeOut 0.15s ease forwards'
             : exiting
-              ? (spotlightRect ? 'tourCardOutSpotlight 0.3s ease forwards' : 'tourCardOutCenter 0.3s ease forwards')
-              : spotlightRect 
-                ? 'tourCardInSpotlight 0.35s cubic-bezier(0.34,1.4,0.64,1) both'
-                : 'tourCardInCenter 0.35s cubic-bezier(0.34,1.4,0.64,1) both',
-          pointerEvents: 'auto',
+              ? 'tourFadeOut 0.3s ease forwards'
+              : 'tourCardInBottom 0.35s cubic-bezier(0.34,1.4,0.64,1) both',
         }}
       >
         <div className="bg-white rounded-[1.75rem] overflow-hidden shadow-2xl">
@@ -419,14 +380,11 @@ export default function OnboardingTour({ role, onComplete }: Props) {
       <style>{`
         @keyframes tourFadeIn  { from { opacity:0 } to { opacity:1 } }
         @keyframes tourFadeOut { from { opacity:1 } to { opacity:0 } }
-        @keyframes tourCardInSpotlight  { from { opacity:0; transform:translate(-50%,16px) scale(0.96) } to { opacity:1; transform:translate(-50%,0) scale(1) } }
-        @keyframes tourCardInCenter     { from { opacity:0; transform:translate(-50%,calc(-50% + 16px)) scale(0.96) } to { opacity:1; transform:translate(-50%,-50%) scale(1) } }
-        @keyframes tourCardOutSpotlight { from { opacity:1; transform:translate(-50%,0) scale(1) } to { opacity:0; transform:translate(-50%,10px) scale(0.97) } }
-        @keyframes tourCardOutCenter    { from { opacity:1; transform:translate(-50%,-50%) scale(1) } to { opacity:0; transform:translate(-50%,calc(-50% + 10px)) scale(0.97) } }
+        @keyframes tourCardInBottom { from { opacity:0; transform:translateY(20px) scale(0.96) } to { opacity:1; transform:translateY(0) scale(1) } }
         @keyframes tourContentIn { from { opacity:0; transform:translateY(5px) } to { opacity:1; transform:translateY(0) } }
         @keyframes tourPulseRing {
-          0%,100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.8), 0 0 20px 4px rgba(99,102,241,0.25); }
-          50%      { box-shadow: 0 0 0 4px rgba(99,102,241,1),   0 0 32px 8px rgba(99,102,241,0.4); }
+          0%,100% { box-shadow: 0 0 0 2px rgba(99,102,241,1), 0 0 12px 2px rgba(99,102,241,0.25); }
+          50%      { box-shadow: 0 0 0 3px rgba(99,102,241,1),   0 0 24px 6px rgba(99,102,241,0.4); }
         }
       `}</style>
     </div>

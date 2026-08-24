@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import HunterDashboard from './HunterDashboard';
-import { getAuthPersistence, setAuthPersistence, supabase } from '../supabase';
+import { getAuthPersistence, setAuthPersistence, authClient } from '../lib/auth-client';
 import { promptForPush } from '../App';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -215,21 +215,20 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       }
       setLoading(true);
       console.log("Landing: Starting Google OAuth with role:", selectedRole);
-      localStorage.setItem('myboma_intended_role', selectedRole);
+      // Note: the selected role can't ride along an OAuth redirect the way it rides
+      // in the signup request body for email/password (see handleEmailAuth) — a
+      // Google signup with no matching `invitations` row always lands as 'hunter'
+      // (server/auth.ts seedProfileForNewAuthUser), same as the old Supabase trigger's
+      // reliable behavior.
       if (selectedRole === 'landlord' && authMode === 'signup') {
         localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlordSignup));
       }
       setAuthPersistence(authMode === 'login' ? rememberMe : true);
       recordTermsAcceptance();
       try {
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { error } = await authClient.signIn.social({
           provider: 'google',
-          options: {
-            queryParams: {
-              access_type: 'offline',
-              prompt: 'consent',
-            },
-          },
+          callbackURL: window.location.origin,
         });
         if (error) throw error;
         console.log("Landing: Google OAuth initiated");
@@ -241,8 +240,8 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       }
     };
 
-    const handleEmailAuth = async (e: React.FormEvent) => {
-      e.preventDefault();
+    const handleEmailAuth = async (e?: React.FormEvent | React.MouseEvent) => {
+      if (e) e.preventDefault();
       console.log("Landing: handleEmailAuth called", authMode);
       
       if (authMode === 'signup' && !agreed) {
@@ -258,21 +257,20 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         return;
       }
 
-    // Crucial: Set the intended role BEFORE signup so App.tsx can pick it up
-    localStorage.setItem('myboma_intended_role', selectedRole);
     setAuthPersistence(authMode === 'login' ? rememberMe : true);
     setLoading(true);
 
     try {
       if (authMode === 'login') {
         console.log("Landing: Attempting login for", cleanEmail);
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await authClient.signIn.email({
           email: cleanEmail,
           password,
+          rememberMe,
         });
         if (error) {
-          console.error("Landing: Login error returned from Supabase:", error);
-          throw error;
+          console.error("Landing: Login error:", error);
+          throw new Error(error.message || 'Login failed');
         }
         console.log("Landing: Login successful!", data.user?.id);
         toast.success("Successfully logged in!");
@@ -312,40 +310,34 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         const termsAcceptance = recordTermsAcceptance();
 
         console.log("Landing: Attempting signup for", cleanEmail);
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        // Extra fields (intended_role, phone, terms_*) ride along in the request body
+        // and are read server-side by databaseHooks.user.create.after (server/auth.ts)
+        // to seed the public.users profile row — see the migration plan.
+        const { data: signUpData, error: signUpError } = await authClient.signUp.email({
           email: cleanEmail,
           password,
-          options: {
-            data: {
-              full_name: cleanFullName,
-              phone: cleanPhone,
-              intended_role: selectedRole,
-              terms_accepted_at: termsAcceptance.acceptedAt,
-              terms_version: termsAcceptance.termsVersion,
-              privacy_version: termsAcceptance.privacyVersion,
-            }
-          }
-        });
-        
+          name: cleanFullName,
+          rememberMe: true,
+          phone: cleanPhone,
+          intended_role: selectedRole,
+          terms_accepted_at: termsAcceptance.acceptedAt,
+          terms_version: termsAcceptance.termsVersion,
+          privacy_version: termsAcceptance.privacyVersion,
+        } as Parameters<typeof authClient.signUp.email>[0]);
+
         if (signUpError) {
           console.error("Landing: Signup error:", signUpError);
-          throw signUpError;
-        }
-        
-        const user = signUpData.user;
-        if (user) {
-          console.log("Landing: Signup successful, creation will be handled by App.tsx");
+          throw new Error(signUpError.message || 'Signup failed');
         }
 
-        if (selectedRole === 'landlord') {
-          toast.success(
-            signUpData.session
-              ? 'Account created. Complete payment with card or M-Pesa on the next screen.'
-              : 'Account created. After email confirmation, sign in to pay and activate your plan.',
-          );
-        } else {
-          toast.success(signUpData.session ? 'Account created successfully!' : 'Confirmation email sent!');
-        }
+        console.log("Landing: Signup successful", signUpData?.user?.id);
+
+        // No email verification is configured, so signup always returns a live session.
+        toast.success(
+          selectedRole === 'landlord'
+            ? 'Account created. Complete payment with card or M-Pesa on the next screen.'
+            : 'Account created successfully!',
+        );
       }
     } catch (error: any) {
       console.error("Landing: Email auth exception:", error);
@@ -755,7 +747,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                       </div>
                     )}
 
-                    <Button type="submit" className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95" disabled={loading}>
+                    <Button type="submit" onClick={handleEmailAuth} className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95" disabled={loading}>
                       {loading 
                         ? <FontAwesomeIcon icon={faCheckCircle} className="animate-spin" />
                         : (authMode === 'login'

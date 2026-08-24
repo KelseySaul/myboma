@@ -52,7 +52,7 @@ export default function LandlordSignupFields({
         </Label>
         <div className="mt-3 grid gap-2">
           {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[])
-            .filter((tierId) => tierId !== 'test')
+            .filter((tierId) => tierId !== 'basic')
             .map((tierId) => {
             const tier = SUBSCRIPTION_TIERS[tierId];
             const tierAmount = getSubscriptionAmount(tierId, value.billing);
