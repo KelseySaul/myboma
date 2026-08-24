@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../supabase';
 import { authClient } from '../lib/auth-client';
-import { initPlatform, updatePlatformBranding, getPlatformBranding, updateMyProfile } from '../lib/api';
+import { initPlatform, updatePlatformBranding, getPlatformBranding, updateMyProfile, uploadFile } from '../lib/api';
 import { UserProfile, promptForPush } from '../App';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -141,13 +140,9 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
     if (!file) return;
     setIsUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const fileName = `${profile.uid}/avatar-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('properties').upload(fileName, file, { upsert: true });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
-      setProfileForm(prev => ({ ...prev, avatarUrl: publicUrl }));
-      await updateMyProfile({ avatarUrl: publicUrl });
+      const { url } = await uploadFile(file, file.name, 'avatar');
+      setProfileForm(prev => ({ ...prev, avatarUrl: url }));
+      await updateMyProfile({ avatarUrl: url });
       toast.success('Avatar updated!');
     } catch {
       toast.error('Failed to upload avatar');
@@ -161,12 +156,8 @@ export default function SettingsPage({ profile }: { profile: UserProfile }) {
     if (!file || !profile.platformId) return;
     setSavingBranding(true);
     try {
-      const ext = file.name.split('.').pop();
-      const fileName = `${profile.uid}/platforms/${profile.platformId}/logo-${Date.now()}.${ext}`;
-      const { error } = await supabase.storage.from('properties').upload(fileName, file, { upsert: true });
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
-      setBrandingForm(prev => ({ ...prev, brandLogoUrl: publicUrl }));
+      const { url } = await uploadFile(file, file.name, `platforms/${profile.platformId}`);
+      setBrandingForm(prev => ({ ...prev, brandLogoUrl: url }));
       toast.success('Logo uploaded!');
     } catch {
       toast.error('Failed to upload logo');

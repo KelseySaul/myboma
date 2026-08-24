@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
-import { supabase } from '../supabase';
 import { authClient } from '../lib/auth-client';
 import {
   provisionUser,
+  uploadFile,
   markRentPaymentManual,
   sendRentReminder as sendRentReminderRequest,
   getLandlordDashboard,
@@ -429,18 +429,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       for (let i = 0; i < files.length; i++) {
         let file = files[i];
         file = await convertToWebP(file);
-        const fileName = `${profile.uid}/${Date.now()}-${i}.webp`;
-        const { error } = await supabase.storage
-          .from('properties')
-          .upload(fileName, file);
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('properties')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(publicUrl);
+        const { url } = await uploadFile(file, `${Date.now()}-${i}.webp`);
+        uploadedUrls.push(url);
       }
 
       if (isEditOpen && editingProperty) {
@@ -662,11 +652,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     setIsUploading(true);
     try {
       const convertedFile = await convertToWebP(file);
-      const fileName = `${profile.uid}/avatar-${Date.now()}.webp`;
-      const { error } = await supabase.storage.from('properties').upload(fileName, convertedFile);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
-      setLandlordProfile({ ...landlordProfile, avatarUrl: publicUrl });
+      const { url } = await uploadFile(convertedFile, `avatar-${Date.now()}.webp`, 'avatar');
+      setLandlordProfile({ ...landlordProfile, avatarUrl: url });
     } catch (error) {
       toast.error("Failed to upload profile picture");
     } finally {

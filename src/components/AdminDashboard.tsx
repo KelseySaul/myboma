@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
-import { supabase } from '../supabase';
 import {
   provisionUser,
   updateUserStatus,
@@ -17,6 +16,7 @@ import {
   createPlatform,
   togglePlatformStatus as togglePlatformStatusRequest,
   updateMyProfile,
+  uploadFile,
 } from '../lib/api';
 import { UserProfile, UserRole } from '../App';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -546,18 +546,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = `${profile.uid}/${Date.now()}-${i}.${file.name.split('.').pop()}`;
-        const { error } = await supabase.storage
-          .from('properties')
-          .upload(fileName, file);
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('properties')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(publicUrl);
+        const { url } = await uploadFile(file, `${Date.now()}-${i}.${file.name.split('.').pop()}`);
+        uploadedUrls.push(url);
       }
 
       setPropertyForm(prev => ({
@@ -582,18 +572,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileName = `${profile.uid}/${Date.now()}-${i}.${file.name.split('.').pop()}`;
-        const { error } = await supabase.storage
-          .from('properties')
-          .upload(fileName, file);
-
-        if (error) throw error;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('properties')
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(publicUrl);
+        const { url } = await uploadFile(file, `${Date.now()}-${i}.${file.name.split('.').pop()}`);
+        uploadedUrls.push(url);
       }
 
       setEditingProperty((prev: any) => {
@@ -718,11 +698,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     if (!file) return;
     setIsUploading(true);
     try {
-      const fileName = `${profile.uid}/avatar-${Date.now()}.${file.name.split('.').pop()}`;
-      const { error } = await supabase.storage.from('properties').upload(fileName, file);
-      if (error) throw error;
-      const { data: { publicUrl } } = supabase.storage.from('properties').getPublicUrl(fileName);
-      setAdminProfile({ ...adminProfile, avatarUrl: publicUrl });
+      const { url } = await uploadFile(file, file.name, 'avatar');
+      setAdminProfile({ ...adminProfile, avatarUrl: url });
     } catch (error) {
       toast.error("Failed to upload profile picture");
     } finally {
