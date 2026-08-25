@@ -125,6 +125,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const [isAddPlatformOpen, setIsAddPlatformOpen] = useState(false);
   const [newPlatform, setNewPlatform] = useState({ name: '', slug: '', ownerEmail: '', ownerPassword: '' });
   const [provisionedPlatform, setProvisionedPlatform] = useState<Platform | null>(null);
+  const [showPlatformPassword, setShowPlatformPassword] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(false);
   const [userPage, setUserPage] = useState(1);
   const usersPerPage = 10;
   const [userSearch, setUserSearch] = useState('');
@@ -894,139 +896,276 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   );
 
   return (
-    <div className="db pb-12 animate-in fade-in duration-700">
-      {/* Hero Page Header */}
-      <div className="hero">
-        <div className="hero-meta">
-          <span className="lvl-badge">Level 4 access</span>
-          <div className="status-dot">
-            <span className="status-pulse"></span>
-            System online
-          </div>
-        </div>
-        <div className="hero-row">
+    <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
+      {/* ── Enterprise Page Header ─────────────────────────── */}
+      <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="hero-title">{profile.isSuperAdmin ? 'Command Center' : 'Platform Control'}</h1>
-            <p className="hero-sub">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/40">
+                <FontAwesomeIcon icon={faShieldAlt} className="h-2.5 w-2.5" />
+                {profile.isSuperAdmin ? 'Level 4 Master Node' : 'Platform Node'}
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                System Live
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {profile.isSuperAdmin ? 'Enterprise Command Center' : 'Platform Management'}
+            </h1>
+            <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               {profile.isSuperAdmin 
-                ? 'Global node management across all instances.' 
-                : `Administrative dashboard for your platform lease.`}
+                ? 'Global tenant registry, node telemetry, user access & audit controls.' 
+                : 'Administrative controls and portfolio management for your platform instance.'}
             </p>
           </div>
-          <div className="hero-actions">
-            <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900 mr-4" onClick={() => setIsProfileOpen(true)}>
-              Secure Profile
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl text-xs font-semibold"
+              onClick={() => setIsProfileOpen(true)}
+            >
+              <FontAwesomeIcon icon={faUser} className="mr-1.5 h-3 w-3 text-slate-400" />
+              Admin Profile
             </Button>
+
             {profile.isSuperAdmin && (
               <>
                 <div className="relative">
                   <select
-                    className="btn-ghost appearance-none pr-8 cursor-pointer font-semibold"
+                    className="h-9 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 pl-3 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer shadow-2xs appearance-none"
                     value={selectedPlatformId}
                     onChange={(e) => setSelectedPlatformId(e.target.value)}
                   >
-                    <option value="all">Global view</option>
+                    <option value="all">🌐 All Platforms (Global View)</option>
                     {platforms.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none text-[10px]">▼</span>
+                  <FontAwesomeIcon icon={faChevronDown} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]" />
                 </div>
 
+                {/* Provision New Platform Modal (Section 11) */}
                 <Dialog open={isAddPlatformOpen} onOpenChange={setIsAddPlatformOpen}>
-                  <DialogTrigger render={<button className="btn-primary" />}>
-                    <i className="ti ti-plus mr-1"></i> New instance
-                  </DialogTrigger>
-                  <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                    <DialogHeader>
-                      <DialogTitle className="text-2xl font-black text-zinc-900 dark:text-white">Provision New Platform</DialogTitle>
-                      <DialogDescription className="font-medium text-zinc-500">Configure a new secure lease and master admin credentials.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-6 py-6">
-                      <div className="grid gap-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Business Name *</label>
-                        <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={newPlatform.name} onChange={e => setNewPlatform({...newPlatform, name: e.target.value})} placeholder="Acme Real Estate" />
+                  <DialogTrigger render={
+                    <Button size="sm" className="rounded-xl font-bold text-xs shadow-xs gap-1.5">
+                      <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
+                      Provision Platform
+                    </Button>
+                  } />
+                  <DialogContent className="sm:max-w-xl p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                    <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="h-7 w-7 rounded-lg bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center text-xs">
+                          <FontAwesomeIcon icon={faGlobe} />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Multi-Tenant Management</span>
                       </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Unique Slug *</label>
-                        <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={newPlatform.slug} onChange={e => setNewPlatform({...newPlatform, slug: e.target.value.toLowerCase().replace(/\s+/g, '-')})} placeholder="acme-prop" />
+                      <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white">
+                        Provision New Platform
+                      </DialogTitle>
+                      <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Deploy an isolated tenant workspace instance with dedicated credentials and URL slug.
+                      </DialogDescription>
+                    </div>
+
+                    <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+                      {/* Section 1: Platform Identity */}
+                      <div className="space-y-3.5">
+                        <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">1. Platform Identity</span>
+                        </div>
+                        <div className="grid gap-3.5">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              Business / Platform Name <span className="text-rose-500">*</span>
+                            </label>
+                            <Input
+                              className="h-10"
+                              value={newPlatform.name}
+                              onChange={e => setNewPlatform({...newPlatform, name: e.target.value})}
+                              placeholder="e.g. Skyline Real Estate Ltd"
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              Subdomain / Routing Slug <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Input
+                                className="h-10 font-mono text-xs"
+                                value={newPlatform.slug}
+                                onChange={e => setNewPlatform({...newPlatform, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-')})}
+                                placeholder="e.g. skyline-properties"
+                                required
+                              />
+                            </div>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              Tenant access URL: <span className="text-slate-600 dark:text-slate-300 font-medium">{window.location.origin}/p/{newPlatform.slug || 'slug'}</span>
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Master Admin Email *</label>
-                        <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={newPlatform.ownerEmail} onChange={e => setNewPlatform({...newPlatform, ownerEmail: e.target.value})} placeholder="admin@acme.com" />
+
+                      {/* Section 2: Master Admin Credentials */}
+                      <div className="space-y-3.5 pt-2">
+                        <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">2. Administrator Credentials</span>
+                        </div>
+                        <div className="grid gap-3.5">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              Master Admin Email <span className="text-rose-500">*</span>
+                            </label>
+                            <Input
+                              className="h-10"
+                              type="email"
+                              value={newPlatform.ownerEmail}
+                              onChange={e => setNewPlatform({...newPlatform, ownerEmail: e.target.value})}
+                              placeholder="admin@skylineproperties.com"
+                              required
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                              Temporary Password <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Input
+                                className="h-10 pr-10"
+                                type={showPlatformPassword ? 'text' : 'password'}
+                                value={newPlatform.ownerPassword}
+                                onChange={e => setNewPlatform({...newPlatform, ownerPassword: e.target.value})}
+                                placeholder="Set secure initial password"
+                                required
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPlatformPassword(!showPlatformPassword)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                                tabIndex={-1}
+                              >
+                                <FontAwesomeIcon icon={showPlatformPassword ? faEye : faEye} className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              The administrator will be prompted to reset this temporary password on their first login.
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid gap-2">
-                        <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Master Admin Temporary Password *</label>
-                        <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" type="password" value={newPlatform.ownerPassword} onChange={e => setNewPlatform({...newPlatform, ownerPassword: e.target.value})} placeholder="••••••" />
+
+                      {/* Security Notice */}
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-start gap-2.5">
+                        <FontAwesomeIcon icon={faShieldAlt} className="h-3.5 w-3.5 text-slate-500 mt-0.5 shrink-0" />
+                        <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                          Provisioning configures database schema partitions, multi-tenant row security policies, and dispatches the activation link immediately.
+                        </div>
                       </div>
                     </div>
-                    <DialogFooter>
-                      <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsAddPlatformOpen(false)}>Abort</Button>
-                      <Button className="font-black rounded-xl h-12 px-8 bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900" onClick={handleAddPlatform}>Initiate Provision</Button>
-                    </DialogFooter>
+
+                    <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-xl font-semibold text-xs cursor-pointer"
+                        onClick={() => setIsAddPlatformOpen(false)}
+                        disabled={isProvisioning}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="rounded-xl font-bold text-xs cursor-pointer"
+                        onClick={async () => {
+                          setIsProvisioning(true);
+                          try {
+                            await handleAddPlatform();
+                          } finally {
+                            setIsProvisioning(false);
+                          }
+                        }}
+                        disabled={isProvisioning || !newPlatform.name || !newPlatform.slug || !newPlatform.ownerEmail || !newPlatform.ownerPassword}
+                      >
+                        {isProvisioning ? (
+                          <>
+                            <FontAwesomeIcon icon={faSpinner} className="animate-spin mr-1.5 h-3 w-3" />
+                            Provisioning...
+                          </>
+                        ) : (
+                          'Initiate Provisioning'
+                        )}
+                      </Button>
+                    </div>
                   </DialogContent>
                 </Dialog>
 
+                {/* Provision Success Modal */}
                 <Dialog open={!!provisionedPlatform} onOpenChange={(open) => { if (!open) setProvisionedPlatform(null); }}>
-                  <DialogContent className="rounded-3xl border-none shadow-2xl sm:max-w-[550px] p-0 overflow-hidden bg-white dark:bg-zinc-900">
-                    <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-8 text-white relative">
-                      <div className="absolute top-4 right-4 h-10 w-10 rounded-2xl bg-white/10 hover:bg-white/20 flex items-center justify-center cursor-pointer transition-colors" onClick={() => setProvisionedPlatform(null)}>
-                        <FontAwesomeIcon icon={faTimesCircle} className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="flex items-center gap-4 mb-4">
-                        <div className="h-14 w-14 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-xl">
-                          <FontAwesomeIcon icon={faCheckCircle} className="h-8 w-8 text-emerald-500" />
+                  <DialogContent className="sm:max-w-lg p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                    <div className="bg-slate-900 text-white p-6 relative">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                          <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5" />
                         </div>
                         <div>
-                          <Badge className="bg-emerald-500/20 text-emerald-300 border-none px-3 py-1 font-black text-[9px] uppercase tracking-widest">
-                            Successfully Leased
-                          </Badge>
-                          <h3 className="text-2xl font-black tracking-tight mt-1">{provisionedPlatform?.name}</h3>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Node Active</span>
+                          <h3 className="text-lg font-bold tracking-tight text-white">{provisionedPlatform?.name}</h3>
                         </div>
                       </div>
-                      <p className="text-indigo-100 text-xs font-semibold leading-relaxed">
-                        The tenant platform instance has been fully provisioned on the network. Master administrative credentials and invitations are active.
+                      <p className="text-xs text-slate-400 mt-2">
+                        The platform lease instance is successfully provisioned and ready for operations.
                       </p>
                     </div>
-                    <div className="p-6 md:p-8 space-y-6 bg-white dark:bg-zinc-900">
-                      <div className="space-y-4">
-                        <div className="flex items-start gap-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                          <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 shrink-0">
-                            <FontAwesomeIcon icon={faGlobe} className="h-4 w-4" />
-                          </div>
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Access Directory / Custom URL</h4>
-                            <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">
+
+                    <div className="p-6 space-y-4">
+                      <div className="space-y-3">
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Custom Tenant URL</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-mono font-semibold text-slate-900 dark:text-white truncate">
                               {window.location.origin}/p/{provisionedPlatform?.slug}
-                            </p>
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[11px] font-semibold shrink-0 cursor-pointer"
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/p/${provisionedPlatform?.slug}`);
+                                toast.success('Tenant URL copied to clipboard');
+                              }}
+                            >
+                              Copy Link
+                            </Button>
                           </div>
                         </div>
 
-                        <div className="flex items-start gap-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">
-                          <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 shrink-0">
-                            <FontAwesomeIcon icon={faUserShield} className="h-4 w-4" />
-                          </div>
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Master Admin Assignee</h4>
-                            <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">
-                              {provisionedPlatform?.ownerEmail}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 p-4 flex gap-3 text-amber-900 dark:text-amber-300">
-                        <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="font-black uppercase tracking-wider text-[10px] text-amber-800 dark:text-amber-400">🔑 Onboarding Instructions</p>
-                          <p className="text-xs font-semibold leading-relaxed text-amber-700 dark:text-amber-300/80">
-                            The platform lease admin has been registered with the temporary password you specified. Provide them with the custom URL link above and their credentials to sign in and begin.
+                        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Master Administrator</span>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                            {provisionedPlatform?.ownerEmail}
                           </p>
                         </div>
                       </div>
 
-                      <Button className="w-full h-12 rounded-2xl bg-zinc-900 hover:bg-zinc-800 dark:bg-white text-white dark:text-zinc-900 font-black text-sm transition-all shadow-xl" onClick={() => setProvisionedPlatform(null)}>
-                        Complete Onboarding
+                      <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+                        Provide the custom URL and temporary password to the assigned administrator to complete setup.
+                      </div>
+
+                      <Button
+                        className="w-full h-10 font-bold text-xs cursor-pointer"
+                        onClick={() => setProvisionedPlatform(null)}
+                      >
+                        Done
                       </Button>
                     </div>
                   </DialogContent>
@@ -1203,247 +1342,253 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       <div className="px-6 mt-4">
         {/* ── USERS TAB ── */}
         {activeTab === 'registered' && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-xl font-black">User Registry</CardTitle>
-                  <CardDescription className="font-medium">Managing all verified network identities.</CardDescription>
+                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">User Registry</CardTitle>
+                  <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Managing verified identity nodes and system access credentials.
+                  </CardDescription>
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                     <div className="relative w-full sm:max-w-xs">
-                      <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                      <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                       <Input 
                         placeholder="Search users..." 
-                        className="h-9 pl-8 text-xs font-bold rounded-xl border-zinc-200" 
+                        className="h-9 pl-8 text-xs font-semibold rounded-xl" 
                         value={userSearch} 
                         onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }} 
                       />
                     </div>
                     <select
-                      className="h-9 rounded-xl border border-zinc-200 bg-white px-3 text-xs font-bold outline-none focus:ring-2 focus:ring-zinc-400 dark:border-zinc-800 dark:bg-zinc-950"
+                      className="h-9 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
                       value={userRoleFilter}
                       onChange={(e) => { setUserRoleFilter(e.target.value); setUserPage(1); }}
                     >
                       <option value="all">All Roles</option>
-                      <option value="admin">Admins</option>
+                      <option value="admin">Platform Admins</option>
                       <option value="landlord">Landlords</option>
                       <option value="tenant">Tenants</option>
                       <option value="hunter">Hunters</option>
                     </select>
                   </div>
+
                   <div className="flex items-center gap-2">
                     <Dialog open={isInviteUserOpen} onOpenChange={setIsInviteUserOpen}>
-                      <DialogTrigger render={<Button className="rounded-xl font-bold bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950" />}>
-                        <FontAwesomeIcon icon={faPlus} className="mr-2 h-3 w-3" />
-                        Invite User
-                      </DialogTrigger>
-                    <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl font-black">Invite New User</DialogTitle>
-                        <DialogDescription className="font-medium text-zinc-500">Send an invitation to join a specific platform.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        {profile.isSuperAdmin && (
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Platform</label>
-                            <select
-                              className="h-12 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-zinc-400 dark:border-zinc-800 dark:bg-zinc-950"
-                              value={selectedPlatformId}
-                              onChange={(e) => setSelectedPlatformId(e.target.value)}
-                            >
-                              <option value="all">None (Global User)</option>
-                              {platforms.map((platform) => (
-                                <option key={platform.id} value={platform.id}>{platform.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                        <div className="grid gap-2">
-                          <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Display Name</label>
-                          <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={inviteForm.displayName} onChange={e => setInviteForm({...inviteForm, displayName: e.target.value})} placeholder="John Doe" />
+                      <DialogTrigger render={
+                        <Button size="sm" className="rounded-xl font-bold text-xs gap-1.5 cursor-pointer">
+                          <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
+                          Invite User
+                        </Button>
+                      } />
+                      <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                        <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Invite New User</DialogTitle>
+                          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Send an onboarding credential invitation to join the platform.
+                          </DialogDescription>
                         </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Email Address</label>
-                          <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" type="email" value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="john@example.com" />
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Temporary Password</label>
-                          <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" type="password" value={inviteForm.password} onChange={e => setInviteForm({...inviteForm, password: e.target.value})} placeholder="Set a temporary password" />
-                        </div>
-                        <div className="grid gap-2">
-                          <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Role</label>
-                          <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={inviteForm.role} onChange={e => setInviteForm({...inviteForm, role: e.target.value as UserRole})}>
-                            <option value="landlord">Landlord</option>
-                            <option value="tenant">Tenant</option>
-                            <option value="hunter">Hunter</option>
-                            {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
-                          </select>
-                        </div>
-
-                        {inviteForm.role === 'landlord' && profile.isAdmin && (
-                          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 space-y-4">
-                            <h4 className="text-sm font-black uppercase tracking-widest text-zinc-600">Rent Payment Settings</h4>
-                            
-                            <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Who Receives Rent Payments?</label>
-                              <select 
-                                className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" 
-                                value={inviteForm.rentRouting} 
-                                onChange={e => setInviteForm({...inviteForm, rentRouting: e.target.value as 'admin' | 'direct'})}
+                        <div className="p-6 space-y-3.5 max-h-[70vh] overflow-y-auto">
+                          {profile.isSuperAdmin && (
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Platform</label>
+                              <select
+                                className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
+                                value={selectedPlatformId}
+                                onChange={(e) => setSelectedPlatformId(e.target.value)}
                               >
-                                <option value="admin">Admin's Account (Centralized)</option>
-                                <option value="direct">Landlord's Account (Direct)</option>
+                                <option value="all">None (Global System User)</option>
+                                {platforms.map((platform) => (
+                                  <option key={platform.id} value={platform.id}>{platform.name}</option>
+                                ))}
                               </select>
                             </div>
-
-                            {inviteForm.rentRouting === 'direct' && (
-                              <>
-                                <div className="grid gap-2">
-                                  <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Payout Method</label>
-                                  <select 
-                                    className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" 
-                                    value={inviteForm.rentPayoutMethod} 
-                                    onChange={e => setInviteForm({...inviteForm, rentPayoutMethod: e.target.value as 'mpesa' | 'bank' | 'cash'})}
-                                  >
-                                    <option value="mpesa">M-Pesa</option>
-                                    <option value="bank">Bank Transfer</option>
-                                    <option value="cash">Cash/Other</option>
-                                  </select>
-                                </div>
-                                {inviteForm.rentPayoutMethod === 'mpesa' && (
-                                  <div className="grid gap-2">
-                                    <label className="text-xs font-black uppercase tracking-widest text-zinc-400">M-Pesa Settlement Phone / Till Number</label>
-                                    <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={inviteForm.mpesaSettlementPhone || ''} onChange={e => setInviteForm({...inviteForm, mpesaSettlementPhone: e.target.value})} placeholder="e.g. 254700000000 or Till No" />
-                                  </div>
-                                )}
-                              </>
-                            )}
+                          )}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Full Name</label>
+                            <Input className="h-10" value={inviteForm.displayName} onChange={e => setInviteForm({...inviteForm, displayName: e.target.value})} placeholder="e.g. Jane Doe" />
                           </div>
-                        )}
-                      </div>
-                      <DialogFooter>
-                        <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsInviteUserOpen(false)}>Cancel</Button>
-                        <Button
-                          className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6"
-                          onClick={handleInviteUser}
-                        >
-                          Send Invite
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
+                            <Input className="h-10" type="email" value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="e.g. jane@example.com" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Temporary Password</label>
+                            <Input className="h-10" type="password" value={inviteForm.password} onChange={e => setInviteForm({...inviteForm, password: e.target.value})} placeholder="Temporary password" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Role</label>
+                            <select className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10" value={inviteForm.role} onChange={e => setInviteForm({...inviteForm, role: e.target.value as UserRole})}>
+                              <option value="landlord">Landlord</option>
+                              <option value="tenant">Tenant</option>
+                              <option value="hunter">Hunter</option>
+                              {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
+                            </select>
+                          </div>
 
-                  <Dialog open={isUpdateRoleOpen} onOpenChange={setIsUpdateRoleOpen}>
-                    <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                      <DialogHeader>
-                        <DialogTitle className="text-xl font-black">Update User Role</DialogTitle>
-                        <DialogDescription className="font-medium text-zinc-500">Change the access level for {selectedUserForRole?.displayName}.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <label className="text-xs font-black uppercase tracking-widest text-zinc-400">New Role</label>
-                          <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={updateRoleForm.role} onChange={e => setUpdateRoleForm({ role: e.target.value })}>
-                            <option value="landlord">Landlord</option>
-                            <option value="tenant">Tenant</option>
-                            <option value="hunter">Hunter</option>
-                            {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
-                            {profile.isSuperAdmin && <option value="superadmin">Super Admin</option>}
-                          </select>
+                          {inviteForm.role === 'landlord' && profile.isAdmin && (
+                            <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 space-y-3 bg-slate-50 dark:bg-slate-800/40">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Rent Payment Routing</h4>
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Settlement Beneficiary</label>
+                                <select 
+                                  className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none" 
+                                  value={inviteForm.rentRouting} 
+                                  onChange={e => setInviteForm({...inviteForm, rentRouting: e.target.value as 'admin' | 'direct'})}
+                                >
+                                  <option value="admin">Centralized Platform Account</option>
+                                  <option value="direct">Direct Landlord Account</option>
+                                </select>
+                              </div>
+
+                              {inviteForm.rentRouting === 'direct' && (
+                                <>
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Payout Method</label>
+                                    <select 
+                                      className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none" 
+                                      value={inviteForm.rentPayoutMethod} 
+                                      onChange={e => setInviteForm({...inviteForm, rentPayoutMethod: e.target.value as 'mpesa' | 'bank' | 'cash'})}
+                                    >
+                                      <option value="mpesa">M-Pesa</option>
+                                      <option value="bank">Bank Transfer</option>
+                                      <option value="cash">Cash / Manual</option>
+                                    </select>
+                                  </div>
+                                  {inviteForm.rentPayoutMethod === 'mpesa' && (
+                                    <div className="space-y-1.5">
+                                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">M-Pesa Settlement Phone / Till Number</label>
+                                      <Input className="h-9 text-xs" value={inviteForm.mpesaSettlementPhone || ''} onChange={e => setInviteForm({...inviteForm, mpesaSettlementPhone: e.target.value})} placeholder="e.g. 254700000000 or Till No" />
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsUpdateRoleOpen(false)}>Cancel</Button>
-                        <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleUpdateRole}>Update Role</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsInviteUserOpen(false)}>Cancel</Button>
+                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleInviteUser}>Send Invitation</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
 
-                  <Button variant="outline" className="rounded-xl font-bold">Export CSV</Button>
+                    <Dialog open={isUpdateRoleOpen} onOpenChange={setIsUpdateRoleOpen}>
+                      <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                        <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Update Access Role</DialogTitle>
+                          <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Modify permissions and access tier for {selectedUserForRole?.displayName}.
+                          </DialogDescription>
+                        </div>
+                        <div className="p-6 space-y-3.5">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Role Tier</label>
+                            <select className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none" value={updateRoleForm.role} onChange={e => setUpdateRoleForm({ role: e.target.value })}>
+                              <option value="landlord">Landlord</option>
+                              <option value="tenant">Tenant</option>
+                              <option value="hunter">Hunter</option>
+                              {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
+                              {profile.isSuperAdmin && <option value="superadmin">Super Admin</option>}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsUpdateRoleOpen(false)}>Cancel</Button>
+                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleUpdateRole}>Save Role</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Button variant="outline" size="sm" className="rounded-xl font-semibold text-xs" onClick={handleBulkExportUsers}>
+                      <FontAwesomeIcon icon={faDownload} className="mr-1.5 h-3 w-3 text-slate-400" />
+                      Export CSV
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardHeader>
+            </CardHeader>
             <CardContent className="p-0">
               {selectedUserIds.length > 0 && (
-                <div className="flex items-center gap-4 bg-zinc-100 dark:bg-zinc-800 p-4 rounded-xl mx-4 mt-4 mb-4">
-                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">{selectedUserIds.length} selected</span>
+                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 mx-4 my-3 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{selectedUserIds.length} users selected</span>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={handleBulkExportUsers} className="h-8 text-[10px] font-black uppercase tracking-widest">Export</Button>
-                    <Button size="sm" variant="outline" onClick={handleBulkPauseUsers} className="h-8 text-[10px] font-black uppercase tracking-widest text-amber-600">Pause / Unpause</Button>
-                    <Button size="sm" variant="outline" onClick={handleBulkDeleteUsers} className="h-8 text-[10px] font-black uppercase tracking-widest text-rose-600 border-rose-200">Delete</Button>
+                    <Button size="sm" variant="outline" onClick={handleBulkExportUsers} className="h-7 text-xs font-semibold">Export</Button>
+                    <Button size="sm" variant="outline" onClick={handleBulkPauseUsers} className="h-7 text-xs font-semibold text-amber-700">Pause / Resume</Button>
+                    <Button size="sm" variant="outline" onClick={handleBulkDeleteUsers} className="h-7 text-xs font-semibold text-rose-600 border-rose-200">Delete</Button>
                   </div>
                 </div>
               )}
-              <div className="overflow-x-auto overflow-y-auto max-h-[500px] relative">
+              <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                      <TableHead className="w-12 px-4"><Checkbox checked={currentUsers.length > 0 && selectedUserIds.length === currentUsers.length} onCheckedChange={toggleAllUsers} /></TableHead>
-                      <TableHead className="px-4 py-3 sm:px-8 sm:py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Entity Name</TableHead>
-                      <TableHead className="px-4 py-3 sm:py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 hidden sm:table-cell">Email</TableHead>
-                      <TableHead className="px-4 py-3 sm:py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Access Level</TableHead>
-                      {profile.isSuperAdmin && <TableHead className="px-4 py-3 sm:py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 hidden lg:table-cell">Platform</TableHead>}
-                      <TableHead className="px-4 py-3 sm:pr-8 sm:py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 text-right">Actions</TableHead>
+                    <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
+                      <TableHead className="w-10 px-4"><Checkbox checked={currentUsers.length > 0 && selectedUserIds.length === currentUsers.length} onCheckedChange={toggleAllUsers} /></TableHead>
+                      <TableHead className="px-4 py-3">Identity / Name</TableHead>
+                      <TableHead className="px-4 py-3 hidden sm:table-cell">Email Address</TableHead>
+                      <TableHead className="px-4 py-3">Access Level</TableHead>
+                      {profile.isSuperAdmin && <TableHead className="px-4 py-3 hidden lg:table-cell">Platform Instance</TableHead>}
+                      <TableHead className="px-4 py-3 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {currentUsers.map((u, i) => (
-                      <TableRow key={i} className={`hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800 group ${selectedUserIds.includes(u.uid) ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''}`}>
+                      <TableRow key={i} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${selectedUserIds.includes(u.uid) ? 'bg-slate-50 dark:bg-slate-800/40' : ''}`}>
                         <TableCell className="px-4"><Checkbox checked={selectedUserIds.includes(u.uid)} onCheckedChange={() => toggleUserSelection(u.uid)} /></TableCell>
-                        <TableCell className="px-4 py-3 sm:px-8 sm:py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-700 dark:to-zinc-600 flex items-center justify-center text-sm font-black text-zinc-600 dark:text-zinc-300 flex-shrink-0">
+                        <TableCell className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-bold shrink-0 border border-slate-200/60 dark:border-slate-700">
                               {u.displayName?.charAt(0) ?? '?'}
                             </div>
-                            <span className="font-bold text-zinc-900 dark:text-white">{u.displayName}</span>
+                            <span className="font-semibold text-xs text-slate-900 dark:text-white">{u.displayName}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="px-4 py-3 sm:px-0 sm:py-5 text-xs font-medium text-zinc-500 hidden sm:table-cell">{u.email}</TableCell>
-                        <TableCell className="px-4 py-3 sm:px-0 sm:py-5">
-                          <Badge className={`rounded-lg px-3 py-1 border-none font-black text-[9px] uppercase tracking-widest ${u.isSuperAdmin ? 'bg-rose-500/10 text-rose-600' : u.role === 'admin' ? 'bg-amber-500/10 text-amber-600' : u.role === 'landlord' ? 'bg-blue-500/10 text-blue-600' : u.role === 'tenant' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-purple-500/10 text-purple-600'}`}>
-                            {u.isSuperAdmin ? 'SuperAdmin' : u.role}
+                        <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal hidden sm:table-cell">{u.email}</TableCell>
+                        <TableCell className="px-4 py-3">
+                          <Badge variant={u.isSuperAdmin ? 'destructive' : u.role === 'admin' ? 'warning' : u.role === 'landlord' ? 'indigo' : u.role === 'tenant' ? 'success' : 'purple'}>
+                            {u.isSuperAdmin ? 'Super Admin' : u.role}
                           </Badge>
                         </TableCell>
                         {profile.isSuperAdmin && (
-                          <TableCell className="px-4 py-3 sm:px-0 sm:py-5 text-[10px] font-black text-zinc-400 tracking-tighter hidden lg:table-cell">
-                            {platforms.find(p => p.id === u.platformId)?.name || 'ROOT'}
+                          <TableCell className="px-4 py-3 text-xs text-slate-500 font-medium hidden lg:table-cell">
+                            {platforms.find(p => p.id === u.platformId)?.name || 'Root Platform'}
                           </TableCell>
                         )}
-                        <TableCell className="px-4 py-3 sm:pr-8 sm:py-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="h-8 w-8 rounded-xl" />}>
-                                <FontAwesomeIcon icon={faEllipsisVertical} />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 rounded-2xl">
-                                <div className="px-2 py-1.5 text-xs font-black uppercase text-zinc-400">Actions</div>
-                                <DropdownMenuSeparator />
-                                {onImpersonate && !u.isSuperAdmin && u.uid !== profile.uid && (
-                                  <DropdownMenuItem onClick={() => onImpersonate(u)} className="font-bold text-sm cursor-pointer">
-                                    <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-zinc-400" /> View As
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem onClick={() => { setSelectedUserForRole(u); setUpdateRoleForm({ role: u.role }); setIsUpdateRoleOpen(true); }} className="font-bold text-sm cursor-pointer">
-                                  <FontAwesomeIcon icon={faUserShield} className="mr-2 h-3.5 w-3.5 text-zinc-400" /> Update Role
+                        <TableCell className="px-4 py-3 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
+                                <FontAwesomeIcon icon={faEllipsisVertical} className="h-3.5 w-3.5" />
+                              </Button>
+                            } />
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
+                              <DropdownMenuLabel className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Node Operations</DropdownMenuLabel>
+                              <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-slate-800" />
+                              {onImpersonate && !u.isSuperAdmin && u.uid !== profile.uid && (
+                                <DropdownMenuItem onClick={() => onImpersonate(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                  <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-slate-400" /> Impersonate Node
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handlePauseAccount(u)} className="font-bold text-sm cursor-pointer text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/20">
-                                  <FontAwesomeIcon icon={u.status === 'suspended' ? faCheckCircle : faTimesCircle} className="mr-2 h-3.5 w-3.5" /> {u.status === 'suspended' ? 'Unpause Account' : 'Pause Account'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDeleteAccount(u)} className="font-bold text-sm cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20">
-                                  <FontAwesomeIcon icon={faTrash} className="mr-2 h-3.5 w-3.5" /> Delete Account
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                              )}
+                              <DropdownMenuItem onClick={() => { setSelectedUserForRole(u); setUpdateRoleForm({ role: u.role }); setIsUpdateRoleOpen(true); }} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                <FontAwesomeIcon icon={faUserShield} className="mr-2 h-3.5 w-3.5 text-slate-400" /> Change Role
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePauseAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20">
+                                <FontAwesomeIcon icon={u.status === 'suspended' ? faCheckCircle : faTimesCircle} className="mr-2 h-3.5 w-3.5" /> {u.status === 'suspended' ? 'Activate Account' : 'Pause Access'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleDeleteAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20">
+                                <FontAwesomeIcon icon={faTrash} className="mr-2 h-3.5 w-3.5" /> Delete Account
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}
                     {users.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={profile.isSuperAdmin ? 5 : 4} className="h-40 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">
-                          No users found.
+                        <TableCell colSpan={profile.isSuperAdmin ? 6 : 5} className="h-32 text-center text-slate-400 font-medium text-xs">
+                          No identity nodes matched the current filter criteria.
                         </TableCell>
                       </TableRow>
                     )}
@@ -1453,29 +1598,29 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               
               {/* Pagination Controls */}
               {totalUserPages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-4">
-                    Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, users.length)} of {users.length}
+                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
+                  <span className="text-xs text-slate-500 font-medium pl-2">
+                    Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, users.length)} of {users.length} users
                   </span>
-                  <div className="flex items-center gap-2 pr-4">
+                  <div className="flex items-center gap-1.5 pr-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={userPage === 1}
                       onClick={() => setUserPage(p => Math.max(1, p - 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
                     </Button>
-                    <span className="text-xs font-black text-zinc-600 min-w-[20px] text-center">{userPage}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{userPage}</span>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={userPage === totalUserPages}
                       onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
                     </Button>
                   </div>
                 </div>
@@ -1486,17 +1631,19 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── PENDING TAB ── */}
         {activeTab === 'pending' && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-xl font-black">Awaiting Authentication</CardTitle>
-                <CardDescription className="font-medium text-zinc-500">Invitations dispatched but not yet claimed.</CardDescription>
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Awaiting Authorization</CardTitle>
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Identity invitations dispatched but pending first-time authentication.
+                </CardDescription>
               </div>
               <div className="relative w-full sm:max-w-xs shrink-0">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input 
                   placeholder="Search invitations..." 
-                  className="h-9 pl-8 text-xs font-bold rounded-xl border-zinc-200" 
+                  className="h-9 pl-8 text-xs font-semibold rounded-xl" 
                   value={inviteSearch} 
                   onChange={(e) => { setInviteSearch(e.target.value); setInvitePage(1); }} 
                 />
@@ -1505,30 +1652,30 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Name</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Target Email</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Assigned Role</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Platform</TableHead>}
+                  <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
+                    <TableHead className="px-4 py-3">Recipient Name</TableHead>
+                    <TableHead className="px-4 py-3">Target Email</TableHead>
+                    <TableHead className="px-4 py-3">Assigned Role</TableHead>
+                    {profile.isSuperAdmin && <TableHead className="px-4 py-3">Platform Instance</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedInvs.map((inv, i) => (
-                    <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                      <TableCell className="px-8 py-5 font-bold">{inv.displayName}</TableCell>
-                      <TableCell className="text-xs font-medium">{inv.email}</TableCell>
-                      <TableCell><Badge variant="secondary" className="rounded-lg px-2 py-0.5 font-bold uppercase text-[9px]">{inv.role}</Badge></TableCell>
+                    <TableRow key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                      <TableCell className="px-4 py-3 text-xs font-semibold text-slate-900 dark:text-white">{inv.displayName}</TableCell>
+                      <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal">{inv.email}</TableCell>
+                      <TableCell className="px-4 py-3"><Badge variant="secondary">{inv.role}</Badge></TableCell>
                       {profile.isSuperAdmin && (
-                        <TableCell className="text-[10px] font-black text-zinc-400">
-                          {platforms.find(p => p.id === inv.platformId)?.name || 'EXTERNAL'}
+                        <TableCell className="px-4 py-3 text-xs text-slate-500 font-medium">
+                          {platforms.find(p => p.id === inv.platformId)?.name || 'Root Instance'}
                         </TableCell>
                       )}
                     </TableRow>
                   ))}
                   {paginatedInvs.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={profile.isSuperAdmin ? 4 : 3} className="h-40 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">
-                        No pending authorizations found.
+                      <TableCell colSpan={profile.isSuperAdmin ? 4 : 3} className="h-32 text-center text-slate-400 font-medium text-xs">
+                        No pending invitations found.
                       </TableCell>
                     </TableRow>
                   )}
@@ -1536,29 +1683,29 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               </Table>
 
               {totalInvitePages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-4">
+                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
+                  <span className="text-xs text-slate-500 font-medium pl-2">
                     Page {invitePage} of {totalInvitePages}
                   </span>
-                  <div className="flex items-center gap-2 pr-4">
+                  <div className="flex items-center gap-1.5 pr-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={invitePage === 1}
                       onClick={() => setInvitePage(p => Math.max(1, p - 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
                     </Button>
-                    <span className="text-xs font-black text-zinc-600 min-w-[20px] text-center">{invitePage}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{invitePage}</span>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={invitePage === totalInvitePages}
                       onClick={() => setInvitePage(p => Math.min(totalInvitePages, p + 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
                     </Button>
                   </div>
                 </div>
@@ -1964,17 +2111,19 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── NETWORK TAB ── */}
         {activeTab === 'platforms' && profile.isSuperAdmin && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-xl font-black">Platform Lease Network</CardTitle>
-                <CardDescription className="font-medium text-zinc-500">Monitoring and controlling all active software instances.</CardDescription>
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Platform Lease Network</CardTitle>
+                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Monitoring and lifecycle control for active tenant instances.
+                </CardDescription>
               </div>
               <div className="relative w-full sm:max-w-xs shrink-0">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input 
                   placeholder="Search platforms..." 
-                  className="h-9 pl-8 text-xs font-bold rounded-xl border-zinc-200" 
+                  className="h-9 pl-8 text-xs font-semibold rounded-xl" 
                   value={platformSearch} 
                   onChange={(e) => { setPlatformSearch(e.target.value); setPlatformPage(1); }} 
                 />
@@ -1983,43 +2132,44 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Platform</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Slug ID</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Node Owner</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Status</TableHead>
-                    <TableHead className="text-right px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Actions</TableHead>
+                  <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
+                    <TableHead className="px-4 py-3">Platform Identity</TableHead>
+                    <TableHead className="px-4 py-3">Routing Slug</TableHead>
+                    <TableHead className="px-4 py-3">Node Owner</TableHead>
+                    <TableHead className="px-4 py-3">Instance Status</TableHead>
+                    <TableHead className="text-right px-4 py-3">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedPlats.map((plat) => (
-                    <TableRow key={plat.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                      <TableCell className="px-8 py-5 font-black text-zinc-800 dark:text-white">{plat.name}</TableCell>
-                      <TableCell className="text-xs font-black font-mono tracking-tighter bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded inline-block mt-4">{plat.slug}</TableCell>
-                      <TableCell className="text-xs font-medium">{plat.ownerEmail}</TableCell>
-                      <TableCell>
-                        <Badge className={`rounded-xl px-4 py-1 font-black text-[9px] uppercase tracking-[0.1em] border-none ${plat.status === 'active' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-rose-600 hover:bg-rose-700 text-white'}`}>
+                    <TableRow key={plat.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                      <TableCell className="px-4 py-3 font-semibold text-xs text-slate-900 dark:text-white">{plat.name}</TableCell>
+                      <TableCell className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300">
+                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[11px]">
+                          {plat.slug}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal">{plat.ownerEmail}</TableCell>
+                      <TableCell className="px-4 py-3">
+                        <Badge variant={plat.status === 'active' ? 'success' : 'destructive'}>
                           {plat.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right px-8 py-5">
+                      <TableCell className="text-right px-4 py-3">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="rounded-xl h-10 w-10 p-0"
+                          className="h-7 text-xs font-semibold rounded-lg"
                           onClick={() => togglePlatformStatus(plat.id, plat.status)}
                         >
-                          {plat.status === 'active'
-                            ? <FontAwesomeIcon icon={faTimesCircle} className="h-5 w-5 text-rose-500" />
-                            : <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5 text-emerald-500" />
-                          }
+                          {plat.status === 'active' ? 'Suspend' : 'Activate'}
                         </Button>
                       </TableCell>
                     </TableRow>
                   ))}
                   {paginatedPlats.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-40 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">
+                      <TableCell colSpan={5} className="h-32 text-center text-slate-400 font-medium text-xs">
                         No platform lease instances found.
                       </TableCell>
                     </TableRow>
@@ -2028,29 +2178,29 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               </Table>
 
               {totalPlatformPages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-4">
+                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
+                  <span className="text-xs text-slate-500 font-medium pl-2">
                     Page {platformPage} of {totalPlatformPages}
                   </span>
-                  <div className="flex items-center gap-2 pr-4">
+                  <div className="flex items-center gap-1.5 pr-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={platformPage === 1}
                       onClick={() => setPlatformPage(p => Math.max(1, p - 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
                     </Button>
-                    <span className="text-xs font-black text-zinc-600 min-w-[20px] text-center">{platformPage}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{platformPage}</span>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={platformPage === totalPlatformPages}
                       onClick={() => setPlatformPage(p => Math.min(totalPlatformPages, p + 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
                     </Button>
                   </div>
                 </div>
@@ -2061,47 +2211,45 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── AUDIT LOG TAB ── */}
         {activeTab === 'audit' && profile.isSuperAdmin && (
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
+          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col xl:flex-row xl:items-center gap-4 justify-between">
                 <div>
-                  <CardTitle className="text-xl font-black flex items-center gap-2">
-                    <FontAwesomeIcon icon={faClipboardList} className="h-5 w-5 text-zinc-400" />
-                    System Audit Log
+                  <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                    <FontAwesomeIcon icon={faClipboardList} className="h-4 w-4 text-slate-400" />
+                    System Audit Trail
                   </CardTitle>
-                  <CardDescription className="font-medium text-zinc-500 mt-1">
-                    Real-time action trail across all users. Showing last 200 events.
+                  <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Immutable activity log of administrative actions across all instances.
                   </CardDescription>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                   <div className="relative w-full sm:max-w-xs shrink-0">
-                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
+                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                     <Input 
-                      placeholder="Search audit trail..." 
-                      className="h-9 pl-8 text-xs font-bold rounded-xl border-zinc-200" 
+                      placeholder="Search audit events..." 
+                      className="h-9 pl-8 text-xs font-semibold rounded-xl" 
                       value={auditSearch} 
                       onChange={(e) => { setAuditSearch(e.target.value); setAuditLogPage(1); }} 
                     />
                   </div>
                   {/* User filter */}
                   <div className="relative">
-                    <FontAwesomeIcon icon={faUser} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
                     <select
-                      className="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 pl-9 pr-8 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-zinc-400 transition-all appearance-none cursor-pointer min-w-[180px]"
+                      className="h-9 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
                       value={auditUserId}
                       onChange={e => { setAuditUserId(e.target.value); setAuditLogPage(1); }}
                     >
-                      <option value="all">All Users</option>
+                      <option value="all">All Actors</option>
                       {users.map(u => (
                         <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
                       ))}
                     </select>
-                    <FontAwesomeIcon icon={faChevronDown} className="absolute right-3 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-zinc-400 pointer-events-none" />
                   </div>
 
-                  <Button variant="outline" size="sm" className="gap-2 rounded-xl h-10 font-bold" onClick={exportAuditCSV}>
-                    <FontAwesomeIcon icon={faDownload} className="h-3.5 w-3.5" />
+                  <Button variant="outline" size="sm" className="gap-1.5 rounded-xl h-9 text-xs font-semibold" onClick={exportAuditCSV}>
+                    <FontAwesomeIcon icon={faDownload} className="h-3 w-3 text-slate-400" />
                     Export CSV
                   </Button>
                 </div>
@@ -2111,81 +2259,72 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             <CardContent className="p-0">
               {auditLoading ? (
                 <div className="flex items-center justify-center py-16 gap-3">
-                  <FontAwesomeIcon icon={faSpinner} className="h-5 w-5 animate-spin text-zinc-400" />
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Loading audit trail...</span>
+                  <FontAwesomeIcon icon={faSpinner} className="h-4 w-4 animate-spin text-slate-400" />
+                  <span className="text-xs font-semibold text-slate-400">Loading audit trail...</span>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                        <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Timestamp</TableHead>
-                        <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">User</TableHead>
-                        <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Action</TableHead>
-                        <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Resource</TableHead>
-                        <TableHead className="py-4 pr-8 font-black text-[10px] uppercase tracking-widest text-zinc-400">Details</TableHead>
+                      <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
+                        <TableHead className="px-4 py-3">Timestamp</TableHead>
+                        <TableHead className="px-4 py-3">User Node</TableHead>
+                        <TableHead className="px-4 py-3">Action</TableHead>
+                        <TableHead className="px-4 py-3">Resource</TableHead>
+                        <TableHead className="px-4 py-3 text-right">Metadata</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedAudits.map((log) => (
-                        <TableRow key={log.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                          <TableCell className="px-8 py-4">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-xs font-black text-zinc-700 dark:text-zinc-300">
+                        <TableRow key={log.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                          <TableCell className="px-4 py-3">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
                                 {new Date(log.createdAt).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })}
                               </span>
-                              <span className="text-[10px] font-medium text-zinc-400">
+                              <span className="text-[10px] text-slate-400 font-mono">
                                 {new Date(log.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-500">
+                              <div className="h-6 w-6 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold shrink-0">
                                 {log.userEmail.charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 max-w-[160px] truncate">
+                              <span className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[160px]">
                                 {log.userEmail}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${ACTION_COLORS[log.action] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                          <TableCell className="px-4 py-3">
+                            <span className="inline-flex px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                               {log.action.replace(/_/g, ' ')}
                             </span>
                           </TableCell>
-                          <TableCell>
-                            {log.resource ? (
-                              <span className="text-xs font-medium text-zinc-500 capitalize">{log.resource}</span>
-                            ) : (
-                              <span className="text-zinc-300 text-xs">—</span>
-                            )}
+                          <TableCell className="px-4 py-3 text-xs text-slate-500 capitalize">
+                            {log.resource || '—'}
                           </TableCell>
-                          <TableCell className="pr-8">
+                          <TableCell className="px-4 py-3 text-right">
                             {log.metadata && Object.keys(log.metadata).length > 0 ? (
-                              <details className="cursor-pointer">
-                                <summary className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest hover:text-zinc-600 transition-colors list-none flex items-center gap-1">
-                                  <FontAwesomeIcon icon={faChevronDown} className="h-2.5 w-2.5" />
-                                  View
+                              <details className="cursor-pointer inline-block text-left">
+                                <summary className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 transition-colors list-none">
+                                  View JSON
                                 </summary>
-                                <pre className="mt-2 text-[10px] bg-zinc-50 dark:bg-zinc-800 rounded-lg p-2 font-mono text-zinc-600 dark:text-zinc-300 max-w-xs overflow-x-auto">
+                                <pre className="mt-1 text-[10px] bg-slate-50 dark:bg-slate-800 rounded-lg p-2 font-mono text-slate-700 dark:text-slate-300 max-w-xs overflow-x-auto border border-slate-200/80 dark:border-slate-700">
                                   {JSON.stringify(log.metadata, null, 2)}
                                 </pre>
                               </details>
                             ) : (
-                              <span className="text-zinc-300 text-xs">—</span>
+                              <span className="text-slate-300 text-xs">—</span>
                             )}
                           </TableCell>
                         </TableRow>
                       ))}
                       {paginatedAudits.length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="h-40 text-center">
-                            <div className="flex flex-col items-center gap-2 text-zinc-400">
-                              <FontAwesomeIcon icon={faClipboardList} className="h-8 w-8 opacity-30" />
-                              <span className="font-bold uppercase tracking-widest text-xs">No audit events found.</span>
-                              <span className="text-[10px]">Events appear here as users interact with the system.</span>
-                            </div>
+                          <TableCell colSpan={5} className="h-32 text-center text-slate-400 font-medium text-xs">
+                            No audit trail entries matched the filter criteria.
                           </TableCell>
                         </TableRow>
                       )}
@@ -2195,29 +2334,29 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               )}
 
               {totalAuditLogPages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-4">
+                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
+                  <span className="text-xs text-slate-500 font-medium pl-2">
                     Page {auditLogPage} of {totalAuditLogPages}
                   </span>
-                  <div className="flex items-center gap-2 pr-4">
+                  <div className="flex items-center gap-1.5 pr-2">
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={auditLogPage === 1}
                       onClick={() => setAuditLogPage(p => Math.max(1, p - 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
                     </Button>
-                    <span className="text-xs font-black text-zinc-600 min-w-[20px] text-center">{auditLogPage}</span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{auditLogPage}</span>
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                      className="rounded-lg h-7 w-7 p-0"
                       disabled={auditLogPage === totalAuditLogPages}
                       onClick={() => setAuditLogPage(p => Math.min(totalAuditLogPages, p + 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
                     </Button>
                   </div>
                 </div>

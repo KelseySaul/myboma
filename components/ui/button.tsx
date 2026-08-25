@@ -4,43 +4,50 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold whitespace-nowrap transition-all duration-200 outline-none select-none will-change-transform backdrop-blur-md focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:border-ring/60 active:not-aria-[haspopup]:scale-[0.97] active:not-aria-[haspopup]:shadow-none disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-xl border text-sm font-semibold whitespace-nowrap transition-all duration-150 outline-none select-none focus-visible:ring-2 focus-visible:ring-slate-950/20 focus-visible:border-slate-900 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 cursor-pointer",
   {
     variants: {
       variant: {
-        // Primary — dark frosted glass
+        // Primary — Deep Slate Solid
         default:
-          "bg-zinc-900/90 dark:bg-white/10 text-white dark:text-zinc-100 border-zinc-700/50 dark:border-white/15 shadow-[0_2px_14px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-zinc-900 dark:hover:bg-white/20 hover:-translate-y-0.5 hover:shadow-[0_6px_24px_rgba(0,0,0,0.22),inset_0_1px_0_rgba(255,255,255,0.1)] active:translate-y-0",
+          "bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 border-slate-900 dark:border-slate-50 shadow-sm hover:bg-slate-800 dark:hover:bg-slate-200 active:bg-slate-950",
 
-        // Outlined — light frosted glass
+        // Outlined — Crisp White / Slate Border
         outline:
-          "bg-white/60 dark:bg-white/5 text-zinc-700 dark:text-zinc-200 border-white/80 dark:border-white/10 shadow-[0_2px_10px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] hover:bg-white/90 dark:hover:bg-white/10 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(0,0,0,0.09),inset_0_1px_0_rgba(255,255,255,1)] aria-expanded:bg-white/90 aria-expanded:text-foreground",
+          "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700",
 
-        // Secondary — mid-tone frosted glass
+        // Secondary — Soft Slate Neutral
         secondary:
-          "bg-zinc-100/70 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-200 border-zinc-200/80 dark:border-zinc-700/50 shadow-[0_2px_10px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.8)] hover:bg-zinc-100/90 dark:hover:bg-zinc-700/60 hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(0,0,0,0.08)] aria-expanded:bg-zinc-100/90",
+          "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-transparent hover:bg-slate-200/80 dark:hover:bg-slate-700 shadow-xs",
 
-        // Ghost — ultra-transparent glass, gains frost on hover
+        // Ghost — Minimal Transparent
         ghost:
-          "bg-transparent border-transparent text-zinc-600 dark:text-zinc-400 shadow-none hover:bg-white/50 dark:hover:bg-white/8 hover:border-white/60 dark:hover:border-white/10 hover:shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 hover:text-zinc-800 dark:hover:text-zinc-200 aria-expanded:bg-white/50 aria-expanded:text-foreground active:translate-y-0",
+          "bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100",
 
-        // Destructive — rose frosted glass
+        // Destructive — Crisp Red
         destructive:
-          "bg-rose-50/80 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/40 shadow-[0_2px_10px_rgba(225,29,72,0.08),inset_0_1px_0_rgba(255,255,255,0.8)] hover:bg-rose-100/80 dark:hover:bg-rose-900/40 hover:-translate-y-0.5 hover:shadow-[0_5px_18px_rgba(225,29,72,0.14)] focus-visible:ring-rose-500/30",
+          "bg-rose-600 dark:bg-rose-600 text-white border-rose-600 shadow-xs hover:bg-rose-700 dark:hover:bg-rose-700 focus-visible:ring-rose-500/30",
 
-        // Link — no glass, just text
-        link: "bg-transparent border-transparent text-primary underline-offset-4 shadow-none hover:underline hover:-translate-y-0.5 active:translate-y-0",
+        // Success — Crisp Emerald
+        success:
+          "bg-emerald-600 text-white border-emerald-600 shadow-xs hover:bg-emerald-700 focus-visible:ring-emerald-500/30",
+
+        // Indigo / Brand
+        indigo:
+          "bg-indigo-600 text-white border-indigo-600 shadow-xs hover:bg-indigo-700 focus-visible:ring-indigo-500/30",
+
+        // Link — Minimal Text
+        link: "bg-transparent border-transparent text-slate-900 dark:text-slate-100 underline-offset-4 hover:underline",
       },
       size: {
-        default:
-          "h-9 gap-2 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        xs: "h-6 gap-1 rounded-xl px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 rounded-xl px-3 text-[0.8rem] has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-11 gap-2 px-5 text-base has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-xl [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8 rounded-xl",
-        "icon-lg": "size-11",
+        default: "h-9 gap-2 px-3.5",
+        xs: "h-6.5 gap-1 rounded-lg px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 gap-1.5 rounded-lg px-2.5 text-xs [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-11 gap-2 rounded-xl px-5 text-sm font-bold",
+        icon: "size-9 rounded-xl",
+        "icon-xs": "size-6.5 rounded-lg [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-8 rounded-lg [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-lg": "size-11 rounded-xl",
       },
     },
     defaultVariants: {

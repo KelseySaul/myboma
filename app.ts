@@ -1,11 +1,13 @@
+// Must run before any other import: several modules (db/client.ts, server/auth.ts) read
+// process.env at import time, which happens before this file's own top-level code runs.
+import 'dotenv/config';
 import * as Sentry from '@sentry/node';
 import cors from 'cors';
 import {randomUUID} from 'node:crypto';
-import dotenv from 'dotenv';
 import {and, desc, eq, ilike, inArray, isNull, ne, or, sql} from 'drizzle-orm';
 import express, {type ErrorRequestHandler, type NextFunction, type Request, type Response} from 'express';
 import multer from 'multer';
-import {buildObjectKey, uploadObject} from './server/storage.ts';
+import {buildObjectKey, getObjectStream, uploadObject} from './server/storage.ts';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import {createProxyMiddleware} from 'http-proxy-middleware';
@@ -62,8 +64,6 @@ import {
 import { handleSendRentReminder, processAutomatedRentReminders } from './server/notificationHandlers.ts';
 import { syncAutomaticRentInvoices, ensureRentInvoiceForProperty } from './server/rentInvoiceSync.ts';
 import cron from 'node-cron';
-
-dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.SERVER_PORT || 3001);
@@ -284,26 +284,14 @@ const mpesaCallbackSchema = z
 
 const getClientKind = (req: Request): ClientKind => (req.baseUrl.includes('/mobile') ? 'mobile' : 'web');
 
-const getBearerToken = (req: Request) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return null;
-  return header.slice('Bearer '.length).trim();
-};
-
 const requireAuth = asyncHandler(async (req, res, next) => {
-  const token = getBearerToken(req);
-
-  if (!token) {
-    res.status(401).json({error: 'Missing bearer token'});
-    return;
-  }
-
-  // The bearer plugin resolves an `Authorization: Bearer <token>` header into a
-  // session for this request — see server/auth.ts.
+  // Native clients send `Authorization: Bearer <token>` (resolved by the bearer
+  // plugin); web clients send the Better-Auth session cookie instead — both are
+  // present on req.headers, so getSession alone determines whether either is valid.
   const session = await auth.api.getSession({headers: fromNodeHeaders(req.headers)});
 
   if (!session?.user) {
-    res.status(401).json({error: 'Invalid or expired token'});
+    res.status(401).json({error: 'Not authenticated'});
     return;
   }
 
@@ -1605,6 +1593,34 @@ app.get('/api/public/properties/available', publicLimiter, asyncHandler(async (_
   });
   res.json(rows.map((p) => ({...p, price: Number(p.price)})));
 }));
+
+/** Public file serving — mirrors the old Supabase bucket, which had public=true and a
+ * "Property images are public" SELECT policy on storage.objects with no auth required. */
+app.get('/api/files/*', publicLimiter, asyncHandler(async (req, res) => {
+  const key = (req.params as unknown as string[])[0];
+  if (!key) {
+    res.status(400).json({error: 'Missing file key'});
+    return;
+  }
+  try {
+    const object = await getObjectStream(key);
+    if (object.ContentType) res.setHeader('Content-Type', object.ContentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    const body = object.Body as NodeJS.ReadableStream | undefined;
+    if (!body) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    body.pipe(res);
+  } catch (err: any) {
+    if (err?.name === 'NoSuchKey') {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    throw err;
+  }
+}));
+
 app.post(
   '/api/waitlist',
   waitlistLimiter,
@@ -1703,8 +1719,8 @@ bffRouter.post(
     }
     const subpath = typeof req.body?.subpath === 'string' ? req.body.subpath.replace(/^\/+|\/+$/g, '') : undefined;
     const key = buildObjectKey(req.profile!.uid, file.originalname, subpath);
-    const url = await uploadObject(key, file.buffer, file.mimetype);
-    res.status(201).json({url});
+    await uploadObject(key, file.buffer, file.mimetype);
+    res.status(201).json({url: `${appBaseUrl}/api/files/${key}`});
   }),
 );
 

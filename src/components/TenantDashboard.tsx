@@ -522,162 +522,176 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
   };
 
   return (
-    <div className="db pb-24 sm:pb-8 animate-in fade-in duration-700">
-      <div className="hero">
-        <div className="hero-row">
-          <div>
-            <h1 className="hero-title">{pageTitle}</h1>
-            <div className="hidden sm:flex flex-col items-start sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-zinc-400 mt-2 font-bold">
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                <span>{profile.phone || 'No phone set'}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <FontAwesomeIcon icon={faEnvelope} className="h-3 w-3" />
-                <span>{profile.email}</span>
-              </div>
-              <Button variant="link" size="sm" className="h-auto p-0 text-zinc-500 font-black uppercase tracking-widest text-[10px] hover:text-zinc-900" onClick={() => setIsProfileOpen(true)}>
-                Secure Profile
-              </Button>
-            </div>
+    <div className="db w-full min-w-0 pb-24 sm:pb-8 animate-in fade-in duration-300">
+      {/* ── Page Header ─────────────────────────── */}
+      <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
+              <FontAwesomeIcon icon={faHome} className="h-2.5 w-2.5" />
+              Resident Node
+            </span>
+            <span className="text-xs text-slate-400 font-medium">·</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              {profile.displayName || profile.email}
+            </span>
           </div>
-          <div className="hero-actions flex flex-wrap gap-2">
-            {nextPayment && currentTab !== 'dashboard' && (
-              <button className="btn-primary" onClick={() => setActiveTab('dashboard')}>
-                <FontAwesomeIcon icon={faWallet} className="mr-1" /> Pay Rent
-              </button>
-            )}
-            {property && (
-              <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
-                <DialogTrigger render={
-                  <button className="btn-ghost hidden sm:inline-flex">
-                    <FontAwesomeIcon icon={faTools} className="mr-1" /> Maintenance
-                  </button>
-                } />
-                <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl p-0 overflow-hidden bg-white dark:bg-zinc-900">
-                  <div className="bg-zinc-950 p-8 text-white">
-                    <DialogTitle className="text-2xl font-black">Maintenance Request</DialogTitle>
-                    <DialogDescription className="text-zinc-400 font-medium mt-1">Send a request to property management.</DialogDescription>
-                  </div>
-                  <div className="p-8 space-y-6">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Issue Title</Label>
-                      <Input className="h-12 rounded-xl" value={newRequest.title} onChange={e => setNewRequest({...newRequest, title: e.target.value})} placeholder="Leaking faucet" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Urgency Level</Label>
-                      <Select value={newRequest.priority} onValueChange={(v: any) => setNewRequest({...newRequest, priority: v})}>
-                        <SelectTrigger className="h-12 rounded-xl border-zinc-200 font-bold">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-black uppercase tracking-widest text-zinc-400">Details</Label>
-                      <Textarea className="rounded-xl min-h-[100px]" value={newRequest.description} onChange={e => setNewRequest({...newRequest, description: e.target.value})} placeholder="Describe the issue" />
-                    </div>
-                  </div>
-                  <div className="p-8 bg-zinc-50 dark:bg-zinc-800/50 flex justify-end gap-4">
-                    <Button variant="ghost" className="font-bold rounded-xl" onClick={() => setIsReportOpen(false)}>Cancel</Button>
-                    <Button className="h-12 px-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-black shadow-lg" onClick={handleReportIssue}>Submit Ticket</Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white capitalize">
+            {pageTitle}
+          </h1>
+          <div className="flex items-center gap-4 text-xs text-slate-400 mt-1 font-medium">
+            <span className="flex items-center gap-1.5">
+              <FontAwesomeIcon icon={faPhone} className="h-2.5 w-2.5" />
+              {profile.phone || 'No phone'}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <FontAwesomeIcon icon={faEnvelope} className="h-2.5 w-2.5" />
+              {profile.email}
+            </span>
+            <button
+              onClick={() => setIsProfileOpen(true)}
+              className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 cursor-pointer underline underline-offset-2"
+            >
+              Edit Profile
+            </button>
+          </div>
+        </div>
 
-            <Dialog open={isManualPaymentOpen} onOpenChange={setIsManualPaymentOpen}>
-              <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
-                <DialogHeader>
-                  <DialogTitle className="text-xl font-black uppercase tracking-tight text-emerald-600">Manual M-Pesa Payment</DialogTitle>
-                  <DialogDescription className="font-medium text-zinc-500">
-                    Your landlord requires direct M-Pesa payments. Please follow the instructions below and provide the receipt code.
+        <div className="flex items-center gap-2 flex-wrap">
+          {nextPayment && currentTab !== 'dashboard' && (
+            <Button size="sm" className="font-bold text-xs gap-1.5 rounded-xl cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+              <FontAwesomeIcon icon={faWallet} className="h-3 w-3" />
+              Pay Rent
+            </Button>
+          )}
+          {property && (
+            <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
+              <DialogTrigger render={
+                <Button variant="outline" size="sm" className="font-semibold text-xs gap-1.5 rounded-xl cursor-pointer">
+                  <FontAwesomeIcon icon={faTools} className="h-3 w-3 text-slate-400" />
+                  Report Issue
+                </Button>
+              } />
+              <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+                <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Maintenance Request</DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Submit a repair ticket directly to your property management.
                   </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-6 py-4">
-                  <div className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-4 border border-zinc-100 dark:border-zinc-700">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Instructions</p>
-                    <ol className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 space-y-2 list-decimal list-inside">
-                      <li>Go to your M-Pesa menu and select <strong>Send Money</strong> or <strong>Lipa na M-Pesa</strong>.</li>
-                      <li>
-                        Use the recipient number/till: 
-                        <span className="ml-2 font-black text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded-md">
-                          {landlord?.mpesaSettlementPhone || landlord?.phone || 'Not provided'}
-                        </span>
-                      </li>
-                      <li>Enter the exact rent amount.</li>
-                      <li>Complete the transaction with your PIN.</li>
-                      <li>Copy the M-Pesa receipt code (e.g., <span className="font-mono text-xs">RKJ4...</span>) and paste it below.</li>
-                    </ol>
+                </div>
+                <div className="p-6 space-y-3.5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Issue Title</Label>
+                    <Input className="h-10" value={newRequest.title} onChange={e => setNewRequest({...newRequest, title: e.target.value})} placeholder="e.g. Leaking pipe under kitchen sink" />
                   </div>
-                  <div className="grid gap-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">M-Pesa Receipt Code</label>
-                    <Input 
-                      className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800 font-mono uppercase" 
-                      placeholder="e.g. RKJ4ABC123" 
-                      value={manualPaymentForm.receiptCode}
-                      onChange={e => setManualPaymentForm({...manualPaymentForm, receiptCode: e.target.value.toUpperCase()})}
-                    />
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Urgency Level</Label>
+                    <Select value={newRequest.priority} onValueChange={(v: any) => setNewRequest({...newRequest, priority: v})}>
+                      <SelectTrigger className="h-10 rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="low">Low (Cosmetic / General)</SelectItem>
+                        <SelectItem value="medium">Medium (Standard Repair)</SelectItem>
+                        <SelectItem value="high">High (Urgent Attention)</SelectItem>
+                        <SelectItem value="urgent">Urgent (Emergency / Hazard)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Detailed Description</Label>
+                    <Textarea className="rounded-xl min-h-[90px] text-xs" value={newRequest.description} onChange={e => setNewRequest({...newRequest, description: e.target.value})} placeholder="Describe what happened and when you noticed it..." />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsManualPaymentOpen(false)}>Cancel</Button>
-                  <Button 
-                    className="h-10 px-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black" 
-                    onClick={handleManualPaymentSubmit}
-                    disabled={isSubmittingManual}
-                  >
-                    {isSubmittingManual ? 'Verifying...' : 'Submit Verification'}
-                  </Button>
-                </DialogFooter>
+                <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                  <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsReportOpen(false)}>Cancel</Button>
+                  <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleReportIssue}>Submit Ticket</Button>
+                </div>
               </DialogContent>
             </Dialog>
-          </div>
+          )}
+
+          <Dialog open={isManualPaymentOpen} onOpenChange={setIsManualPaymentOpen}>
+            <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+              <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-emerald-950/20">
+                <DialogTitle className="text-lg font-bold text-emerald-600 dark:text-emerald-400">Direct M-Pesa Settlement</DialogTitle>
+                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Transfer rent to the landlord's registered settlement number and enter the confirmation code.
+                </DialogDescription>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200/80 dark:border-slate-700 text-xs space-y-2">
+                  <p className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">Payment Instructions</p>
+                  <ol className="text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal list-inside">
+                    <li>Open M-Pesa and select <strong>Send Money</strong> or <strong>Lipa na M-Pesa</strong>.</li>
+                    <li>Recipient: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{landlord?.mpesaSettlementPhone || landlord?.phone || 'Not provided'}</strong></li>
+                    <li>Enter exact rent amount and your PIN.</li>
+                    <li>Paste the confirmation receipt code below.</li>
+                  </ol>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">M-Pesa Receipt Code</Label>
+                  <Input 
+                    className="h-10 rounded-xl font-mono uppercase text-xs" 
+                    placeholder="e.g. RKJ4ABC123" 
+                    value={manualPaymentForm.receiptCode}
+                    onChange={e => setManualPaymentForm({...manualPaymentForm, receiptCode: e.target.value.toUpperCase()})}
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsManualPaymentOpen(false)}>Cancel</Button>
+                <Button 
+                  size="sm"
+                  className="font-bold text-xs rounded-xl" 
+                  onClick={handleManualPaymentSubmit}
+                  disabled={isSubmittingManual}
+                >
+                  {isSubmittingManual ? 'Submitting...' : 'Submit Receipt'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 mt-6">
+      <div className="px-6 md:px-8 mt-6">
         {reminderAlert && currentTab === 'dashboard' && (
-          <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 font-black text-sm uppercase tracking-widest ${reminderAlert.type === 'urgent' ? 'bg-rose-500/10 text-rose-600 border border-rose-500/20' : 'bg-amber-500/10 text-amber-600 border border-amber-500/20'}`}>
-            <FontAwesomeIcon icon={faExclamationCircle} className="h-5 w-5 shrink-0" />
+          <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold ${reminderAlert.type === 'urgent' ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800' : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800'}`}>
+            <FontAwesomeIcon icon={faExclamationCircle} className="h-4 w-4 shrink-0" />
             {reminderAlert.text}
           </div>
         )}
 
         {currentTab === 'dashboard' && (
-          <div className="space-y-4">
+          <div className="space-y-6 animate-in fade-in duration-300">
             {property && landlord ? (
               <>
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Rent Arrears</span>
-                      <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-4 w-4' : 'text-emerald-500 h-4 w-4'} />
+                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rent Arrears</span>
+                      <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-3.5 w-3.5' : 'text-emerald-500 h-3.5 w-3.5'} />
                     </div>
                     <div>
-                      <p className={`text-2xl font-black tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-zinc-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
-                      <p className="mt-1 text-xs font-bold text-zinc-400">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
+                      <p className={`text-2xl font-bold tracking-tight tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
+                      <p className="mt-1 text-xs text-slate-400 font-medium">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Upcoming Rent</span>
-                      <FontAwesomeIcon icon={faClock} className="text-amber-500 h-4 w-4" />
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upcoming Due</span>
+                      <FontAwesomeIcon icon={faClock} className="text-amber-500 h-3.5 w-3.5" />
                     </div>
                     <div>
                       {displayUpcoming ? (
                         <>
-                          <p className="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
                             Due {formatDate(displayUpcoming.dueDate)}
-                            <span className="mx-2 text-zinc-300">•</span>
-                            <span className={upcomingDaysRemaining! <= 3 ? 'text-rose-500' : 'text-emerald-500'}>
+                            <span className="mx-1.5 text-slate-300">·</span>
+                            <span className={upcomingDaysRemaining! <= 3 ? 'text-rose-600' : 'text-emerald-600'}>
                               {upcomingDaysRemaining! < 0 ? `${Math.abs(upcomingDaysRemaining!)} days ago` : 
                                upcomingDaysRemaining === 0 ? 'Due Today' : 
                                `In ${upcomingDaysRemaining} day${upcomingDaysRemaining === 1 ? '' : 's'}`}
@@ -686,83 +700,74 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
                         </>
                       ) : (
                         <>
-                          <p className="text-2xl font-black text-zinc-900 dark:text-white tabular-nums">KES 0</p>
-                          <p className="mt-1 text-xs font-bold text-emerald-600">Rent clear</p>
+                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">KES 0</p>
+                          <p className="mt-1 text-xs text-emerald-600 font-semibold">Rent cleared</p>
                         </>
                       )}
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-zinc-900 rounded-2xl p-4 flex flex-col justify-between border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Pay Rent</span>
-                      <FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs sm:col-span-2 lg:col-span-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Checkout / Invoicing</span>
+                      <FontAwesomeIcon icon={faWallet} className="text-blue-500 h-3.5 w-3.5" />
                     </div>
                     <div>
                       {nextPayment ? (
                         <div className="space-y-3">
-                          <div className="flex flex-col">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-lg font-black text-zinc-900 dark:text-white">{formatMoney(nextPayment.amount)}</p>
-                              {paymentStatusBadge(nextPayment)}
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Due {formatDate(nextPayment.dueDate)}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-lg font-bold text-slate-900 dark:text-white">{formatMoney(nextPayment.amount)}</span>
+                            {paymentStatusBadge(nextPayment)}
                           </div>
                           {payButtons(nextPayment)}
                         </div>
-                      ) : payments.length === 0 ? (
-                        <div className="flex items-center gap-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 p-3 text-amber-700 dark:text-amber-500">
-                          <FontAwesomeIcon icon={faExclamationCircle} className="h-4 w-4" />
-                          <p className="font-bold text-[10px] uppercase tracking-widest">No invoice</p>
-                        </div>
                       ) : (
-                        <div className="flex items-center gap-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-500">
-                          <FontAwesomeIcon icon={faCheckCircle} className="h-4 w-4" />
-                          <p className="font-bold text-[10px] uppercase tracking-widest">All clear</p>
+                        <div className="py-2 text-center text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1.5">
+                          <FontAwesomeIcon icon={faCheckCircle} className="h-3.5 w-3.5" />
+                          Account current & cleared
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden mt-2">
-                  <div className="grid sm:grid-cols-5 h-full">
-                    <div className="sm:col-span-3 p-5 flex flex-col justify-center">
-                      <div className="mb-4">
-                        <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-md mb-2 inline-block">Current Residence</span>
-                        <h2 className="text-xl font-black text-zinc-900 dark:text-white leading-tight">{property.title}</h2>
-                        <div className="flex items-center gap-2 text-zinc-500 mt-1 font-bold text-xs">
-                          <FontAwesomeIcon icon={faMapMarkerAlt} className="text-zinc-400" />
+                {/* Current Residence Card */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+                  <div className="grid md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-800">
+                    <div className="md:col-span-3 p-6 space-y-4">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Active Tenancy</span>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">{property.title}</h2>
+                        <div className="flex items-center gap-1.5 text-slate-500 mt-1 text-xs font-medium">
+                          <FontAwesomeIcon icon={faMapMarkerAlt} className="h-3 w-3 text-slate-400" />
                           {property.location}
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
+                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
                         <div>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Rent Cycle</p>
-                          <p className="text-xs font-black text-zinc-900 dark:text-white">Monthly</p>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Billing Schedule</span>
+                          <span className="font-bold text-slate-900 dark:text-white">Monthly</span>
                         </div>
                         <div>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-0.5">Lease Status</p>
-                          <p className="text-xs font-black text-emerald-600">Active</p>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Lease Status</span>
+                          <span className="font-bold text-emerald-600">Active</span>
                         </div>
                       </div>
                     </div>
-                    <div className="sm:col-span-2 bg-zinc-50 dark:bg-zinc-950/50 border-l border-zinc-100 dark:border-zinc-800 flex items-center">
-                      <div className="p-5 flex flex-col justify-center w-full">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 mb-3">Management</p>
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                              <FontAwesomeIcon icon={faUser} className="h-3 w-3" />
-                            </div>
-                            <span className="font-bold text-xs text-zinc-900 dark:text-white">{landlord.displayName}</span>
+                    <div className="md:col-span-2 p-6 bg-slate-50/50 dark:bg-slate-800/20 space-y-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Property Manager</span>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            <FontAwesomeIcon icon={faUser} className="h-3 w-3" />
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700">
-                              <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                            </div>
-                            <span className="font-bold text-xs text-zinc-900 dark:text-white">{landlord.phone || "No phone set"}</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{landlord.displayName}</span>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
                           </div>
+                          <span className="text-slate-600 dark:text-slate-300">{landlord.phone || "No phone listed"}</span>
                         </div>
                       </div>
                     </div>
@@ -770,59 +775,57 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
                 </div>
               </>
             ) : (
-              <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col items-center justify-center text-center rounded-3xl p-12 mb-8 shadow-sm">
-                <div className="h-16 w-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center text-zinc-300 dark:text-zinc-600 mb-4 border border-zinc-100 dark:border-zinc-800">
-                  <FontAwesomeIcon icon={faExclamationCircle} className="h-8 w-8" />
+              <div className="border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col items-center justify-center text-center rounded-2xl p-12 shadow-xs">
+                <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                  <FontAwesomeIcon icon={faExclamationCircle} className="h-5 w-5" />
                 </div>
-                <h3 className="text-lg font-black text-zinc-900 dark:text-white mb-1">Pending Assignment</h3>
-                <p className="text-zinc-500 font-medium text-sm">Your account is not yet linked to a property.</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Awaiting Unit Assignment</h3>
+                <p className="text-slate-500 text-xs max-w-sm">Your resident account is not yet assigned to an active property lease.</p>
               </div>
             )}
           </div>
         )}
 
         {currentTab === 'finances' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Payment History</h2>
-                <p className="text-xs font-medium text-zinc-500">Receipts are available for cleared rent payments.</p>
-              </div>
-              <FontAwesomeIcon icon={faReceipt} className="h-5 w-5 text-emerald-500" />
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Transaction History</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Cleared rent receipts and payment audit trail.</p>
             </div>
 
             {orderedPayments.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {orderedPayments.map(payment => (
-                  <div key={payment.id} className="flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm">
+                  <div key={payment.id} className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 shadow-xs">
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <p className="text-base font-black text-zinc-900 dark:text-white">{formatMoney(payment.amount)}</p>
+                        <span className="text-base font-bold text-slate-900 dark:text-white tabular-nums">{formatMoney(payment.amount)}</span>
                         {paymentStatusBadge(payment)}
                       </div>
-                      <div className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                        <span>Due {formatDate(payment.dueDate)}</span>
-                        <span>{payment.paidAt ? `Paid ${formatDate(payment.paidAt)}` : 'Awaiting payment'}</span>
+                      <div className="flex flex-col gap-1 text-xs text-slate-400 font-medium">
+                        <span>Due: {formatDate(payment.dueDate)}</span>
+                        <span>{payment.paidAt ? `Paid: ${formatDate(payment.paidAt)}` : 'Awaiting confirmation'}</span>
                       </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
                       {payment.status === 'paid' ? (
                         <a
                           href={getReceiptDownloadUrl(payment)}
                           download={getReceiptFileName(payment)}
                           target={payment.receiptUrl ? '_blank' : undefined}
                           rel={payment.receiptUrl ? 'noreferrer' : undefined}
-                          className="inline-flex w-full h-10 items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 text-xs font-bold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                          className="inline-flex w-full h-9 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
                         >
                           <FontAwesomeIcon icon={payment.receiptUrl ? faExternalLinkAlt : faDownload} className="h-3 w-3" />
-                          Receipt
+                          Download Receipt
                         </a>
                       ) : (
                         <Button
-                          className="w-full h-10 rounded-xl font-black uppercase tracking-widest text-[10px] bg-zinc-900 text-white dark:bg-white dark:text-black"
+                          size="sm"
+                          className="w-full h-9 rounded-xl font-bold text-xs"
                           onClick={() => setActiveTab('dashboard')}
                         >
-                          Pay Now
+                          Pay Invoice
                         </Button>
                       )}
                     </div>
@@ -830,96 +833,90 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
-                <FontAwesomeIcon icon={faHistory} className="h-8 w-8 opacity-50 mb-3" />
-                <p className="font-bold text-xs">No Payments Found</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <FontAwesomeIcon icon={faHistory} className="h-6 w-6 opacity-40 mb-2" />
+                <p className="font-semibold text-xs">No Payment Records Found</p>
               </div>
             )}
           </div>
         )}
 
         {currentTab === 'maintenance' && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Maintenance History</h2>
-                <p className="text-xs font-medium text-zinc-500">Track every ticket sent to management.</p>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Maintenance Tickets</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Track reported issues and management repair status.</p>
               </div>
-              <Button className="h-10 rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-black font-black text-xs px-4" onClick={() => setIsReportOpen(true)}>
-                <FontAwesomeIcon icon={faPlus} className="mr-2" /> Request
+              <Button size="sm" className="font-bold text-xs gap-1.5 rounded-xl" onClick={() => setIsReportOpen(true)}>
+                <FontAwesomeIcon icon={faPlus} className="h-3 w-3" /> New Request
               </Button>
             </div>
 
             {requests.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {[...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(req => (
-                  <div key={req.id} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 shadow-sm flex flex-col justify-between">
+                  <div key={req.id} className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 shadow-xs flex flex-col justify-between">
                     <div>
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="font-black text-sm text-zinc-900 dark:text-white">{req.title}</p>
-                        <Badge className={`rounded-lg border-none px-2 py-1 font-black text-[8px] uppercase tracking-widest ${
-                          req.status === 'resolved' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10' :
-                          req.status === 'in-progress' ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' : 'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
-                        }`}>
+                        <h3 className="font-bold text-sm text-slate-900 dark:text-white">{req.title}</h3>
+                        <Badge variant={req.status === 'resolved' ? 'success' : req.status === 'in-progress' ? 'info' : 'warning'}>
                           {req.status}
                         </Badge>
                       </div>
-                      <p className="text-xs font-medium text-zinc-500 line-clamp-2">{req.description}</p>
+                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{req.description}</p>
                     </div>
-                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                      <span className="text-[10px] font-bold text-zinc-400">{formatDate(req.createdAt)}</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{req.priority}</span>
+                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+                      <span className="text-slate-400 font-medium">{formatDate(req.createdAt)}</span>
+                      <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-500">{req.priority} Priority</span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
-                <FontAwesomeIcon icon={faFileAlt} className="h-8 w-8 opacity-50 mb-3" />
-                <p className="font-bold text-xs">No Maintenance History</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <FontAwesomeIcon icon={faTools} className="h-6 w-6 opacity-40 mb-2" />
+                <p className="font-semibold text-xs">No Maintenance Requests</p>
               </div>
             )}
           </div>
         )}
 
         {currentTab === 'notices' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black text-zinc-900 dark:text-white">Notifications</h2>
-                <p className="text-xs font-medium text-zinc-500">Rent clearance and upcoming payment notices.</p>
-              </div>
-              <FontAwesomeIcon icon={faBell} className="text-purple-500 h-5 w-5" />
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Resident Notices</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Rent clearance notices and community broadcasts.</p>
             </div>
 
             {noticeItems.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {noticeItems.map(note => (
-                  <button
+                  <div
                     key={note.id}
-                    className={`w-full flex items-start gap-4 p-4 rounded-2xl border transition-all text-left ${note.read ? 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800' : 'bg-white dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 shadow-sm'}`}
+                    className={`w-full flex items-start gap-3.5 p-4 rounded-2xl border transition-all text-left ${note.read ? 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 opacity-80' : 'bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800 shadow-xs'}`}
                     onClick={() => note.stored && !note.read && markNotificationRead(note.id)}
                   >
-                    <div className="h-10 w-10 rounded-xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faBell} />
+                    <div className="h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <h4 className={`text-sm tracking-tight ${note.read ? 'font-bold text-zinc-700 dark:text-zinc-300' : 'font-black text-zinc-900 dark:text-white'}`}>{note.title}</h4>
-                        {!note.read && <span className="h-2 w-2 rounded-full bg-zinc-900 dark:bg-white" />}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{note.title}</h4>
+                        {!note.read && <span className="h-2 w-2 rounded-full bg-blue-600" />}
                       </div>
-                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 leading-relaxed">{note.message}</p>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-2 block">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{note.message}</p>
+                      <span className="text-[10px] text-slate-400 font-medium mt-1.5 block">
                         {formatDate(note.createdAt)}
                       </span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-zinc-400 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
-                <FontAwesomeIcon icon={faBell} className="h-8 w-8 opacity-50 mb-3" />
-                <p className="font-bold text-xs">No Rent Notices</p>
+              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <FontAwesomeIcon icon={faBell} className="h-6 w-6 opacity-40 mb-2" />
+                <p className="font-semibold text-xs">No Notices Recorded</p>
               </div>
             )}
           </div>
@@ -928,75 +925,75 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
       {/* Profile Settings Dialog */}
       <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-        <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Account Settings</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-6 py-2">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative h-24 w-24 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border-4 border-white dark:border-zinc-900 shadow-lg">
+        <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+          <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Resident Profile</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Update your contact credentials and notification details.
+            </DialogDescription>
+          </div>
+          <div className="p-6 space-y-3.5">
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 shadow-sm">
                 <img src={tenantProfile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                  <FontAwesomeIcon icon={faEdit} />
+                <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
+                  <FontAwesomeIcon icon={faEdit} className="h-4 w-4" />
                   <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={isUploading} />
                 </label>
               </div>
-              {isUploading && <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 animate-pulse">Uploading...</p>}
+              {isUploading && <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 animate-pulse">Uploading...</p>}
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Display Name</label>
-              <Input className="h-12 rounded-xl" value={tenantProfile.displayName} onChange={e => setTenantProfile({...tenantProfile, displayName: e.target.value})} />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Full Name</Label>
+              <Input className="h-10" value={tenantProfile.displayName} onChange={e => setTenantProfile({...tenantProfile, displayName: e.target.value})} />
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Phone</label>
-              <Input className="h-12 rounded-xl" value={tenantProfile.phone} onChange={e => setTenantProfile({...tenantProfile, phone: e.target.value})} />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Phone Number</Label>
+              <Input className="h-10" value={tenantProfile.phone} onChange={e => setTenantProfile({...tenantProfile, phone: e.target.value})} />
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address</label>
-              <Textarea className="rounded-xl" value={tenantProfile.address} onChange={e => setTenantProfile({...tenantProfile, address: e.target.value})} />
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Permanent Address / Notes</Label>
+              <Textarea className="rounded-xl min-h-[70px] text-xs" value={tenantProfile.address} onChange={e => setTenantProfile({...tenantProfile, address: e.target.value})} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProfile}>Save Changes</Button>
-          </DialogFooter>
+          <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
+            <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleUpdateProfile}>Save Changes</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Bank Transfer Dialog */}
       <Dialog open={isBankOpen} onOpenChange={setIsBankOpen}>
-        <DialogContent className="sm:max-w-[450px] p-0 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
-          <div className="bg-blue-600 p-8 text-white">
-            <DialogTitle className="text-2xl font-black">Bank Transfer</DialogTitle>
-            <DialogDescription className="text-blue-100 font-medium mt-1">Make a manual transfer to the account below.</DialogDescription>
+        <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+          <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-blue-950/20">
+            <DialogTitle className="text-lg font-bold text-blue-600 dark:text-blue-400">Direct Bank Settlement</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Transfer funds via EFT/RTGS to the landlord's designated account.
+            </DialogDescription>
           </div>
-          <div className="p-8 space-y-6">
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Bank Name</p>
-                <p className="text-sm font-black text-zinc-900 dark:text-white">{landlord?.bankName || 'Equity Bank / KCB (Default)'}</p>
+          <div className="p-6 space-y-3.5">
+            <div className="space-y-2.5">
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Bank Institution</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">{landlord?.bankName || 'Equity Bank / KCB (Default)'}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Account Name</p>
-                <p className="text-sm font-black text-zinc-900 dark:text-white">{landlord?.bankAccountName || landlord?.displayName || 'Property Management'}</p>
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Name</span>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">{landlord?.bankAccountName || landlord?.displayName || 'Property Management'}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-1">Account Number</p>
-                <p className="text-sm font-black text-zinc-900 dark:text-white tracking-wider">{landlord?.bankAccountNumber || '0123456789012'}</p>
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Number</span>
+                <p className="text-xs font-bold font-mono text-slate-900 dark:text-white tracking-wider">{landlord?.bankAccountNumber || '0123456789012'}</p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
-              <div className="flex gap-3">
-                <FontAwesomeIcon icon={faInfoCircle} className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-[10px] font-bold text-amber-700 leading-relaxed uppercase tracking-wide">
-                  After payment, please send the transaction confirmation to the landlord. Your records will be updated once verified.
-                </p>
-              </div>
+            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
+              After payment, share the transaction receipt with the landlord to mark the invoice as settled.
             </div>
           </div>
-          <div className="p-8 bg-zinc-50 dark:bg-zinc-800/50 flex justify-end gap-4">
-            <Button variant="ghost" className="font-bold rounded-xl" onClick={() => setIsBankOpen(false)}>Done</Button>
+          <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
+            <Button size="sm" className="font-bold text-xs rounded-xl" onClick={() => setIsBankOpen(false)}>Done</Button>
           </div>
         </DialogContent>
       </Dialog>
