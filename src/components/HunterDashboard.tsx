@@ -389,13 +389,12 @@ export default function HunterDashboard({
       </div>
     );
   };
-
   const searchInput = (
     <div className="relative group w-full">
-      <FontAwesomeIcon icon={faSearch} className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+      <FontAwesomeIcon icon={faSearch} className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 group-focus-within:text-slate-900 dark:group-focus-within:text-white transition-colors" />
       <Input
-        placeholder="Search location or title..."
-        className="h-10 pl-9 sm:pl-10 pr-4 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 focus:ring-1 focus:ring-zinc-400 font-bold text-sm"
+        placeholder="Search location, building, or property title..."
+        className="h-10 pl-9 sm:pl-10 pr-4 rounded-xl text-xs font-semibold"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
@@ -403,16 +402,16 @@ export default function HunterDashboard({
   );
 
   const filterChips = (
-    <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex gap-2 overflow-x-auto pb-0.5">
       {PROPERTY_FILTERS.map((f) => (
         <button
           key={f.id}
           type="button"
           onClick={() => setFilterType(f.id)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
             filterType === f.id
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-              : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              ? 'bg-slate-900 text-white shadow-xs dark:bg-white dark:text-slate-900'
+              : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
           }`}
         >
           <FontAwesomeIcon icon={f.icon} className="h-3 w-3" />
@@ -423,186 +422,198 @@ export default function HunterDashboard({
   );
 
   return (
-    <div className={`db animate-in fade-in duration-700 ${variant === 'embedded' ? 'pb-8' : 'pb-24 sm:pb-8'}`}>
+    <div className={`db w-full min-w-0 animate-in fade-in duration-300 ${variant === 'embedded' ? 'pb-8' : 'pb-24 sm:pb-8'}`}>
       {variant === 'embedded' ? (
-        <div className="listing-sticky-bar sticky z-20 -mx-2 sm:-mx-0 border-b border-zinc-100 bg-white/95 px-3 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95 sm:rounded-2xl sm:border sm:shadow-sm sm:top-0">
+        <div className="listing-sticky-bar sticky z-20 -mx-2 sm:-mx-0 border-b border-slate-200/80 bg-white/95 px-4 py-3.5 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95 sm:rounded-2xl sm:border sm:shadow-xs sm:top-0">
           {searchInput}
-          <div className="mt-3">{filterChips}</div>
-          <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-            {loading ? 'Loading listings...' : `${filteredProperties.length} properties`}
+          <div className="mt-2.5">{filterChips}</div>
+          <p className="mt-2 text-xs font-semibold text-slate-400">
+            {loading ? 'Scanning listings...' : `${filteredProperties.length} spaces available`}
           </p>
         </div>
       ) : (
-        <div className="hero">
-          <div className="hero-meta">
-            <span className="lvl-badge">Public Directory</span>
-            <div className="status-dot">
-              <span className="status-pulse"></span>
-              Scan complete
-            </div>
-          </div>
-          <div className="hero-row">
+        <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="hero-title">Find Your Space</h1>
-              <p className="hero-sub">Explore residential, commercial, or luxury short stays.</p>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40">
+                  <FontAwesomeIcon icon={faBuilding} className="h-2.5 w-2.5" />
+                  Marketplace Network
+                </span>
+                <span className="text-xs text-slate-400 font-medium">·</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  {filteredProperties.length} verified listings
+                </span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Find Your Space
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Explore verified residential apartments, commercial properties, and luxury short stays.
+              </p>
             </div>
-            <div className="hero-actions">{searchInput}</div>
+            <div className="w-full md:w-80 shrink-0">
+              {searchInput}
+            </div>
           </div>
-          <div className="mt-4 px-0 sm:px-0">{filterChips}</div>
+          <div className="mt-4">{filterChips}</div>
         </div>
       )}
 
-      <div className={`mt-3 sm:mt-6 ${variant === 'embedded' ? 'px-1 sm:px-4' : 'px-3 sm:px-6'}`}>
+      <div className={`mt-6 ${variant === 'embedded' ? 'px-1 sm:px-4' : 'px-6 md:px-8'}`}>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <FontAwesomeIcon icon={faSpinner} className="h-10 w-10 animate-spin text-zinc-400" />
-            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Scanning Network...</p>
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <FontAwesomeIcon icon={faSpinner} className="h-6 w-6 animate-spin text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400">Loading properties...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredProperties.map((property) => (
-              <Card key={property.id} className="overflow-hidden border border-zinc-100/80 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 cursor-pointer transition-all hover:shadow-lg sm:hover:-translate-y-0.5 group rounded-xl sm:rounded-2xl sm:shadow-[0_8px_30px_rgb(0,0,0,0.04)] sm:border-none">
-                <div className="aspect-square sm:aspect-video w-full bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+              <Card key={property.id} className="overflow-hidden border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 rounded-2xl shadow-xs hover:shadow-md transition-all flex flex-col group">
+                <div className="aspect-video w-full bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                   {property.images?.[0] ? (
                     <img 
                       src={property.images[0]} 
                       alt={property.title} 
-                      className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:group-hover:scale-110"
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       referrerPolicy="no-referrer"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-zinc-400">
-                      <FontAwesomeIcon icon={faHome} className="h-8 w-8 sm:h-12 sm:w-12 opacity-10" />
+                    <div className="flex h-full w-full items-center justify-center text-slate-400">
+                      <FontAwesomeIcon icon={faHome} className="h-8 w-8 opacity-20" />
                     </div>
                   )}
-                  <div className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 flex gap-2">
-                     <Badge className="bg-white/90 dark:bg-black/90 text-zinc-900 dark:text-white border-none px-1.5 py-0 sm:px-2 sm:py-0.5 rounded-md sm:rounded-lg font-black text-[7px] sm:text-[8px] uppercase tracking-widest backdrop-blur-md shadow-lg">
-                        {property.type}
-                     </Badge>
+                  <div className="absolute top-2.5 left-2.5">
+                    <Badge variant={property.type === 'bnb' ? 'purple' : property.type === 'commercial' ? 'warning' : 'indigo'}>
+                      {property.type}
+                    </Badge>
                   </div>
-                  <div className="absolute top-1.5 right-1.5 sm:top-3 sm:right-3 flex gap-2">
+                  <div className="absolute top-2.5 right-2.5">
                     <button
                       onClick={(e) => toggleLike(e, property.id)}
-                      className={`flex items-center justify-center h-7 w-7 sm:h-9 sm:w-9 rounded-full backdrop-blur-md transition-all shadow-lg ${
+                      className={`flex items-center justify-center h-8 w-8 rounded-full backdrop-blur-md transition-all shadow-sm cursor-pointer ${
                         likedPropertyIds.has(property.id)
-                          ? 'bg-white text-rose-500 scale-110'
-                          : 'bg-black/30 text-white hover:bg-white/90 hover:text-rose-500'
+                          ? 'bg-white text-rose-500 scale-105'
+                          : 'bg-black/40 text-white hover:bg-white hover:text-rose-500'
                       }`}
                     >
-                      <FontAwesomeIcon icon={faHeart} className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <FontAwesomeIcon icon={faHeart} className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-70 sm:opacity-60" />
-                  <div className="absolute bottom-1.5 left-1.5 right-1.5 sm:bottom-3 sm:left-3 sm:right-3">
-                     <p className="text-white text-xs sm:text-xl font-black tabular-nums leading-tight">
-                       <span className="sm:hidden">KES {(property.price >= 1000 ? `${Math.round(property.price / 1000)}k` : property.price.toLocaleString())}</span>
-                       <span className="hidden sm:inline">KES {property.price.toLocaleString()}</span>
-                       <span className="text-[8px] sm:text-[10px] font-bold text-white/70 ml-0.5 sm:ml-1.5">/{property.type === 'bnb' ? 'nt' : 'mo'}</span>
-                     </p>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-60 pointer-events-none" />
+                  <div className="absolute bottom-2.5 left-3 right-3 pointer-events-none">
+                    <p className="text-white text-base font-bold tabular-nums leading-tight">
+                      KES {property.price.toLocaleString()}
+                      <span className="text-[11px] font-normal opacity-80 ml-1">/{property.type === 'bnb' ? 'night' : 'mo'}</span>
+                    </p>
                   </div>
                 </div>
-                <CardHeader className="p-2 pb-0 sm:p-4 sm:pb-2">
-                  <CardTitle className="text-[11px] sm:text-base font-black text-zinc-900 dark:text-white group-hover:text-zinc-600 transition-colors line-clamp-2 sm:line-clamp-1 leading-snug">{property.title}</CardTitle>
-                  <div className="flex items-center gap-1 text-[9px] sm:text-[10px] text-zinc-400 font-bold mt-0.5 line-clamp-1">
-                    <FontAwesomeIcon icon={faMapMarkerAlt} className="shrink-0 text-zinc-400 text-[8px] sm:text-[10px]" />
+
+                <CardHeader className="p-4 pb-2">
+                  <CardTitle className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 group-hover:text-blue-600 transition-colors">
+                    {property.title}
+                  </CardTitle>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-400 font-normal mt-0.5 line-clamp-1">
+                    <FontAwesomeIcon icon={faMapMarkerAlt} className="shrink-0 h-3 w-3 text-slate-400" />
                     <span className="truncate">{property.location}</span>
                   </div>
                 </CardHeader>
-                <CardContent className="hidden sm:block px-4 pb-4 pt-0">
-                  <p className="line-clamp-1 text-xs font-medium text-zinc-500 leading-relaxed mb-3">{property.description}</p>
+
+                <CardContent className="px-4 pb-3 pt-0 flex-1">
+                  <p className="line-clamp-2 text-xs text-slate-500 leading-relaxed mb-3">{property.description}</p>
                   <div className="flex flex-wrap gap-1.5">
-                     {property.amenities?.slice(0, 2).map((a, i) => (
-                        <Badge key={i} variant="outline" className="border-zinc-100 dark:border-zinc-800 text-[8px] font-black uppercase tracking-widest text-zinc-400 px-1.5 py-0">{a}</Badge>
-                     ))}
-                     {property.amenities?.length > 2 && (
-                        <Badge variant="outline" className="border-none bg-zinc-50 dark:bg-zinc-800 text-[8px] font-black uppercase tracking-widest px-1.5 py-0">+{property.amenities.length - 2}</Badge>
-                     )}
+                    {property.amenities?.slice(0, 2).map((a, i) => (
+                      <Badge key={i} variant="outline" className="text-[10px] font-medium text-slate-500 px-2 py-0">{a}</Badge>
+                    ))}
+                    {property.amenities?.length > 2 && (
+                      <Badge variant="outline" className="text-[10px] font-medium text-slate-400 px-2 py-0">+{property.amenities.length - 2}</Badge>
+                    )}
                   </div>
                 </CardContent>
-                <CardFooter className="p-2 pt-1 sm:px-4 sm:pb-4 sm:pt-0">
+
+                <CardFooter className="p-4 pt-0 mt-auto">
                   <Dialog>
                     <DialogTrigger render={
-                      <Button className="w-full h-8 sm:h-10 rounded-lg sm:rounded-xl bg-zinc-950 dark:bg-white text-white dark:text-zinc-900 font-black text-[10px] sm:text-xs hover:bg-zinc-800 active:scale-[0.98] transition-all">
-                        <span className="sm:hidden">View</span>
-                        <span className="hidden sm:inline">Reserve Asset</span>
+                      <Button size="sm" className="w-full font-bold text-xs rounded-xl cursor-pointer">
+                        Reserve / View Asset
                       </Button>
                     } />
-                    <DialogContent className="sm:max-w-3xl rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden bg-white dark:bg-zinc-900 max-h-[90dvh] overflow-y-auto">
+                    <DialogContent className="sm:max-w-3xl rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xl p-0 overflow-hidden bg-white dark:bg-slate-900 max-h-[90dvh] overflow-y-auto">
                       <div className="grid md:grid-cols-2">
-                         <div className="p-6 md:p-8 space-y-5 md:space-y-6">
-                            <DialogHeader>
-                               <div className="flex items-center gap-3 mb-2">
-                                  <Badge className="bg-zinc-900 text-white border-none font-black text-[9px] uppercase tracking-widest px-3 py-1">{property.type}</Badge>
-                                  <div className="flex items-center gap-1 text-amber-500">
-                                     <FontAwesomeIcon icon={faStar} className="h-3 w-3" />
-                                     <span className="text-xs font-black">4.9</span>
-                                  </div>
-                               </div>
-                               <DialogTitle className="text-2xl font-black leading-tight">{property.title}</DialogTitle>
-                               <DialogDescription className="flex items-center gap-1.5 font-bold text-zinc-500 mt-1">
-                                 <FontAwesomeIcon icon={faMapMarkerAlt} className="text-rose-500" />
-                                 {property.location}
-                               </DialogDescription>
-                            </DialogHeader>
-                            
-                            <div className="space-y-5">
-                               <div>
-                                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-2">Pricing Model</h4>
-                                  <p className="text-3xl font-black text-zinc-900 dark:text-white tabular-nums">
-                                    KES {property.price.toLocaleString()} 
-                                    <span className="text-xs font-bold text-zinc-400 ml-2">/ {property.type === 'bnb' ? 'night' : 'month'}</span>
-                                  </p>
-                               </div>
-                               
-                               {property.type === 'bnb' && <BNBBookingForm property={property} />}
-                               
-                               <div>
-                                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Core Amenities</h4>
-                                  <div className="grid grid-cols-2 gap-3">
-                                     {property.amenities?.map((a, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-sm font-bold text-zinc-600 dark:text-zinc-400">
-                                           <FontAwesomeIcon icon={getAmenityIcon(a)} className="h-3.5 w-3.5 text-emerald-500" />
-                                           {a}
-                                        </div>
-                                     ))}
-                                  </div>
-                               </div>
-                               
-                               <LandlordContactInfo landlordId={property.landlordId} />
+                        <div className="p-6 md:p-8 space-y-5">
+                          <DialogHeader>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant={property.type === 'bnb' ? 'purple' : property.type === 'commercial' ? 'warning' : 'indigo'}>{property.type}</Badge>
+                              <div className="flex items-center gap-1 text-amber-500">
+                                <FontAwesomeIcon icon={faStar} className="h-3 w-3" />
+                                <span className="text-xs font-bold">4.9</span>
+                              </div>
+                            </div>
+                            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white leading-tight">{property.title}</DialogTitle>
+                            <DialogDescription className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                              <FontAwesomeIcon icon={faMapMarkerAlt} className="text-rose-500 h-3 w-3" />
+                              {property.location}
+                            </DialogDescription>
+                          </DialogHeader>
+                          
+                          <div className="space-y-4">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Pricing Model</span>
+                              <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums">
+                                KES {property.price.toLocaleString()} 
+                                <span className="text-xs font-normal text-slate-400 ml-1.5">/ {property.type === 'bnb' ? 'night' : 'month'}</span>
+                              </p>
                             </div>
                             
-                            <div className="pt-4">
-                               {property.type === 'bnb' ? (
-                                 <Button onClick={() => handleBook(property)} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-lg gap-3 shadow-xl shadow-blue-200 dark:shadow-none" disabled={paying}>
-                                   {paying ? <FontAwesomeIcon icon={faSpinner} className="h-5 w-5 animate-spin" /> : <FontAwesomeIcon icon={faWallet} className="h-5 w-5" />}
-                                   {paying ? "Processing Transaction..." : "Secure Booking"}
-                                 </Button>
-                               ) : (
-                                 <Button
-                                   className="w-full h-14 rounded-2xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-black text-lg gap-3 shadow-xl"
-                                   onClick={() => {
-                                     if (!profile) {
-                                       toast.info("Sign in to request a viewing.");
-                                       onLoginRequired?.();
-                                       return;
-                                     }
-                                     window.open(`mailto:${profile.email}?subject=Interest in ${property.title}`);
-                                   }}
-                                 >
-                                   <FontAwesomeIcon icon={faEnvelope} className="h-5 w-5" />
-                                   Request Viewing
-                                 </Button>
-                               )}
+                            {property.type === 'bnb' && <BNBBookingForm property={property} />}
+                            
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Amenities</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                {property.amenities?.map((a, i) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                    <FontAwesomeIcon icon={getAmenityIcon(a)} className="h-3 w-3 text-emerald-500" />
+                                    {a}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                         </div>
-                         <div className="bg-zinc-50 dark:bg-zinc-800 p-6 flex flex-col justify-start space-y-4 md:space-y-6">
-                            <PropertyGallery images={property.images} title={property.title} />
-                            <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800">
-                               <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mb-3">Property Intelligence</h4>
-                               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400 leading-relaxed italic">"{property.description}"</p>
-                            </div>
-                         </div>
+                            
+                            <LandlordContactInfo landlordId={property.landlordId} />
+                          </div>
+                          
+                          <div className="pt-2">
+                            {property.type === 'bnb' ? (
+                              <Button onClick={() => handleBook(property)} className="w-full h-11 rounded-xl font-bold text-xs gap-2" disabled={paying}>
+                                {paying ? <FontAwesomeIcon icon={faSpinner} className="h-3.5 w-3.5 animate-spin" /> : <FontAwesomeIcon icon={faWallet} className="h-3.5 w-3.5" />}
+                                {paying ? "Processing Reservation..." : "Secure Instant Booking"}
+                              </Button>
+                            ) : (
+                              <Button
+                                className="w-full h-11 rounded-xl font-bold text-xs gap-2"
+                                onClick={() => {
+                                  if (!profile) {
+                                    toast.info("Sign in to request a viewing.");
+                                    onLoginRequired?.();
+                                    return;
+                                  }
+                                  window.open(`mailto:${profile.email}?subject=Interest in ${property.title}`);
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faEnvelope} className="h-3.5 w-3.5" />
+                                Request Scheduled Viewing
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800/40 p-6 flex flex-col justify-start space-y-4 border-l border-slate-100 dark:border-slate-800">
+                          <PropertyGallery images={property.images} title={property.title} />
+                          <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Property Description</span>
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic">"{property.description}"</p>
+                          </div>
+                        </div>
                       </div>
                     </DialogContent>
                   </Dialog>
@@ -613,20 +624,20 @@ export default function HunterDashboard({
         )}
 
         {filteredProperties.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center py-32 text-center">
-            <div className="h-24 w-24 rounded-[2.5rem] bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center text-zinc-200 mb-8 border border-zinc-100 dark:border-zinc-800">
-              <FontAwesomeIcon icon={faSearch} className="h-10 w-10" />
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-4">
+              <FontAwesomeIcon icon={faSearch} className="h-5 w-5" />
             </div>
-            <h3 className="text-2xl font-black text-zinc-900 dark:text-white mb-2">Zero Assets Found</h3>
-            <p className="text-zinc-500 font-medium max-w-xs">We couldn't find any spaces matching your current parameters.</p>
-            <Button variant="link" className="mt-4 font-black text-zinc-400 uppercase tracking-widest text-[10px]" onClick={() => {setSearchTerm(''); setFilterType('all');}}>Reset Search Index</Button>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No Matching Spaces Found</h3>
+            <p className="text-xs text-slate-500 max-w-xs">We couldn't find any active listings matching your current filter parameters.</p>
+            <Button variant="outline" size="sm" className="mt-4 text-xs font-semibold rounded-xl" onClick={() => {setSearchTerm(''); setFilterType('all');}}>Reset Filters</Button>
           </div>
         )}
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
       {profile && variant !== 'embedded' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800">
           <div className="flex items-center justify-around h-16 px-2">
             {PROPERTY_FILTERS.map(f => (
               <button
@@ -637,18 +648,12 @@ export default function HunterDashboard({
                 }}
                 className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
                   filterType === f.id
-                    ? 'text-indigo-600'
-                    : 'text-zinc-400 hover:text-zinc-700'
+                    ? 'text-slate-900 dark:text-white font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                  filterType === f.id ? 'bg-indigo-50' : ''
-                }`}>
-                  <FontAwesomeIcon icon={f.icon} className={`text-sm ${filterType === f.id ? 'text-indigo-600' : ''}`} />
-                </div>
-                <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                  filterType === f.id ? 'text-indigo-600' : 'text-zinc-400'
-                }`}>{f.label}</span>
+                <FontAwesomeIcon icon={f.icon} className="text-sm" />
+                <span className="text-[10px] font-semibold">{f.label}</span>
               </button>
             ))}
           </div>

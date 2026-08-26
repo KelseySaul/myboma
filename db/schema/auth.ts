@@ -4,7 +4,7 @@ import { pgTable, text, timestamp, boolean, uuid } from 'drizzle-orm/pg-core';
 // so they can be referenced directly from db/schema/app.ts's users.uid FK.
 
 export const authUser = pgTable('user', {
-  id: uuid('id').primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
   emailVerified: boolean('emailVerified').notNull().default(false),
@@ -14,7 +14,7 @@ export const authUser = pgTable('user', {
 });
 
 export const authSession = pgTable('session', {
-  id: uuid('id').primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('userId').notNull().references(() => authUser.id, { onDelete: 'cascade' }),
   token: text('token').notNull().unique(),
   expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
@@ -25,7 +25,7 @@ export const authSession = pgTable('session', {
 });
 
 export const authAccount = pgTable('account', {
-  id: uuid('id').primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('userId').notNull().references(() => authUser.id, { onDelete: 'cascade' }),
   accountId: text('accountId').notNull(),
   providerId: text('providerId').notNull(),
@@ -44,7 +44,7 @@ export const authAccount = pgTable('account', {
 });
 
 export const authVerification = pgTable('verification', {
-  id: uuid('id').primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
   expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
