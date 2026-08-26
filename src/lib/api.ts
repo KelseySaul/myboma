@@ -57,6 +57,34 @@ export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Pro
   return payload as T;
 };
 
+/** Uploads a file to Cloudflare R2 via the server (replaces supabase.storage). `subpath`
+ * mirrors the old bucket's optional `${uid}/platforms/${platformId}/...` nesting. */
+export const uploadFile = async (file: File | Blob, fileName: string, subpath?: string): Promise<{url: string}> => {
+  const isNative = Capacitor.isNativePlatform();
+  const token = isNative ? getStoredToken() : null;
+
+  if (isNative && !token) {
+    throw new Error('You must be signed in to continue.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file, fileName);
+  if (subpath) formData.append('subpath', subpath);
+
+  const response = await fetch(`${apiBaseUrl()}${clientPrefix()}/uploads`, {
+    method: 'POST',
+    credentials: isNative ? undefined : 'include',
+    headers: token ? {Authorization: `Bearer ${token}`} : undefined,
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || `Upload failed with status ${response.status}`);
+  }
+  return payload as {url: string};
+};
+
 export const getUnreadNotificationCount = () => bffRequest<{count: number}>('/notifications/unread-count');
 
 export const getSession = () =>

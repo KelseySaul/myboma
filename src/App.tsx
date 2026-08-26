@@ -510,64 +510,54 @@ export default function App() {
 
   if (isResetRequired) {
     return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-slate-50/50 p-4 relative overflow-hidden">
-        {/* Abstract beautiful mesh gradient background blobs */}
-        <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-indigo-200/40 to-purple-200/40 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-gradient-to-tr from-blue-200/40 to-emerald-200/40 blur-[120px] pointer-events-none" />
+      <div className="flex min-h-screen w-full items-center justify-center bg-slate-50/70 dark:bg-slate-950 p-4 relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-slate-200/40 dark:bg-slate-800/20 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-100/40 dark:bg-indigo-950/20 blur-[120px] pointer-events-none" />
         
-        <div className="relative w-full max-w-[460px] bg-white/80 backdrop-blur-xl border border-white/40 shadow-[0_32px_64px_rgba(15,23,42,0.08)] rounded-[32px] p-8 md:p-10 transition-all duration-300 animate-in fade-in zoom-in-95 duration-500 flex flex-col gap-8">
-          
-          <div className="flex flex-col items-center gap-6 text-center">
-            {/* Pulsing Lock Icon */}
-            <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 rounded-[24px] bg-indigo-500/10 blur-xl animate-pulse scale-150" />
-              <div className="relative h-16 w-16 rounded-[24px] bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-[0_8px_20px_rgba(79,70,229,0.3)] flex items-center justify-center text-white">
-                <i className="ti ti-shield-lock text-3xl"></i>
-              </div>
+        <div className="relative w-full max-w-[440px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xl rounded-2xl p-8 transition-all animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="h-14 w-14 rounded-2xl bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center shadow-md">
+              <FontAwesomeIcon icon={faCog} className="text-xl" />
             </div>
             
-            <div className="space-y-2">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Secure Your Account</h2>
-              <p className="text-sm font-medium text-slate-500 leading-relaxed max-w-sm">
-                To complete your onboarding, please update your temporary credentials with a new secure password.
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Secure Your Account</h2>
+              <p className="text-xs font-normal text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm">
+                To complete your onboarding, please update your temporary credentials with a permanent secure password.
               </p>
             </div>
           </div>
           
-          <form onSubmit={handlePasswordReset} className="flex flex-col gap-6">
+          <form onSubmit={handlePasswordReset} className="flex flex-col gap-5">
             <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400">New Password</label>
-                <div className="relative">
-                  <Input 
-                    type="password" 
-                    required 
-                    placeholder="Min. 8 characters" 
-                    value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
-                    className="h-12 px-4 rounded-2xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10 bg-white/50"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">New Password</label>
+                <Input 
+                  type="password" 
+                  required 
+                  placeholder="Minimum 8 characters" 
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="h-10"
+                />
               </div>
               
-              <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-slate-400">Confirm Password</label>
-                <div className="relative">
-                  <Input 
-                    type="password" 
-                    required 
-                    placeholder="Re-enter password" 
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    className="h-12 px-4 rounded-2xl border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10 bg-white/50"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirm Password</label>
+                <Input 
+                  type="password" 
+                  required 
+                  placeholder="Re-enter your new password" 
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  className="h-10"
+                />
               </div>
             </div>
             
             {resetError && (
-              <div className="flex items-center gap-2 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-xs font-semibold leading-relaxed animate-in fade-in slide-in-from-top-1 duration-200">
-                <i className="ti ti-alert-circle text-lg shrink-0"></i>
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-semibold animate-in fade-in duration-200">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="text-sm shrink-0" />
                 <span>{resetError}</span>
               </div>
             )}
@@ -575,19 +565,9 @@ export default function App() {
             <Button 
               type="submit" 
               disabled={resetLoading}
-              className="w-full h-13 rounded-2xl bg-slate-950 hover:bg-slate-800 text-white font-black text-sm transition-all shadow-[0_4px_12px_rgba(15,23,42,0.15)] flex items-center justify-center gap-2"
+              className="w-full h-10 font-bold text-xs"
             >
-              {resetLoading ? (
-                <>
-                  <i className="ti ti-spinner animate-spin text-lg"></i>
-                  <span>Updating Credentials...</span>
-                </>
-              ) : (
-                <>
-                  <span>Activate Account</span>
-                  <i className="ti ti-arrow-right text-base"></i>
-                </>
-              )}
+              {resetLoading ? 'Updating Credentials...' : 'Activate Account & Continue'}
             </Button>
           </form>
         </div>
@@ -596,9 +576,11 @@ export default function App() {
   }
 
   const activeProfile = impersonatedProfile ?? profile;
-  const currentRole = impersonatedProfile
-    ? impersonatedProfile.role
-    : (activeView || profile?.role || 'hunter');
+  const currentRole: UserRole = normalizeRole(
+    impersonatedProfile
+      ? impersonatedProfile.role
+      : (activeView || profile?.role || 'hunter')
+  );
 
   const landlordNeedsSubscription = Boolean(
     activeProfile &&
@@ -608,132 +590,142 @@ export default function App() {
 
   return (
     <div 
-      className={`db app-shell min-h-screen bg-[#f8f9fa] transition-colors duration-300 flex flex-col ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
+      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#f8fafc] dark:bg-[#090d16] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
     >
-      {impersonatedProfile && (
-        <ImpersonationBanner target={impersonatedProfile} onExit={handleExitImpersonation} />
+      {/* Desktop Fixed Sidebar — only when logged in */}
+      {activeProfile && (
+        <Sidebar
+          profile={activeProfile}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentRole={currentRole as UserRole}
+          isImpersonating={Boolean(impersonatedProfile)}
+        />
       )}
-      <Navbar 
-        user={user} 
-        profile={profile} 
-        activeView={activeView} 
-        setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
-        setActiveTab={setActiveTab}
-        onLoginClick={() => setIsAuthOpen(true)} 
-        isImpersonating={Boolean(impersonatedProfile)}
-        onHelpClick={() => setShowOnboarding(true)}
-      />
-      {/* Sidebar + content row */}
-      <div className="flex flex-1 min-h-0">
-        {/* Desktop Sidebar — only when logged in */}
-        {activeProfile && (
-          <Sidebar
-            profile={activeProfile}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            currentRole={currentRole as UserRole}
-            isImpersonating={Boolean(impersonatedProfile)}
-          />
-        )}
-        {/* Main content area */}
-        <main className="flex-1 min-w-0 w-full">
-          {error ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-              <div className="h-16 w-16 rounded-3xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="h-8 w-8" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-zinc-900 dark:text-white">Profile Error</h3>
-                <p className="text-zinc-500 max-w-xs mx-auto mt-2">{error}</p>
-              </div>
-              <Button onClick={() => window.location.reload()} className="gap-2 rounded-xl">
-                <FontAwesomeIcon icon={faSync} className="h-4 w-4" />
-                Try Again
-              </Button>
-            </div>
-          ) : !profile ? (
-             <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
-               <div className="relative flex items-center justify-center">
-                 <div className="absolute inset-0 rounded-2xl bg-zinc-100/80 blur-lg animate-pulse scale-150" />
-                 <img
-                   src={tenantConfig.logoUrl}
-                   alt={tenantConfig.appName}
-                   className="relative h-12 w-12 object-contain rounded-xl animate-logo-reveal bg-white p-1 shadow-xs"
-                 />
-               </div>
-               <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Synchronizing Identity...</p>
-             </div>
-          ) : (
-            <>
-              {/* Settings page — rendered for all roles when activeTab === 'settings' */}
-              {activeTab === 'settings' && <SettingsPage profile={activeProfile!} />}
 
-              {activeTab !== 'settings' && (
-                <>
-                  {landlordNeedsSubscription && activeTab !== 'settings' && (
-                    <LandlordSubscriptionGate
-                      email={activeProfile!.email}
-                      phone={activeProfile!.phone}
-                      onActivated={refreshProfile}
-                    />
-                  )}
-                  {!landlordNeedsSubscription &&
-                    (currentRole === 'landlord' ||
-                      (currentRole === 'admin' &&
-                        ['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab))) && (
-                      <LandlordDashboard
+      {/* Right Column Container (Next to the Sidebar) */}
+      <div className="flex-1 flex flex-col min-w-0 w-full overflow-x-hidden h-full relative">
+        {impersonatedProfile && (
+          <div className="shrink-0 z-50 w-full">
+            <ImpersonationBanner target={impersonatedProfile} onExit={handleExitImpersonation} />
+          </div>
+        )}
+        
+        <div className="shrink-0 z-40 w-full">
+          <Navbar 
+            user={user} 
+            profile={profile} 
+            activeView={activeView} 
+            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+            setActiveTab={setActiveTab}
+            onLoginClick={() => setIsAuthOpen(true)} 
+            isImpersonating={Boolean(impersonatedProfile)}
+            onHelpClick={() => setShowOnboarding(true)}
+          />
+        </div>
+
+        {/* Independent Scrollable Content Area */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
+          <div className="flex-1 min-w-0 w-full">
+            {error ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <div className="h-14 w-14 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200/80 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Profile Loading Error</h3>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">{error}</p>
+                </div>
+                <Button onClick={() => window.location.reload()} size="sm" className="gap-2">
+                  <FontAwesomeIcon icon={faSync} className="h-3.5 w-3.5" />
+                  Reload Page
+                </Button>
+              </div>
+            ) : !profile ? (
+               <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                 <div className="relative flex items-center justify-center">
+                   <div className="absolute inset-0 rounded-2xl bg-slate-200/60 blur-lg animate-pulse scale-125" />
+                   <img
+                     src={tenantConfig.logoUrl}
+                     alt={tenantConfig.appName}
+                     className="relative h-12 w-12 object-contain rounded-xl bg-white p-1 shadow-xs border border-slate-200/80"
+                   />
+                 </div>
+                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticating Session...</p>
+               </div>
+            ) : (
+              <>
+                {/* Settings page — rendered for all roles when activeTab === 'settings' */}
+                {activeTab === 'settings' && <SettingsPage profile={activeProfile!} />}
+
+                {activeTab !== 'settings' && (
+                  <>
+                    {landlordNeedsSubscription && activeTab !== 'settings' && (
+                      <LandlordSubscriptionGate
+                        email={activeProfile!.email}
+                        phone={activeProfile!.phone}
+                        onActivated={refreshProfile}
+                      />
+                    )}
+                    {!landlordNeedsSubscription &&
+                      (currentRole === 'landlord' ||
+                        (currentRole === 'admin' &&
+                          ['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab))) && (
+                        <LandlordDashboard
+                          profile={activeProfile!}
+                          activeTab={activeTab || 'dashboard'}
+                          setActiveTab={setActiveTab}
+                        />
+                      )}
+                    {currentRole === 'tenant' && (
+                      <TenantDashboard
                         profile={activeProfile!}
                         activeTab={activeTab || 'dashboard'}
                         setActiveTab={setActiveTab}
                       />
                     )}
-                  {currentRole === 'tenant' && (
-                    <TenantDashboard
-                      profile={activeProfile!}
-                      activeTab={activeTab || 'dashboard'}
-                      setActiveTab={setActiveTab}
-                    />
-                  )}
-                  {currentRole === 'hunter' && (
-                    <HunterDashboard
-                      profile={activeProfile!}
-                      activeTab={activeTab || 'dashboard'}
-                      setActiveTab={setActiveTab}
-                    />
-                  )}
-                  {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && !impersonatedProfile && (
-                    <AdminDashboard
-                      profile={profile!}
-                      onImpersonate={handleImpersonate}
-                      activeTab={activeTab || 'dashboard'}
-                      setActiveTab={setActiveTab}
-                    />
-                  )}
-                  {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && impersonatedProfile && (
-                    <AdminDashboard
-                      profile={impersonatedProfile}
-                      onImpersonate={handleImpersonate}
-                      activeTab={activeTab || 'dashboard'}
-                      setActiveTab={setActiveTab}
-                    />
-                  )}
-                </>
-              )}
-            </>
-          )}
+                    {currentRole === 'hunter' && (
+                      <HunterDashboard
+                        profile={activeProfile!}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                    {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && !impersonatedProfile && (
+                      <AdminDashboard
+                        profile={profile!}
+                        onImpersonate={handleImpersonate}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                    {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && impersonatedProfile && (
+                      <AdminDashboard
+                        profile={impersonatedProfile}
+                        onImpersonate={handleImpersonate}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+          <Footer />
         </main>
       </div>
 
       {currentRole === 'admin' && (
         <>
           {/* Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center justify-around h-16 px-1">
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+            <div className="flex items-center justify-around h-15 px-1">
               {[
                 { id: 'dashboard',   label: 'Home',      icon: faChartPie },
                 { id: 'registered',  label: 'Users',     icon: faUsers },
                 { id: 'pending',     label: 'Pending',   icon: faLink },
-                { id: 'properties',  label: 'Assets', icon: faBuilding },
+                { id: 'properties',  label: 'Assets',    icon: faBuilding },
               ].map(t => (
                 <button
                   key={t.id}
@@ -741,19 +733,19 @@ export default function App() {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                     activeTab === t.id
-                      ? 'text-indigo-600'
-                      : 'text-zinc-400 hover:text-zinc-700'
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                    activeTab === t.id ? 'bg-indigo-50' : ''
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-sm ${activeTab === t.id ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                    activeTab === t.id ? 'text-indigo-600' : 'text-zinc-400'
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
                   }`}>{t.label}</span>
                 </button>
               ))}
@@ -762,19 +754,19 @@ export default function App() {
                 return (
                   <button
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                       isAdminMenuTabActive
-                        ? 'text-indigo-600'
-                        : 'text-zinc-400 hover:text-zinc-700'
+                        ? 'text-slate-900 dark:text-white font-bold'
+                        : 'text-slate-400 hover:text-slate-700'
                     }`}
                   >
-                    <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                      isAdminMenuTabActive ? 'bg-indigo-50' : ''
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                      isAdminMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
                     }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-sm ${isAdminMenuTabActive ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isAdminMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                      isAdminMenuTabActive ? 'text-indigo-600' : 'text-zinc-400'
+                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                      isAdminMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
                     }`}>Menu</span>
                   </button>
                 );
@@ -785,37 +777,37 @@ export default function App() {
           {/* Mobile Drawer Slide-out Menu (Right to Left) */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-black/45 z-50 sm:hidden transition-opacity duration-300 backdrop-blur-xs animate-in fade-in"
+              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
               onClick={() => setIsMobileMenuOpen(false)}
             />
           )}
           
           <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-zinc-950 shadow-2xl p-6 sm:hidden transition-transform duration-300 ease-in-out ${
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
               isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-4 mb-6">
-              <span className="text-xs font-black uppercase tracking-widest text-zinc-900 dark:text-white">More Options</span>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Operations Menu</span>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="h-8 w-8 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center hover:bg-zinc-100"
+                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
               >
-                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5 text-zinc-500" />
+                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
               </button>
             </div>
             
-            <nav className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-140px)]">
+            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
-                { id: 'maintenance', label: 'Maintenance',   icon: faTools,         color: 'text-amber-500' },
-                { id: 'finances',    label: 'Finances',      icon: faWallet,        color: 'text-emerald-500' },
-                { id: 'tenants',     label: 'Tenants',       icon: faUsers,         color: 'text-purple-500' },
-                { id: 'automations', label: 'Notifications', icon: faBell,          color: 'text-rose-500' },
+                { id: 'maintenance', label: 'Maintenance',   icon: faTools },
+                { id: 'finances',    label: 'Finances',      icon: faWallet },
+                { id: 'tenants',     label: 'Tenants',       icon: faUsers },
+                { id: 'automations', label: 'Notifications', icon: faBell },
                 ...(profile?.isSuperAdmin ? [
-                  { id: 'platforms', label: 'Network',        icon: faGlobe,         color: 'text-indigo-500' },
-                  { id: 'audit',     label: 'Audit Log',      icon: faClipboardList, color: 'text-rose-500' },
+                  { id: 'platforms', label: 'Network Platforms', icon: faGlobe },
+                  { id: 'audit',     label: 'Audit Trail',       icon: faClipboardList },
                 ] : []),
-                { id: 'settings',    label: 'Settings',       icon: faCog,           color: 'text-zinc-500' }
+                { id: 'settings',    label: 'Settings',          icon: faCog }
               ].map(item => {
                 const isActive = activeTab === item.id;
                 return (
@@ -826,23 +818,18 @@ export default function App() {
                       setIsMobileMenuOpen(false);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-zinc-950 text-white dark:bg-zinc-800'
-                        : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-900'
+                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
                     }`}
                   >
-                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/15' : 'bg-zinc-50 dark:bg-zinc-900'
+                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                     }`}>
-                      <FontAwesomeIcon
-                        icon={item.icon}
-                        className={`h-3.5 w-3.5 ${isActive ? 'text-white' : item.color}`}
-                      />
+                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
                     </div>
-                    <span className={`text-[11px] font-black uppercase tracking-wide ${
-                      isActive ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'
-                    }`}>
+                    <span className="text-xs tracking-tight">
                       {item.label}
                     </span>
                   </button>
@@ -856,8 +843,8 @@ export default function App() {
       {currentRole === 'landlord' && (
         <>
           {/* Landlord Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center justify-around h-16 px-1">
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+            <div className="flex items-center justify-around h-15 px-1">
               {[
                 { id: 'dashboard',   label: 'Home',     icon: faChartPie },
                 { id: 'properties',  label: 'Units',    icon: faHome },
@@ -870,19 +857,19 @@ export default function App() {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                     activeTab === t.id
-                      ? 'text-indigo-600'
-                      : 'text-zinc-400 hover:text-zinc-700'
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                    activeTab === t.id ? 'bg-indigo-50' : ''
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-sm ${activeTab === t.id ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                    activeTab === t.id ? 'text-indigo-600' : 'text-zinc-400'
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
                   }`}>{t.label}</span>
                 </button>
               ))}
@@ -891,19 +878,19 @@ export default function App() {
                 return (
                   <button
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                       isMenuTabActive
-                        ? 'text-indigo-600'
-                        : 'text-zinc-400 hover:text-zinc-700'
+                        ? 'text-slate-900 dark:text-white font-bold'
+                        : 'text-slate-400 hover:text-slate-700'
                     }`}
                   >
-                    <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                      isMenuTabActive ? 'bg-indigo-50' : ''
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                      isMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
                     }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-sm ${isMenuTabActive ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
                     </div>
-                    <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                      isMenuTabActive ? 'text-indigo-600' : 'text-zinc-400'
+                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                      isMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
                     }`}>Menu</span>
                   </button>
                 );
@@ -914,31 +901,31 @@ export default function App() {
           {/* Mobile Drawer Slide-out Menu (Right to Left) */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-black/45 z-50 sm:hidden transition-opacity duration-300 backdrop-blur-xs animate-in fade-in"
+              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
               onClick={() => setIsMobileMenuOpen(false)}
             />
           )}
           
           <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-zinc-950 shadow-2xl p-6 sm:hidden transition-transform duration-300 ease-in-out ${
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
               isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-4 mb-6">
-              <span className="text-xs font-black uppercase tracking-widest text-zinc-900 dark:text-white">More Options</span>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">More Options</span>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="h-8 w-8 rounded-xl bg-zinc-50 dark:bg-zinc-900 flex items-center justify-center hover:bg-zinc-100"
+                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
               >
-                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5 text-zinc-500" />
+                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
               </button>
             </div>
             
-            <nav className="space-y-1.5 overflow-y-auto max-h-[calc(100vh-140px)]">
+            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
-                { id: 'maintenance', label: 'Maintenance',   icon: faTools,         color: 'text-amber-500' },
-                { id: 'automations', label: 'Notifications', icon: faBell,          color: 'text-rose-500' },
-                { id: 'settings',    label: 'Settings',       icon: faCog,           color: 'text-zinc-500' }
+                { id: 'maintenance', label: 'Maintenance Hub', icon: faTools },
+                { id: 'automations', label: 'Broadcast Notices', icon: faBell },
+                { id: 'settings',    label: 'Settings',          icon: faCog }
               ].map(item => {
                 const isActive = activeTab === item.id;
                 return (
@@ -949,42 +936,38 @@ export default function App() {
                       setIsMobileMenuOpen(false);
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all duration-150 ${
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-zinc-950 text-white dark:bg-zinc-800'
-                        : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-900'
+                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
                     }`}
                   >
-                    <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/15' : 'bg-zinc-50 dark:bg-zinc-900'
+                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                     }`}>
-                      <FontAwesomeIcon
-                        icon={item.icon}
-                        className={`h-3.5 w-3.5 ${isActive ? 'text-white' : item.color}`}
-                      />
+                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
                     </div>
-                    <span className={`text-[11px] font-black uppercase tracking-wide ${
-                      isActive ? 'text-white' : 'text-zinc-700 dark:text-zinc-300'
-                    }`}>
+                    <span className="text-xs tracking-tight">
                       {item.label}
                     </span>
                   </button>
                 );
               })}
 
-              <div className="my-2 border-t border-zinc-100 dark:border-zinc-800" />
+              <div className="my-2 border-t border-slate-100 dark:border-slate-800" />
               
               <button
                 onClick={async () => {
                   setIsMobileMenuOpen(false);
                   await authClient.signOut({});
+                  toast.success('Signed out');
                 }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
               >
-                <div className="h-8 w-8 rounded-xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center shrink-0">
-                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3.5 w-3.5 text-rose-500" />
+                <div className="h-7 w-7 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 text-rose-600" />
                 </div>
-                <span className="text-[11px] font-black uppercase tracking-wide">Sign Out</span>
+                <span className="text-xs font-semibold">Sign Out</span>
               </button>
             </nav>
           </div>
@@ -992,8 +975,8 @@ export default function App() {
       )}
 
       {currentRole === 'tenant' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-around h-16 px-1">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+          <div className="flex items-center justify-around h-15 px-1">
             {[
               { id: 'dashboard',   label: 'Dashboard', icon: faChartPie },
               { id: 'finances',    label: 'Finance', icon: faWallet },
@@ -1009,19 +992,19 @@ export default function App() {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                     isActive
-                      ? 'text-emerald-600'
-                      : 'text-zinc-400 hover:text-zinc-700'
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-xl transition-all ${
-                    isActive ? 'bg-emerald-50' : ''
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-100 dark:bg-slate-800' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-sm ${isActive ? 'text-emerald-600' : 'text-zinc-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
                   </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wide leading-none ${
-                    isActive ? 'text-emerald-600' : 'text-zinc-400'
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    isActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
                   }`}>{t.label}</span>
                 </button>
               );
@@ -1030,7 +1013,6 @@ export default function App() {
         </nav>
       )}
 
-      <Footer />
       <Toaster />
       {showOnboarding && !impersonatedProfile && profile && (
         <OnboardingTour

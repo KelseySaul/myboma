@@ -10,7 +10,6 @@ import {
   faTools,
   faWallet,
   faUsers,
-  faBolt,
   faBuilding,
   faHotel,
   faShieldAlt,
@@ -23,6 +22,7 @@ import {
   faCog,
   faChartPie,
 } from '@fortawesome/free-solid-svg-icons';
+import { tenantConfig } from '../config/tenant';
 
 interface SidebarProps {
   profile: UserProfile;
@@ -36,73 +36,110 @@ interface NavItem {
   id: string;
   label: string;
   icon: any;
-  color?: string;
+  category?: 'workspace' | 'operations' | 'network' | 'system' | string;
 }
 
-function getRoleNavItems(role: UserRole, isSuperAdmin?: boolean, profile?: UserProfile): NavItem[] {
-  const dashboard: NavItem = { id: 'dashboard', label: 'Dashboard', icon: faChartPie, color: 'text-zinc-500' };
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: UserProfile): NavSection[] {
+  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: faChartPie, category: 'workspace' };
+
   switch (role) {
     case 'landlord': {
-      const items: NavItem[] = [
-        dashboard,
-        { id: 'properties',  label: 'Assets',    icon: faHome,          color: 'text-blue-500' },
-        { id: 'maintenance', label: 'Maintenance',   icon: faTools,         color: 'text-amber-500' },
-        { id: 'finances',    label: 'Finances',      icon: faWallet,        color: 'text-emerald-500' },
-        { id: 'tenants',     label: 'Tenants',       icon: faUsers,         color: 'text-purple-500' },
-        { id: 'automations', label: 'Notifications', icon: faBell,          color: 'text-rose-500' },
-      ];
       const features = profile ? getSubscriptionFeatures(profile) : { maintenanceHub: true };
-      return features.maintenanceHub ? items : items.filter((item) => item.id !== 'maintenance');
+      const workspaceItems: NavItem[] = [
+        dashboardItem,
+        { id: 'properties', label: 'Assets & Units', icon: faHome, category: 'workspace' },
+      ];
+      const operationsItems: NavItem[] = [
+        { id: 'finances', label: 'Finances & Rent', icon: faWallet, category: 'operations' },
+        ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: faTools, category: 'operations' as const }] : []),
+        { id: 'tenants', label: 'Tenants Directory', icon: faUsers, category: 'operations' },
+        { id: 'automations', label: 'Notifications', icon: faBell, category: 'operations' },
+      ];
+      return [
+        { title: 'Core Workspace', items: workspaceItems },
+        { title: 'Operations', items: operationsItems },
+      ];
     }
     case 'hunter':
       return [
-        dashboard,
-        { id: 'all',         label: 'All Spaces',   icon: faHome,          color: 'text-blue-500' },
-        { id: 'residential', label: 'Residential',   icon: faBuilding,      color: 'text-emerald-500' },
-        { id: 'commercial',  label: 'Commercial',    icon: faBuilding,      color: 'text-amber-500' },
-        { id: 'bnb',         label: 'BNB / Luxury',  icon: faHotel,         color: 'text-purple-500' },
+        {
+          title: 'Explorer',
+          items: [
+            dashboardItem,
+            { id: 'all', label: 'All Spaces', icon: faHome, category: 'workspace' },
+            { id: 'residential', label: 'Residential', icon: faBuilding, category: 'workspace' },
+            { id: 'commercial', label: 'Commercial', icon: faBuilding, category: 'workspace' },
+            { id: 'bnb', label: 'BNB / Luxury', icon: faHotel, category: 'workspace' },
+          ],
+        },
       ];
     case 'admin':
       return [
-        dashboard,
-        { id: 'registered',  label: 'Users',         icon: faUsers,         color: 'text-blue-500' },
-        { id: 'pending',     label: 'Pending',        icon: faLink,          color: 'text-amber-500' },
-        { id: 'properties',  label: 'Assets',      icon: faBuilding,      color: 'text-emerald-500' },
-        { id: 'maintenance', label: 'Maintenance',   icon: faTools,         color: 'text-amber-500' },
-        { id: 'finances',    label: 'Finances',      icon: faWallet,        color: 'text-emerald-500' },
-        { id: 'tenants',     label: 'Tenants',       icon: faUsers,         color: 'text-purple-500' },
-        { id: 'automations', label: 'Notifications', icon: faBell,          color: 'text-rose-500' },
-        ...(isSuperAdmin ? [
-          { id: 'platforms', label: 'Network',        icon: faGlobe,         color: 'text-indigo-500' },
-          { id: 'audit',     label: 'Audit Log',      icon: faClipboardList, color: 'text-rose-500' },
-        ] : []),
+        {
+          title: 'Management',
+          items: [
+            dashboardItem,
+            { id: 'registered', label: 'User Registry', icon: faUsers, category: 'workspace' },
+            { id: 'pending', label: 'Pending Users', icon: faLink, category: 'workspace' },
+            { id: 'properties', label: 'Asset Portfolio', icon: faBuilding, category: 'workspace' },
+          ],
+        },
+        {
+          title: 'Property Operations',
+          items: [
+            { id: 'maintenance', label: 'Maintenance', icon: faTools, category: 'operations' },
+            { id: 'finances', label: 'Finances', icon: faWallet, category: 'operations' },
+            { id: 'tenants', label: 'Tenants', icon: faUsers, category: 'operations' },
+            { id: 'automations', label: 'Notifications', icon: faBell, category: 'operations' },
+          ],
+        },
+        ...(isSuperAdmin
+          ? [
+              {
+                title: 'Multi-Tenant Governance',
+                items: [
+                  { id: 'platforms', label: 'Network Platforms', icon: faGlobe, category: 'network' as const },
+                  { id: 'audit', label: 'Audit Trail', icon: faClipboardList, category: 'network' as const },
+                ],
+              },
+            ]
+          : []),
       ];
     case 'tenant':
       return [
-        { id: 'dashboard',   label: 'Dashboard',      icon: faChartPie,      color: 'text-emerald-500' },
-        { id: 'finances',    label: 'Finances',       icon: faWallet,        color: 'text-emerald-500' },
-        { id: 'maintenance', label: 'Maintenance',    icon: faTools,         color: 'text-amber-500' },
-        { id: 'notices',     label: 'Notices',        icon: faBell,          color: 'text-purple-500' },
+        {
+          title: 'Tenant Space',
+          items: [
+            dashboardItem,
+            { id: 'finances', label: 'Rent & Payments', icon: faWallet, category: 'workspace' },
+            { id: 'maintenance', label: 'Maintenance Requests', icon: faTools, category: 'workspace' },
+            { id: 'notices', label: 'Notices & Reminders', icon: faBell, category: 'workspace' },
+          ],
+        },
       ];
     default:
-      return [dashboard];
+      return [{ title: 'Main', items: [dashboardItem] }];
   }
 }
 
-const ROLE_META: Record<UserRole, { label: string; color: string; bg: string }> = {
-  landlord: { label: 'Landlord',  color: 'text-blue-600',    bg: 'bg-blue-50' },
-  hunter:   { label: 'Hunter',    color: 'text-purple-600',  bg: 'bg-purple-50' },
-  admin:    { label: 'Admin',     color: 'text-rose-600',    bg: 'bg-rose-50' },
-  tenant:   { label: 'Tenant',    color: 'text-emerald-600', bg: 'bg-emerald-50' },
+const ROLE_BADGE_STYLES: Record<UserRole, { label: string; text: string; bg: string; border: string }> = {
+  landlord: { label: 'Landlord', text: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-50 dark:bg-blue-950/40', border: 'border-blue-200/80 dark:border-blue-800/60' },
+  hunter:   { label: 'Hunter',   text: 'text-purple-700 dark:text-purple-300', bg: 'bg-purple-50 dark:bg-purple-950/40', border: 'border-purple-200/80 dark:border-purple-800/60' },
+  admin:    { label: 'Admin',    text: 'text-rose-700 dark:text-rose-300', bg: 'bg-rose-50 dark:bg-rose-950/40', border: 'border-rose-200/80 dark:border-rose-800/60' },
+  tenant:   { label: 'Tenant',   text: 'text-emerald-700 dark:text-emerald-300', bg: 'bg-emerald-50 dark:bg-emerald-950/40', border: 'border-emerald-200/80 dark:border-emerald-800/60' },
 };
 
 export default function Sidebar({ profile, activeTab, setActiveTab, currentRole, isImpersonating }: SidebarProps) {
-  const navItems = getRoleNavItems(currentRole, profile.isSuperAdmin, profile);
-  const roleMeta = ROLE_META[currentRole] ?? ROLE_META.hunter;
+  const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
+  const roleStyle = ROLE_BADGE_STYLES[currentRole] ?? ROLE_BADGE_STYLES.hunter;
   const topOffset = isImpersonating ? '100px' : '56px';
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Polls for unread notifications — replaces the old Supabase Realtime subscription.
   useEffect(() => {
     if (!profile?.email) return;
 
@@ -126,7 +163,7 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
 
   const handleLogout = async () => {
     await authClient.signOut({});
-    toast.success('Signed out');
+    toast.success('Signed out successfully');
   };
 
   const handleNavClick = (id: string) => {
@@ -134,36 +171,46 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const NavButton = ({ id, label, icon, color }: NavItem) => {
+  const NavButton = ({ id, label, icon }: NavItem) => {
     const isActive = (activeTab || 'dashboard') === id;
+    const hasUnread = unreadCount > 0 && (id === 'automations' || id === 'notices');
+
     return (
       <button
         key={id}
         onClick={() => handleNavClick(id)}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 group ${
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 group cursor-pointer ${
           isActive
-            ? 'bg-zinc-950 text-white shadow-sm'
-            : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
+            ? 'bg-slate-900 text-white font-semibold shadow-xs dark:bg-slate-50 dark:text-slate-900'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
         }`}
       >
-        <div className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-          isActive ? 'bg-white/15' : 'bg-zinc-100 group-hover:bg-zinc-200'
-        }`}>
-          <FontAwesomeIcon
-            icon={icon}
-            className={`h-3 w-3 ${isActive ? 'text-white' : color || 'text-zinc-400'}`}
-          />
+        <div
+          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+            isActive
+              ? 'bg-white/15 dark:bg-slate-900/10 text-white dark:text-slate-900'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-200'
+          }`}
+        >
+          <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
         </div>
-        <span className={`text-[11px] font-black uppercase tracking-wide flex-1 ${
-          isActive ? 'text-white' : 'text-zinc-600 group-hover:text-zinc-900'
-        }`}>
+
+        <span className="text-xs tracking-tight flex-1 truncate">
           {label}
         </span>
-        {unreadCount > 0 && (id === 'automations' || id === 'notices') && (
-          <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse shrink-0 mr-1 shadow-[0_0_8px_#9333ea]" />
+
+        {hasUnread && (
+          <span className="flex h-2 w-2 relative shrink-0 mr-0.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          </span>
         )}
+
         {isActive && (
-          <FontAwesomeIcon icon={faChevronRight} className="h-2 w-2 text-white/50" />
+          <FontAwesomeIcon
+            icon={faChevronRight}
+            className={`h-2.5 w-2.5 ${isActive ? 'text-white/60 dark:text-slate-900/50' : 'opacity-0'}`}
+          />
         )}
       </button>
     );
@@ -171,89 +218,96 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
 
   return (
     <aside
-      className="hidden sm:flex flex-col w-[220px] shrink-0 border-r border-zinc-100 bg-white sticky overflow-y-auto"
-      style={{ 
-        top: topOffset,
-        height: `calc(100vh - ${topOffset})`
-      }}
+      className="hidden sm:flex flex-col w-64 h-full shrink-0 border-r border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 justify-between select-none overflow-hidden z-30"
     >
-      {/* ── User card ──────────────────────────────────────── */}
-      <div className="p-4 border-b border-zinc-50">
-        <div className="flex items-center gap-3">
+      {/* ── Brand / Status Header ──────────────────────────── */}
+      <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <img
+            src={tenantConfig.logoUrl}
+            alt={tenantConfig.appName}
+            className="h-7 w-7 object-contain rounded-lg border border-slate-200/60 dark:border-slate-700 bg-white p-0.5 shrink-0"
+          />
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-slate-900 dark:text-white tracking-tight truncate">
+              {tenantConfig.appName} OS
+            </div>
+            <div className="text-[10px] text-slate-400 font-medium tracking-wide truncate">
+              Command Node
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0" title="System Status: Connected">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+        </div>
+      </div>
+
+      {/* ── Main Navigation Sections ─────────────────────────── */}
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {navSections.map((section, idx) => (
+          <div key={idx} className="space-y-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1">
+              {section.title}
+            </p>
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavButton key={item.id} {...item} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* ── Bottom Section: Profile + Settings + Sign Out ───── */}
+      <div className="mt-auto shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
+        <div className="flex items-center gap-2.5 px-1 py-1">
           <div className="relative shrink-0">
-            <div className="h-9 w-9 rounded-xl overflow-hidden bg-gradient-to-br from-zinc-800 to-zinc-600 flex items-center justify-center text-white text-sm font-black shadow">
+            <div className="h-8 w-8 rounded-lg overflow-hidden bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-xs">
               {profile.avatarUrl ? (
                 <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
               ) : (
                 profile.displayName?.charAt(0).toUpperCase() || 'U'
               )}
             </div>
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-black text-zinc-900 truncate">{profile.displayName || 'User'}</p>
-            <p className="text-[9px] font-bold text-zinc-400 truncate">{profile.email}</p>
+            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+              {profile.displayName || 'User'}
+            </p>
+            <div className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border text-[9px] font-semibold uppercase tracking-wider mt-0.5 ${roleStyle.bg} ${roleStyle.text} ${roleStyle.border}`}>
+              <FontAwesomeIcon icon={faShieldAlt} className="h-2 w-2" />
+              {profile.isSuperAdmin ? 'Super Admin' : roleStyle.label}
+            </div>
           </div>
         </div>
-        <div className={`mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${roleMeta.bg} ${roleMeta.color}`}>
-          <FontAwesomeIcon icon={faShieldAlt} className="h-2.5 w-2.5" />
-          {profile.isSuperAdmin ? 'Super Admin' : roleMeta.label}
+
+        <div className="grid grid-cols-2 gap-1.5 pt-1">
+          <button
+            onClick={() => handleNavClick('settings')}
+            className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+            title="System Settings"
+          >
+            <FontAwesomeIcon icon={faCog} className="h-3 w-3" />
+            <span>Settings</span>
+          </button>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border border-rose-200/60 bg-rose-50/50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/20 dark:border-rose-800/40 dark:text-rose-400 transition-all cursor-pointer"
+            title="Sign out of MYBOMA"
+          >
+            <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3" />
+            <span>Sign Out</span>
+          </button>
         </div>
-      </div>
-
-      {/* ── Main navigation ────────────────────────────────── */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-300 px-3 py-2">
-          Navigation
-        </p>
-        {navItems.map(item => (
-          <NavButton key={item.id} {...item} />
-        ))}
-      </nav>
-
-      {/* ── Bottom section: Settings + Sign out ────────────── */}
-      <div className="p-3 border-t border-zinc-50 space-y-0.5">
-        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-300 px-3 py-1.5">
-          Account
-        </p>
-
-        {/* Settings */}
-        <button
-          onClick={() => handleNavClick('settings')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 group ${
-            activeTab === 'settings'
-              ? 'bg-zinc-950 text-white shadow-sm'
-              : 'text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-          }`}
-        >
-          <div className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-            activeTab === 'settings' ? 'bg-white/15' : 'bg-zinc-100 group-hover:bg-zinc-200'
-          }`}>
-            <FontAwesomeIcon
-              icon={faCog}
-              className={`h-3 w-3 ${activeTab === 'settings' ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-600'}`}
-            />
-          </div>
-          <span className={`text-[11px] font-black uppercase tracking-wide flex-1 ${
-            activeTab === 'settings' ? 'text-white' : 'text-zinc-600 group-hover:text-zinc-900'
-          }`}>
-            Settings
-          </span>
-          {activeTab === 'settings' && (
-            <FontAwesomeIcon icon={faChevronRight} className="h-2 w-2 text-white/50" />
-          )}
-        </button>
-
-        {/* Sign out */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-zinc-400 hover:text-rose-600 hover:bg-rose-50 transition-all group"
-        >
-          <div className="h-6 w-6 rounded-lg bg-zinc-100 group-hover:bg-rose-100 flex items-center justify-center shrink-0 transition-all">
-            <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 group-hover:text-rose-600" />
-          </div>
-          <span className="text-[11px] font-black uppercase tracking-wide">Sign Out</span>
-        </button>
       </div>
     </aside>
   );
