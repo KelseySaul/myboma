@@ -17,6 +17,7 @@ import {
   faCog,
   faBell,
   faInfoCircle,
+  faChevronDown,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   DropdownMenu,
