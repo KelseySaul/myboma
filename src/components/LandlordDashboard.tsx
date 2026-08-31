@@ -1022,69 +1022,207 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
         )}
       </div>
 
-      <div className="w-full px-6 md:px-8 mt-6">
+      <div className="w-full px-4 sm:px-6 md:px-8 mt-6">
         {/* ── Dashboard Overview ─────────────────────── */}
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="space-y-6 animate-in fade-in duration-300 w-full">
-            {/* Quick stats row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
-              <div className="col-span-1 sm:col-span-2 md:col-span-1 lg:col-span-1 bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 rounded-2xl p-5 flex flex-col justify-between shadow-xs">
-                <div className="flex items-center justify-between opacity-80">
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Plan Tier</span>
-                  <FontAwesomeIcon icon={faBolt} className="h-3 w-3" />
+            {/* 1. Step Action Banner (Pinterest Style) */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-rose-500 tracking-tight">
+                  Well begun is half done
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Complete the following steps to optimize your properties and collect rent effortlessly.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Step 1: Rose Gradient */}
+                <div 
+                  onClick={() => setIsProfileOpen(true)}
+                  className="bg-gradient-to-r from-rose-500 to-rose-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs">1. Verification</span>
+                    <span className="bg-white text-rose-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
+                  </div>
+                  <p className="text-[10px] text-white/85 mt-2 font-medium">Payout & settlement details</p>
                 </div>
-                <div className="my-2">
-                  <p className="text-xl font-bold tracking-tight">{subscriptionFeatures.label}</p>
-                  <p className="text-[10px] opacity-70 mt-0.5">
-                    {profile.subscriptionExpiresAt 
-                      ? `Renews ${new Date(profile.subscriptionExpiresAt).toLocaleDateString()}` 
-                      : 'Active Plan'}
-                  </p>
+
+                {/* Step 2: Sky/Blue Gradient */}
+                <div 
+                  onClick={() => setIsAddOpen(true)}
+                  className="bg-gradient-to-r from-blue-500 to-sky-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs">2. Add a unit</span>
+                    <span className="bg-white text-blue-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
+                  </div>
+                  <p className="text-[10px] text-white/85 mt-2 font-medium">List properties & pricing</p>
                 </div>
-                <div className="text-[10px] font-semibold flex items-center gap-1 text-emerald-400 dark:text-emerald-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 dark:bg-emerald-600"></span>
-                  Active Node
+
+                {/* Step 3: Purple/Violet Gradient */}
+                <div 
+                  onClick={() => setIsCreateTenantOpen(true)}
+                  className="bg-gradient-to-r from-purple-500 to-indigo-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs">3. Onboard tenant</span>
+                    <span className="bg-white text-purple-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
+                  </div>
+                  <p className="text-[10px] text-white/85 mt-2 font-medium">Send invite & automate rent</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Today's Data Section (Pastel Tiles + Circular Badges) */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Today's data</h3>
+                <button onClick={() => setActiveTab('finances')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 cursor-pointer">
+                  More →
+                </button>
+              </div>
+
+              {/* 4 Pastel KPI Cards with Circular Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Card 1: Rose Pastel */}
+                <div className="rounded-2xl p-4.5 bg-rose-50/80 border border-rose-100/70 dark:bg-rose-950/20 dark:border-rose-900/30 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Payment amount</p>
+                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
+                      {formatStatKes(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {payments.filter(p => p.status === 'paid').length} payments recorded
+                    </p>
+                  </div>
+                  <div className="w-11 h-11 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <FontAwesomeIcon icon={faWallet} className="h-4 w-4" />
+                  </div>
+                </div>
+
+                {/* Card 2: Sky Pastel */}
+                <div className="rounded-2xl p-4.5 bg-sky-50/80 border border-sky-100/70 dark:bg-sky-950/20 dark:border-sky-900/30 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Rent invoices</p>
+                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
+                      {payments.length}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending dues
+                    </p>
+                  </div>
+                  <div className="w-11 h-11 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <FontAwesomeIcon icon={faReceipt} className="h-4 w-4" />
+                  </div>
+                </div>
+
+                {/* Card 3: Purple Pastel */}
+                <div className="rounded-2xl p-4.5 bg-purple-50/80 border border-purple-100/70 dark:bg-purple-950/20 dark:border-purple-900/30 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Active tenants</p>
+                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
+                      {tenantList.filter(t => t.status === 'active').length}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {tenantList.filter(t => t.status === 'invited').length} pending invites
+                    </p>
+                  </div>
+                  <div className="w-11 h-11 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
+                  </div>
+                </div>
+
+                {/* Card 4: Emerald Pastel */}
+                <div className="rounded-2xl p-4.5 bg-emerald-50/80 border border-emerald-100/70 dark:bg-emerald-950/20 dark:border-emerald-900/30 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Vacant units</p>
+                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
+                      {properties.filter(p => p.status === 'available').length}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      {properties.length > 0 ? Math.round(((properties.length - properties.filter(p => p.status === 'available').length) / properties.length) * 100) : 0}% occupancy rate
+                    </p>
+                  </div>
+                  <div className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
+                  </div>
                 </div>
               </div>
 
-              <StatCard
-                title="Total Units"
-                value={properties.length}
-                description={`${properties.filter(p => p.status === 'available').length} available`}
-                icon={<FontAwesomeIcon icon={faHome} className="text-blue-500 h-4 w-4" />}
-                accent="blue"
-              />
-              
-              <StatCard
-                title="Capacity Limit"
-                value={`${properties.length} / ${subscriptionFeatures.maxListings ?? '∞'}`}
-                description="Listings allowance"
-                icon={<FontAwesomeIcon icon={faChartPie} className="text-purple-500 h-4 w-4" />}
-                accent="purple"
-              />
-              
-              <StatCard
-                title="Revenue Collected"
-                value={formatCurrencyCompact(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
-                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending dues`}
-                icon={<FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />}
-                accent="emerald"
-              />
-              
-              <StatCard
-                title="Open Tickets"
-                value={requests.filter(r => r.status !== 'resolved').length}
-                description={`${requests.filter(r => r.status === 'resolved').length} resolved`}
-                icon={<FontAwesomeIcon icon={faTools} className="text-rose-500 h-4 w-4" />}
-                accent="rose"
-              />
+              {/* 4 Clean Secondary Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-medium text-slate-500">Total units managed</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{properties.length}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Across {buildings.length || 1} building portfolio</p>
+                </div>
+
+                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-medium text-slate-500">Open work orders</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{requests.filter(r => r.status !== 'resolved').length}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">{requests.filter(r => r.status === 'resolved').length} resolved tickets</p>
+                </div>
+
+                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-medium text-slate-500">Plan allowance</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{properties.length} / {subscriptionFeatures.maxListings ?? '∞'}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">{subscriptionFeatures.label} Tier</p>
+                </div>
+
+                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-medium text-slate-500">Overdue rent</p>
+                  <p className="text-2xl font-bold text-rose-600 tabular-nums mt-0.5">
+                    {formatStatKes(payments.filter(p => p.status === 'overdue').reduce((s, p) => s + (p.amount || 0), 0))}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">{payments.filter(p => p.status === 'overdue').length} overdue tenant(s)</p>
+                </div>
+              </div>
             </div>
 
-            {/* Recent payments + Maintenance split */}
+            {/* 3. Operations Assistant Section (Pinterest Style 2x4 Tools Grid) */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Operations Assistant</h3>
+                <button onClick={() => setActiveTab('properties')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 cursor-pointer">
+                  More →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { title: 'New Unit', desc: 'List a single property', icon: faHome, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-950/40', action: () => setIsAddOpen(true) },
+                  { title: 'Bulk Units', desc: 'Batch create apartments', icon: faTools, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/40', action: () => setIsBulkAddOpen(true) },
+                  { title: 'Add Tenant', desc: 'Invite tenant by email', icon: faUsers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/40', action: () => setIsCreateTenantOpen(true) },
+                  { title: 'Building Block', desc: 'Group units by estate', icon: faBuilding, color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-950/40', action: () => setIsBuildingOpen(true) },
+                  { title: 'Record Expense', desc: 'Log repairs & utility costs', icon: faWallet, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/40', action: () => setIsExpenseOpen(true) },
+                  { title: 'Rent Sync', desc: 'Generate monthly invoices', icon: faReceipt, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950/40', action: refreshLandlordPayments },
+                  { title: 'Export Data', desc: 'Download CSV statement', icon: faChartPie, color: 'text-pink-600', bg: 'bg-pink-50 dark:bg-pink-950/40', action: () => setActiveTab('finances') },
+                  { title: 'Payout Rails', desc: 'Configure M-Pesa & Bank', icon: faShieldAlt, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/40', action: () => setIsProfileOpen(true) },
+                ].map((tool) => (
+                  <div 
+                    key={tool.title}
+                    onClick={tool.action}
+                    className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 p-3.5 flex items-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xs hover:border-slate-200 transition-all cursor-pointer group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl ${tool.bg} ${tool.color} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
+                      <FontAwesomeIcon icon={tool.icon} className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{tool.title}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{tool.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 4. Recent Payments + Maintenance Split */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
               {/* Recent payments */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xs overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Rent Activity</h3>
                     <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Latest Transactions</p>
@@ -1093,14 +1231,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     variant="ghost"
                     size="sm"
                     onClick={() => setActiveTab('finances')}
-                    className="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                    className="text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                   >
                     View All →
                   </Button>
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {payments.slice(0, 5).map(pay => (
-                    <div key={pay.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                    <div key={pay.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <div>
                         <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">
                           {properties.find(p => p.id === pay.propertyId)?.title || 'Unit Lease'}
@@ -1127,8 +1265,8 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
               {/* Maintenance queue */}
               {subscriptionFeatures.maintenanceHub ? (
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xs overflow-hidden">
+                  <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Work Orders</h3>
                       <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Maintenance Queue</p>
@@ -1137,14 +1275,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                       variant="ghost"
                       size="sm"
                       onClick={() => setActiveTab('maintenance')}
-                      className="text-xs font-semibold text-slate-600 dark:text-slate-300"
+                      className="text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                     >
                       View All →
                     </Button>
                   </div>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
                     {requests.slice(0, 5).map(req => (
-                      <div key={req.id} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <div key={req.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                         <div>
                           <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">{req.title}</p>
                           <p className="text-[11px] text-slate-400 capitalize">
@@ -1164,7 +1302,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center flex flex-col items-center justify-center">
+                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center flex flex-col items-center justify-center">
                   <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 mb-3">
                     <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
                   </div>

@@ -408,9 +408,9 @@ export default function HunterDashboard({
           key={f.id}
           type="button"
           onClick={() => setFilterType(f.id)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all cursor-pointer ${
             filterType === f.id
-              ? 'bg-slate-900 text-white shadow-xs dark:bg-white dark:text-slate-900'
+              ? 'bg-rose-500 text-white shadow-xs scale-[1.02]'
               : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
           }`}
         >

@@ -179,17 +179,17 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
       <button
         key={id}
         onClick={() => handleNavClick(id)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 group cursor-pointer ${
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-left transition-all duration-150 group cursor-pointer ${
           isActive
-            ? 'bg-slate-900 text-white font-semibold shadow-xs dark:bg-slate-50 dark:text-slate-900'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
+            ? 'bg-rose-50 text-rose-600 font-bold shadow-2xs dark:bg-rose-950/30 dark:text-rose-400'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
         }`}
       >
         <div
-          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+          className={`h-7.5 w-7.5 rounded-xl flex items-center justify-center shrink-0 transition-all ${
             isActive
-              ? 'bg-white/15 dark:bg-slate-900/10 text-white dark:text-slate-900'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:text-slate-800 dark:group-hover:text-slate-200'
+              ? 'bg-rose-500 text-white shadow-xs'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200'
           }`}
         >
           <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
@@ -209,7 +209,7 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
         {isActive && (
           <FontAwesomeIcon
             icon={faChevronRight}
-            className={`h-2.5 w-2.5 ${isActive ? 'text-white/60 dark:text-slate-900/50' : 'opacity-0'}`}
+            className="h-2.5 w-2.5 text-rose-400 dark:text-rose-300"
           />
         )}
       </button>

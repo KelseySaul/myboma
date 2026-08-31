@@ -667,62 +667,73 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
           <div className="space-y-6 animate-in fade-in duration-300">
             {property && landlord ? (
               <>
-                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rent Arrears</span>
-                      <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-3.5 w-3.5' : 'text-emerald-500 h-3.5 w-3.5'} />
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Card 1: Arrears (Rose pastel) */}
+                  <div className="rounded-3xl p-5 flex items-center justify-between bg-rose-50/80 border border-rose-100/70 dark:bg-rose-950/20 dark:border-rose-900/30 shadow-xs">
                     <div>
-                      <p className={`text-2xl font-bold tracking-tight tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
-                      <p className="mt-1 text-xs text-slate-400 font-medium">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
+                      <p className="text-xs font-medium text-slate-500">Rent Arrears</p>
+                      <p className={`text-2xl sm:text-3xl font-black tracking-tight tabular-nums mt-0.5 ${arrearsTotal > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>
+                        {formatMoney(arrearsTotal)}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400 font-medium">
+                        {overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                    <div className="w-11 h-11 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <FontAwesomeIcon icon={faExclamationCircle} className="h-4 w-4" />
                     </div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upcoming Due</span>
-                      <FontAwesomeIcon icon={faClock} className="text-amber-500 h-3.5 w-3.5" />
-                    </div>
+                  {/* Card 2: Upcoming (Sky pastel) */}
+                  <div className="rounded-3xl p-5 flex items-center justify-between bg-sky-50/80 border border-sky-100/70 dark:bg-sky-950/20 dark:border-sky-900/30 shadow-xs">
                     <div>
+                      <p className="text-xs font-medium text-slate-500">Upcoming Due</p>
                       {displayUpcoming ? (
                         <>
-                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                          <p className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums mt-0.5">
+                            {formatMoney(displayUpcoming.amount)}
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold text-slate-500">
                             Due {formatDate(displayUpcoming.dueDate)}
-                            <span className="mx-1.5 text-slate-300">·</span>
+                            <span className="mx-1 text-slate-300">·</span>
                             <span className={upcomingDaysRemaining! <= 3 ? 'text-rose-600' : 'text-emerald-600'}>
                               {upcomingDaysRemaining! < 0 ? `${Math.abs(upcomingDaysRemaining!)} days ago` : 
                                upcomingDaysRemaining === 0 ? 'Due Today' : 
-                               `In ${upcomingDaysRemaining} day${upcomingDaysRemaining === 1 ? '' : 's'}`}
+                               `In ${upcomingDaysRemaining}d`}
                             </span>
                           </p>
                         </>
                       ) : (
                         <>
-                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">KES 0</p>
-                          <p className="mt-1 text-xs text-emerald-600 font-semibold">Rent cleared</p>
+                          <p className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums mt-0.5">KES 0</p>
+                          <p className="mt-1 text-[11px] text-emerald-600 font-semibold">Rent cleared</p>
                         </>
                       )}
                     </div>
+                    <div className="w-11 h-11 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <FontAwesomeIcon icon={faClock} className="h-4 w-4" />
+                    </div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs sm:col-span-2 lg:col-span-1">
+                  {/* Card 3: Checkout (White card) */}
+                  <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 flex flex-col justify-between border border-slate-100 dark:border-slate-800 shadow-xs sm:col-span-2 lg:col-span-1">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Checkout / Invoicing</span>
-                      <FontAwesomeIcon icon={faWallet} className="text-blue-500 h-3.5 w-3.5" />
+                      <span className="text-xs font-medium text-slate-500">Active Lease Invoice</span>
+                      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                        <FontAwesomeIcon icon={faWallet} className="h-3.5 w-3.5" />
+                      </div>
                     </div>
                     <div>
                       {nextPayment ? (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-lg font-bold text-slate-900 dark:text-white">{formatMoney(nextPayment.amount)}</span>
+                            <span className="text-xl font-bold text-slate-900 dark:text-white tabular-nums">{formatMoney(nextPayment.amount)}</span>
                             {paymentStatusBadge(nextPayment)}
                           </div>
                           {payButtons(nextPayment)}
                         </div>
                       ) : (
-                        <div className="py-2 text-center text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1.5">
+                        <div className="py-3 text-center text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1.5">
                           <FontAwesomeIcon icon={faCheckCircle} className="h-3.5 w-3.5" />
                           Account current & cleared
                         </div>
