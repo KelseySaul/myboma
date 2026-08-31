@@ -57,15 +57,15 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
   };
 
   return (
-    <div className="space-y-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
-      <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">
+    <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+      <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
         Secure Checkout via Pesapal
       </Label>
       
       <div className="grid grid-cols-1">
         <Button
           type="button"
-          className="h-12 rounded-xl bg-indigo-600 font-black text-xs uppercase tracking-widest hover:bg-indigo-500 shadow-lg shadow-indigo-500/20"
+          className="h-12 rounded-xl bg-indigo-600 font-bold text-xs uppercase tracking-wider hover:bg-indigo-500 shadow-sm cursor-pointer"
           disabled={Boolean(paying)}
           onClick={checkout}
         >
@@ -77,8 +77,8 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
           Pay with Pesapal
         </Button>
       </div>
-      <p className="text-[10px] font-medium leading-relaxed text-zinc-500 text-center">
-        Supports <span className="font-bold text-zinc-700">M-Pesa, Visa, Mastercard</span>, and Bank Transfers.
+      <p className="text-[11px] font-normal leading-relaxed text-slate-500 text-center">
+        Supports <span className="font-semibold text-slate-700 dark:text-slate-300">M-Pesa, Visa, Mastercard</span>, and Bank Transfers.
         You will be redirected to a secure checkout page.
       </p>
     </div>
