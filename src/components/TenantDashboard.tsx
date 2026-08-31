@@ -454,14 +454,14 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       return (
         <div className="grid grid-cols-1 gap-2">
           <Button
-            className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+            className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-xs cursor-pointer"
             onClick={() => {
               setSelectedManualPaymentId(payment.id);
               setIsManualPaymentOpen(true);
             }}
           >
             <FontAwesomeIcon icon={faMobileAlt} />
-            Pay via M-Pesa (Manual)
+            Pay via M-Pesa (Manual Receipt)
           </Button>
         </div>
       );
@@ -470,23 +470,23 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     return (
       <div className="grid grid-cols-2 gap-2">
         <Button
-          className="col-span-2 h-10 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          className="col-span-2 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-2 shadow-xs cursor-pointer"
           onClick={() => handlePayRent(payment.id, 'pesapal')}
           disabled={Boolean(payingAction)}
         >
           <FontAwesomeIcon icon={payingAction === `pesapal:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `pesapal:${payment.id}` ? 'animate-spin' : ''} />
-          Pesapal
+          Pay via Pesapal
         </Button>
         <Button
-          className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shadow-xs cursor-pointer"
           onClick={() => handlePayRent(payment.id, 'mpesa')}
           disabled={Boolean(payingAction)}
         >
           <FontAwesomeIcon icon={payingAction === `mpesa:${payment.id}` ? faSpinner : faMobileAlt} className={payingAction === `mpesa:${payment.id}` ? 'animate-spin' : ''} />
-          Mobile Money
+          M-Pesa STK
         </Button>
         <Button
-          className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
+          className="h-10 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs gap-2 shadow-xs cursor-pointer"
           onClick={() => {
             setSelectedPaymentForBank(payment);
             setIsBankOpen(true);
@@ -494,10 +494,10 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
           disabled={Boolean(payingAction)}
         >
           <FontAwesomeIcon icon={faBuilding} />
-          Bank
+          Bank Details
         </Button>
         <Button
-          className="h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black text-[9px] uppercase tracking-widest gap-2 col-span-2"
+          className="h-10 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs gap-2 col-span-2 shadow-xs cursor-pointer"
           onClick={() => handlePayRent(payment.id, 'stripe')}
           disabled={Boolean(payingAction)}
         >
@@ -510,12 +510,12 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
   const paymentStatusBadge = (payment: RentPayment) => {
     let color = 'bg-amber-500 text-white';
-    if (payment.status === 'paid') color = 'bg-emerald-500 text-white';
-    else if (payment.status === 'verifying') color = 'bg-indigo-500 text-white';
-    else if (payment.status === 'overdue') color = 'bg-rose-500 text-white';
+    if (payment.status === 'paid') color = 'bg-emerald-600 text-white';
+    else if (payment.status === 'verifying') color = 'bg-indigo-600 text-white';
+    else if (payment.status === 'overdue') color = 'bg-rose-600 text-white';
     
     return (
-      <Badge className={`border-none px-3 py-1 font-black text-[9px] uppercase tracking-widest ${color}`}>
+      <Badge className={`border-none px-2.5 py-0.5 font-bold text-[10px] uppercase tracking-wider ${color}`}>
         {payment.status}
       </Badge>
     );

@@ -333,7 +333,7 @@ export default function OnboardingTour({ role, onComplete }: Props) {
           <div className="px-5 pt-4 pb-5">
             <p
               key={`d${step}`}
-              className="text-zinc-600 text-sm leading-relaxed"
+              className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed"
               style={{ animation: 'tourContentIn 0.3s 0.04s ease both' }}
             >
               {current.description}
@@ -342,11 +342,11 @@ export default function OnboardingTour({ role, onComplete }: Props) {
             {current.spotlight && (
               <div
                 key={`s${step}`}
-                className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100"
+                className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800"
                 style={{ animation: 'tourContentIn 0.3s 0.08s ease both' }}
               >
                 <span className="text-indigo-500 text-sm">👆</span>
-                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">
                   Highlighted above
                 </span>
               </div>
@@ -357,14 +357,14 @@ export default function OnboardingTour({ role, onComplete }: Props) {
               <button
                 onClick={(e) => { e.stopPropagation(); prev(); }}
                 disabled={step === 0}
-                className="text-[11px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-700 disabled:opacity-0 transition-all"
+                className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-0 transition-all cursor-pointer"
               >
                 ← Back
               </button>
-              <span className="text-[10px] font-bold text-zinc-400">{step + 1} / {steps.length}</span>
+              <span className="text-[10px] font-bold text-slate-400 tabular-nums">{step + 1} / {steps.length}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); next(); }}
-                className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-white active:scale-95 shadow-md bg-gradient-to-r ${current.color} transition-transform`}
+                className={`px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-white active:scale-95 shadow-xs bg-gradient-to-r ${current.color} transition-transform cursor-pointer`}
               >
                 {isLast ? 'Get Started →' : 'Next →'}
               </button>
@@ -372,7 +372,7 @@ export default function OnboardingTour({ role, onComplete }: Props) {
           </div>
         </div>
 
-        <p className="text-center text-white/40 text-[9px] font-bold uppercase tracking-widest mt-3">
+        <p className="text-center text-white/40 text-[10px] font-medium uppercase tracking-wider mt-3">
           Tap backdrop · Arrow keys · Esc to skip
         </p>
       </div>
