@@ -636,3 +636,165 @@ export function FinancialYieldGrid() {
     </div>
   );
 }
+
+// ==========================================
+// 7. EdukaSplineChart (Eduka Reference Chart)
+// ==========================================
+export function EdukaSplineChart({ payments = [] }: { payments?: any[] }) {
+  const [hoveredPoint, setHoveredPoint] = useState<number | null>(3);
+
+  // 4 sample or derived collection points (1 Dec, 8 Dec, 16 Dec, 31 Dec)
+  const points = [
+    { label: '1 Dec', val: 45, display: 'KES 45,000' },
+    { label: '8 Dec', val: 140, display: 'KES 140,000' },
+    { label: '16 Dec', val: 80, display: 'KES 80,000' },
+    { label: '31 Dec', val: 165, display: 'KES 165,000' },
+  ];
+
+  // SVG dimensions
+  const width = 340;
+  const height = 140;
+  const max = 200;
+
+  // Compute coordinates
+  const coords = points.map((pt, i) => ({
+    x: 40 + i * ((width - 70) / (points.length - 1)),
+    y: height - (pt.val / max) * (height - 30) - 10,
+    ...pt
+  }));
+
+  // Smooth spline path
+  const pathD = coords.reduce((acc, pt, i, arr) => {
+    if (i === 0) return `M ${pt.x},${pt.y}`;
+    const prev = arr[i - 1];
+    const cx1 = prev.x + (pt.x - prev.x) / 2;
+    const cy1 = prev.y;
+    const cx2 = prev.x + (pt.x - prev.x) / 2;
+    const cy2 = pt.y;
+    return `${acc} C ${cx1},${cy1} ${cx2},${cy2} ${pt.x},${pt.y}`;
+  }, '');
+
+  const areaD = `${pathD} L ${coords[coords.length - 1].x},${height} L ${coords[0].x},${height} Z`;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-xs flex flex-col justify-between w-full">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-bold text-slate-900 dark:text-white">Tenant Participation</h4>
+        <span className="text-[10px] font-semibold text-slate-400">Show: <span className="text-blue-500 font-bold">Monthly ▾</span></span>
+      </div>
+
+      <div className="relative w-full h-[150px]">
+        <svg viewBox={`0 0 ${width} ${height + 25}`} className="w-full h-full overflow-visible">
+          <defs>
+            <linearGradient id="eduka-spline-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#00c569" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#00c569" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Horizontal grid lines */}
+          {[0, 50, 100, 150, 200].map((level) => {
+            const y = height - (level / max) * (height - 30) - 10;
+            return (
+              <g key={level}>
+                <line x1="30" y1={y} x2={width} y2={y} stroke="#eef2f6" strokeDasharray="3 3" strokeWidth="1" />
+                <text x="10" y={y + 3} fill="#94a3b8" fontSize="8" className="font-semibold">{level}</text>
+              </g>
+            );
+          })}
+
+          {/* Area fill */}
+          <path d={areaD} fill="url(#eduka-spline-grad)" />
+
+          {/* Spline stroke */}
+          <path d={pathD} fill="none" stroke="#00c569" strokeWidth="2.5" strokeLinecap="round" />
+
+          {/* Indicator vertical line and dots */}
+          {coords.map((pt, i) => {
+            const isHovered = hoveredPoint === i;
+            return (
+              <g key={pt.label} className="cursor-pointer" onClick={() => setHoveredPoint(i)} onMouseEnter={() => setHoveredPoint(i)}>
+                {isHovered && (
+                  <>
+                    <line x1={pt.x} y1={pt.y} x2={pt.x} y2={height} stroke="#64748b" strokeWidth="1" strokeDasharray="2 2" opacity="0.6" />
+                    {/* Tooltip badge */}
+                    <rect x={pt.x + 6} y={pt.y - 12} width="40" height="18" rx="6" fill="#1e293b" />
+                    <text x={pt.x + 26} y={pt.y} fill="#ffffff" fontSize="8" fontBold="true" textAnchor="middle">{pt.val}</text>
+                  </>
+                )}
+                <circle cx={pt.x} cy={pt.y} r={isHovered ? 5 : 3.5} fill="#ffffff" stroke="#00c569" strokeWidth="2.5" />
+                <text x={pt.x} y={height + 18} fill="#64748b" fontSize="8.5" textAnchor="middle" className="font-medium">{pt.label}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 8. EdukaDonutChart (Eduka Reference Donut)
+// ==========================================
+export function EdukaDonutChart() {
+  const segments = [
+    { label: 'Residential', pct: 35, color: '#ff5722' },
+    { label: 'Commercial', pct: 20, color: '#8c45ff' },
+    { label: 'BNB / Short', pct: 30, color: '#0094ff' },
+    { label: 'Vacant', pct: 10, color: '#00c569' },
+    { label: 'Other', pct: 5, color: '#f59e0b' },
+  ];
+
+  let currentAngle = 0;
+  const radius = 40;
+  const strokeWidth = 14;
+  const center = 55;
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-3xl p-5 border border-slate-100 dark:border-slate-800 shadow-xs flex flex-col justify-between w-full">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-xs font-bold text-slate-900 dark:text-white">Total Improvement</h4>
+        <span className="text-[10px] font-semibold text-slate-400">Show: <span className="text-blue-500 font-bold">This month ▾</span></span>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 mt-2">
+        {/* SVG Donut Ring */}
+        <div className="w-[110px] h-[110px] shrink-0 relative flex items-center justify-center">
+          <svg viewBox="0 0 110 110" className="w-full h-full -rotate-90">
+            {segments.map((seg, i) => {
+              const angle = (seg.pct / 100) * 360;
+              const startAngle = currentAngle;
+              const endAngle = currentAngle + angle;
+              currentAngle = endAngle;
+
+              return (
+                <path
+                  key={seg.label}
+                  d={describeArc(center, center, radius, startAngle + 1, endAngle - 1)}
+                  fill="none"
+                  stroke={seg.color}
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Legend */}
+        <div className="flex-1 space-y-1.5 min-w-0">
+          {segments.map((seg) => (
+            <div key={seg.label} className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                <span className="text-slate-600 dark:text-slate-300 text-[11px] truncate font-medium">{seg.label}</span>
+              </div>
+              <span className="text-slate-400 text-[11px] font-bold tabular-nums ml-2">{seg.pct}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -625,7 +625,7 @@ export default function App() {
         </div>
 
         {/* Independent Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between bg-[#f4f6fa] dark:bg-slate-950">
           <div className="flex-1 min-w-0 w-full">
             {error ? (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
