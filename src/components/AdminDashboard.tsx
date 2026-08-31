@@ -87,7 +87,7 @@ interface AuditLog {
 
 const ACTION_COLORS: Record<string, string> = {
   LOGIN:                   'bg-emerald-100 text-emerald-700',
-  LOGOUT:                  'bg-zinc-100 text-zinc-600',
+  LOGOUT:                  'bg-slate-100 text-slate-600',
   PROPERTY_CREATE:         'bg-blue-100 text-blue-700',
   PROPERTY_UPDATE:         'bg-sky-100 text-sky-700',
   PROPERTY_DELETE:         'bg-rose-100 text-rose-700',
