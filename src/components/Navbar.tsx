@@ -140,16 +140,16 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
             <img 
               src={platformBranding?.brandLogoUrl || tenantConfig.logoUrl} 
               alt={platformBranding?.name || tenantConfig.appName} 
-              className="h-7 w-7 object-contain rounded-lg border border-slate-200/60 dark:border-slate-700 bg-white p-0.5" 
-              width="28" 
-              height="28" 
+              className="h-7.5 w-7.5 object-contain rounded-xl border border-slate-200/60 dark:border-slate-700 bg-white p-0.5" 
+              width="30" 
+              height="30" 
             />
             <div className="flex items-center gap-2">
               <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white tracking-tight">
                 {platformBranding?.name || tenantConfig.appName}
               </span>
-              <span className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700">
-                OS
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/60">
+                {profile?.subscriptionPlan || (profile?.isSuperAdmin ? 'Admin' : 'Basic')}
               </span>
             </div>
           </div>
@@ -158,59 +158,49 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
 
       {/* Right Side Controls */}
       {user ? (
-        <div className={`topbar-right pointer-events-auto flex items-center gap-3 ${
+        <div className={`topbar-right pointer-events-auto flex items-center gap-4 ${
           isNative 
             ? 'bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full shadow-sm border border-slate-200/80 dark:border-slate-800' 
             : ''
         }`}>
-          {profile && !isNative && (
-            <div className="hidden sm:flex items-center gap-3 border-r border-slate-200/80 dark:border-slate-800 pr-3">
-              <div className="text-right leading-tight">
-                <div className="text-xs font-bold text-slate-900 dark:text-white">
-                  {profile.displayName || 'User'}
-                </div>
-                <div className="text-[10px] text-slate-400 font-normal truncate max-w-[150px]">
-                  {profile.email}
-                </div>
-              </div>
-
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs">
-                {currentRoleLabel}
-              </span>
+          {!isNative && (
+            <div className="hidden md:flex items-center gap-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <button 
+                onClick={handlePushNotificationRequest}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer relative"
+              >
+                Notice
+                {unreadCount > 0 && (
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500 ml-1 mb-1.5" />
+                )}
+              </button>
+              <span className="text-slate-300 dark:text-slate-700">|</span>
+              <button 
+                onClick={onHelpClick}
+                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                Help center
+              </button>
             </div>
           )}
-
-          {/* Notifications Button */}
-          <Button
-            variant="ghost"
-            onClick={handlePushNotificationRequest}
-            className="h-8.5 w-8.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors p-0 relative cursor-pointer"
-            title="Enable Push Notifications"
-            aria-label="Enable Push Notifications"
-          >
-            <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-              </span>
-            )}
-          </Button>
 
           {/* User Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger render={
               <button 
-                className="h-8.5 w-8.5 rounded-xl overflow-hidden bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-xs hover:ring-2 hover:ring-slate-900/20 active:scale-95 transition-all cursor-pointer relative"
+                className="flex items-center gap-2 p-0.5 rounded-full hover:ring-2 hover:ring-slate-900/10 active:scale-95 transition-all cursor-pointer"
               >
-                {profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
-                ) : (
-                  profile?.displayName?.charAt(0).toUpperCase() || 'U'
-                )}
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 border border-white" />
-                )}
+                <div className="h-8.5 w-8.5 rounded-full overflow-hidden bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-xs relative">
+                  {profile?.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    profile?.displayName?.charAt(0).toUpperCase() || 'U'
+                  )}
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 border border-white" />
+                  )}
+                </div>
+                <FontAwesomeIcon icon={faChevronDown} className="h-2.5 w-2.5 text-slate-400 hidden sm:block mr-1" />
               </button>
             } />
             <DropdownMenuContent align="end" className="w-72 p-2 mt-2 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl animate-in fade-in zoom-in-95 duration-150">
