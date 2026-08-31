@@ -47,7 +47,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
+import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid, EdukaSplineChart, EdukaDonutChart } from './AnalyticsCharts';
 import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
 
 interface Building {
@@ -933,6 +933,13 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     tenantPage * 10
   );
 
+  const [overviewSubTab, setOverviewSubTab] = useState<'all' | 'occupied' | 'vacant'>('all');
+  const filteredOverviewProperties = properties.filter((p) => {
+    if (overviewSubTab === 'occupied') return p.status === 'rented' || p.status === 'booked';
+    if (overviewSubTab === 'vacant') return p.status === 'available';
+    return true;
+  });
+
   return (
     <div className="db w-full min-w-0 pb-24 sm:pb-8 animate-in fade-in duration-300">
       {/* ── Enterprise Page Header ─────────────────────────── */}
@@ -1023,298 +1030,206 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       </div>
 
       <div className="w-full px-4 sm:px-6 md:px-8 mt-6">
-        {/* ── Dashboard Overview ─────────────────────── */}
+        {/* ── Dashboard Overview (Eduka Style) ─────────────────────── */}
         {(activeTab === 'dashboard' || !activeTab) && (
           <div className="space-y-6 animate-in fade-in duration-300 w-full">
-            {/* 1. Step Action Banner (Pinterest Style) */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
-              <div>
-                <h2 className="text-xl sm:text-2xl font-black text-rose-500 tracking-tight">
-                  Well begun is half done
-                </h2>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Complete the following steps to optimize your properties and collect rent effortlessly.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Step 1: Rose Gradient */}
-                <div 
-                  onClick={() => setIsProfileOpen(true)}
-                  className="bg-gradient-to-r from-rose-500 to-rose-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs">1. Verification</span>
-                    <span className="bg-white text-rose-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
-                  </div>
-                  <p className="text-[10px] text-white/85 mt-2 font-medium">Payout & settlement details</p>
-                </div>
-
-                {/* Step 2: Sky/Blue Gradient */}
-                <div 
-                  onClick={() => setIsAddOpen(true)}
-                  className="bg-gradient-to-r from-blue-500 to-sky-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs">2. Add a unit</span>
-                    <span className="bg-white text-blue-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
-                  </div>
-                  <p className="text-[10px] text-white/85 mt-2 font-medium">List properties & pricing</p>
-                </div>
-
-                {/* Step 3: Purple/Violet Gradient */}
-                <div 
-                  onClick={() => setIsCreateTenantOpen(true)}
-                  className="bg-gradient-to-r from-purple-500 to-indigo-400 text-white rounded-2xl p-4 shadow-xs flex flex-col justify-between min-w-[190px] cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs">3. Onboard tenant</span>
-                    <span className="bg-white text-purple-600 font-black text-[9px] px-2.5 py-0.5 rounded-md">GO</span>
-                  </div>
-                  <p className="text-[10px] text-white/85 mt-2 font-medium">Send invite & automate rent</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Today's Data Section (Pastel Tiles + Circular Badges) */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Today's data</h3>
-                <button onClick={() => setActiveTab('finances')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 cursor-pointer">
-                  More →
-                </button>
-              </div>
-
-              {/* 4 Pastel KPI Cards with Circular Badges */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Card 1: Rose Pastel */}
-                <div className="rounded-2xl p-4.5 bg-rose-50/80 border border-rose-100/70 dark:bg-rose-950/20 dark:border-rose-900/30 flex items-center justify-between">
+            {/* 1. Top 4 Vibrant Solid Stat Cards (Eduka Style) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+              {/* Card 1: Green Card - Total Units */}
+              <div className="bg-[#00c569] text-white rounded-3xl p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+                <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Payment amount</p>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
+                    <p className="text-white/80 text-xs font-medium">Total Units</p>
+                    <p className="text-3xl font-black tracking-tight tabular-nums mt-1">{properties.length}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center text-white">
+                    <FontAwesomeIcon icon={faHome} className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="bg-black/10 -mx-5 -mb-5 px-5 py-2.5 rounded-b-3xl mt-4 flex items-center justify-between text-xs text-white/90 font-medium">
+                  <span>Vacant units</span>
+                  <span className="font-bold tabular-nums">{properties.filter(p => p.status === 'available').length} available</span>
+                </div>
+              </div>
+
+              {/* Card 2: Blue Card - Total Tenants */}
+              <div className="bg-[#0094ff] text-white rounded-3xl p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-white/80 text-xs font-medium">Total Tenants</p>
+                    <p className="text-3xl font-black tracking-tight tabular-nums mt-1">{tenantList.filter(t => t.status === 'active').length}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center text-white">
+                    <FontAwesomeIcon icon={faUsers} className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="bg-black/10 -mx-5 -mb-5 px-5 py-2.5 rounded-b-3xl mt-4 flex items-center justify-between text-xs text-white/90 font-medium">
+                  <span>Pending invitations</span>
+                  <span className="font-bold tabular-nums">{tenantList.filter(t => t.status === 'invited').length}</span>
+                </div>
+              </div>
+
+              {/* Card 3: Purple Card - Total Revenue */}
+              <div className="bg-[#8c45ff] text-white rounded-3xl p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-white/80 text-xs font-medium">Total Revenue</p>
+                    <p className="text-3xl font-black tracking-tight tabular-nums mt-1">
                       {formatStatKes(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {payments.filter(p => p.status === 'paid').length} payments recorded
-                    </p>
                   </div>
-                  <div className="w-11 h-11 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <FontAwesomeIcon icon={faWallet} className="h-4 w-4" />
+                  <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center text-white">
+                    <FontAwesomeIcon icon={faReceipt} className="h-5 w-5" />
                   </div>
                 </div>
-
-                {/* Card 2: Sky Pastel */}
-                <div className="rounded-2xl p-4.5 bg-sky-50/80 border border-sky-100/70 dark:bg-sky-950/20 dark:border-sky-900/30 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">Rent invoices</p>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
-                      {payments.length}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending dues
-                    </p>
-                  </div>
-                  <div className="w-11 h-11 rounded-full bg-sky-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <FontAwesomeIcon icon={faReceipt} className="h-4 w-4" />
-                  </div>
-                </div>
-
-                {/* Card 3: Purple Pastel */}
-                <div className="rounded-2xl p-4.5 bg-purple-50/80 border border-purple-100/70 dark:bg-purple-950/20 dark:border-purple-900/30 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">Active tenants</p>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
-                      {tenantList.filter(t => t.status === 'active').length}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {tenantList.filter(t => t.status === 'invited').length} pending invites
-                    </p>
-                  </div>
-                  <div className="w-11 h-11 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <FontAwesomeIcon icon={faUsers} className="h-4 w-4" />
-                  </div>
-                </div>
-
-                {/* Card 4: Emerald Pastel */}
-                <div className="rounded-2xl p-4.5 bg-emerald-50/80 border border-emerald-100/70 dark:bg-emerald-950/20 dark:border-emerald-900/30 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-500">Vacant units</p>
-                    <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tabular-nums mt-0.5">
-                      {properties.filter(p => p.status === 'available').length}
-                    </p>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      {properties.length > 0 ? Math.round(((properties.length - properties.filter(p => p.status === 'available').length) / properties.length) * 100) : 0}% occupancy rate
-                    </p>
-                  </div>
-                  <div className="w-11 h-11 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
-                  </div>
+                <div className="bg-black/10 -mx-5 -mb-5 px-5 py-2.5 rounded-b-3xl mt-4 flex items-center justify-between text-xs text-white/90 font-medium">
+                  <span>Completed</span>
+                  <span className="font-bold tabular-nums">{payments.filter(p => p.status === 'paid').length} invoices</span>
                 </div>
               </div>
 
-              {/* 4 Clean Secondary Stat Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
-                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                  <p className="text-xs font-medium text-slate-500">Total units managed</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{properties.length}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Across {buildings.length || 1} building portfolio</p>
+              {/* Card 4: Orange Card - Plan Tier */}
+              <div className="bg-[#ff5722] text-white rounded-3xl p-5 shadow-xs flex flex-col justify-between overflow-hidden">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-white/80 text-xs font-medium">Plan</p>
+                    <p className="text-2xl font-black tracking-tight mt-1">{subscriptionFeatures.label}</p>
+                  </div>
+                  <div className="h-10 w-10 rounded-2xl bg-white/20 flex items-center justify-center text-white">
+                    <FontAwesomeIcon icon={faShieldAlt} className="h-5 w-5" />
+                  </div>
                 </div>
-
-                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                  <p className="text-xs font-medium text-slate-500">Open work orders</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{requests.filter(r => r.status !== 'resolved').length}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">{requests.filter(r => r.status === 'resolved').length} resolved tickets</p>
-                </div>
-
-                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                  <p className="text-xs font-medium text-slate-500">Plan allowance</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white tabular-nums mt-0.5">{properties.length} / {subscriptionFeatures.maxListings ?? '∞'}</p>
-                  <p className="text-[11px] text-slate-400 mt-1">{subscriptionFeatures.label} Tier</p>
-                </div>
-
-                <div className="rounded-2xl p-4 bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                  <p className="text-xs font-medium text-slate-500">Overdue rent</p>
-                  <p className="text-2xl font-bold text-rose-600 tabular-nums mt-0.5">
-                    {formatStatKes(payments.filter(p => p.status === 'overdue').reduce((s, p) => s + (p.amount || 0), 0))}
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-1">{payments.filter(p => p.status === 'overdue').length} overdue tenant(s)</p>
+                <div className="bg-black/10 -mx-5 -mb-5 px-5 py-2.5 rounded-b-3xl mt-4 flex items-center justify-between text-xs text-white/90 font-medium">
+                  <span className="truncate">Expires: {profile.subscriptionExpiresAt ? new Date(profile.subscriptionExpiresAt).toLocaleDateString() : 'Active'}</span>
+                  <button onClick={() => setActiveTab('settings')} className="underline font-bold shrink-0 cursor-pointer">See Details</button>
                 </div>
               </div>
             </div>
 
-            {/* 3. Operations Assistant Section (Pinterest Style 2x4 Tools Grid) */}
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Operations Assistant</h3>
-                <button onClick={() => setActiveTab('properties')} className="text-xs font-semibold text-rose-500 hover:text-rose-600 cursor-pointer">
-                  More →
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { title: 'New Unit', desc: 'List a single property', icon: faHome, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-950/40', action: () => setIsAddOpen(true) },
-                  { title: 'Bulk Units', desc: 'Batch create apartments', icon: faTools, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/40', action: () => setIsBulkAddOpen(true) },
-                  { title: 'Add Tenant', desc: 'Invite tenant by email', icon: faUsers, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/40', action: () => setIsCreateTenantOpen(true) },
-                  { title: 'Building Block', desc: 'Group units by estate', icon: faBuilding, color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-950/40', action: () => setIsBuildingOpen(true) },
-                  { title: 'Record Expense', desc: 'Log repairs & utility costs', icon: faWallet, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/40', action: () => setIsExpenseOpen(true) },
-                  { title: 'Rent Sync', desc: 'Generate monthly invoices', icon: faReceipt, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-950/40', action: refreshLandlordPayments },
-                  { title: 'Export Data', desc: 'Download CSV statement', icon: faChartPie, color: 'text-pink-600', bg: 'bg-pink-50 dark:bg-pink-950/40', action: () => setActiveTab('finances') },
-                  { title: 'Payout Rails', desc: 'Configure M-Pesa & Bank', icon: faShieldAlt, color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/40', action: () => setIsProfileOpen(true) },
-                ].map((tool) => (
-                  <div 
-                    key={tool.title}
-                    onClick={tool.action}
-                    className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 p-3.5 flex items-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:shadow-xs hover:border-slate-200 transition-all cursor-pointer group"
-                  >
-                    <div className={`w-10 h-10 rounded-xl ${tool.bg} ${tool.color} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
-                      <FontAwesomeIcon icon={tool.icon} className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{tool.title}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{tool.desc}</p>
+            {/* 2. Main Section: 2/3 Left (Units & Tenants) and 1/3 Right (Charts) */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 w-full mt-6">
+              {/* ── Left Column: Properties List + Recent Tenants ──────────────── */}
+              <div className="xl:col-span-2 space-y-6">
+                {/* Properties Table Card ("Courses" in Eduka) */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Properties & Units</h3>
+                    <div className="flex items-center gap-4 text-xs font-semibold">
+                      {(['all', 'occupied', 'vacant'] as const).map((sub) => {
+                        const isSubActive = overviewSubTab === sub;
+                        return (
+                          <button
+                            key={sub}
+                            onClick={() => setOverviewSubTab(sub)}
+                            className={`pb-1 relative capitalize transition-colors cursor-pointer ${
+                              isSubActive ? 'text-[#00c569] font-bold' : 'text-slate-400 hover:text-slate-700'
+                            }`}
+                          >
+                            {sub}
+                            {isSubActive && (
+                              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00c569] rounded-full" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* 4. Recent Payments + Maintenance Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-6">
-              {/* Recent payments */}
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xs overflow-hidden">
-                <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent Rent Activity</h3>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Latest Transactions</p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setActiveTab('finances')}
-                    className="text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                  >
-                    View All →
-                  </Button>
-                </div>
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {payments.slice(0, 5).map(pay => (
-                    <div key={pay.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">
-                          {properties.find(p => p.id === pay.propertyId)?.title || 'Unit Lease'}
-                        </p>
-                        <p className="text-[11px] text-slate-400 font-normal">
-                          Due {new Date(pay.dueDate).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white tabular-nums">KES {pay.amount?.toLocaleString()}</span>
-                        <Badge variant={pay.status === 'paid' ? 'success' : pay.status === 'overdue' ? 'destructive' : 'warning'}>
-                          {pay.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                  {payments.length === 0 && (
-                    <div className="p-8 text-center text-xs text-slate-400">
-                      No payment transactions recorded yet.
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Maintenance queue */}
-              {subscriptionFeatures.maintenanceHub ? (
-                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-xs overflow-hidden">
-                  <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Work Orders</h3>
-                      <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">Maintenance Queue</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setActiveTab('maintenance')}
-                      className="text-xs font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                    >
-                      View All →
-                    </Button>
-                  </div>
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {requests.slice(0, 5).map(req => (
-                      <div key={req.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <div>
-                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[180px]">{req.title}</p>
-                          <p className="text-[11px] text-slate-400 capitalize">
-                            {req.priority} priority · {properties.find(p => p.id === req.propertyId)?.title || 'Property'}
-                          </p>
+                    {filteredOverviewProperties.slice(0, 4).map((prop) => (
+                      <div key={prop.id} className="py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-2xl px-2 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-11 w-11 rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200/60">
+                            {prop.images?.[0] ? (
+                              <img src={prop.images[0]} alt={prop.title} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center text-slate-400">
+                                <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{prop.title}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{prop.location} · {prop.type}</p>
+                          </div>
                         </div>
-                        <Badge variant={req.status === 'resolved' ? 'success' : req.status === 'in-progress' ? 'info' : 'warning'}>
-                          {req.status}
-                        </Badge>
+
+                        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white tabular-nums hidden sm:block">
+                            KES {prop.price?.toLocaleString()}/mo
+                          </span>
+                          <span className={`text-[11px] font-bold capitalize ${
+                            prop.status === 'rented' ? 'text-[#00c569]' : prop.status === 'available' ? 'text-blue-500' : 'text-amber-500'
+                          }`}>
+                            {prop.status === 'rented' ? 'Occupied' : prop.status === 'available' ? 'Available' : 'Booked'}
+                          </span>
+                          <Button variant="ghost" size="sm" onClick={() => setActiveTab('properties')} className="h-8 w-8 p-0 rounded-full text-slate-400 hover:text-slate-700">
+                            <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
-                    {requests.length === 0 && (
-                      <div className="p-8 text-center text-xs text-slate-400">
-                        All clear! No active maintenance requests in queue.
+                    {properties.length === 0 && (
+                      <div className="py-8 text-center text-xs text-slate-400">
+                        No properties added yet. Click "+ Create New" above.
                       </div>
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="bg-slate-50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 p-8 text-center flex flex-col items-center justify-center">
-                  <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 mb-3">
-                    <FontAwesomeIcon icon={faTools} className="h-4 w-4" />
+
+                {/* Recent Tenant Activity ("Student Participated Recently" in Eduka) */}
+                <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xs border border-slate-100 dark:border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Recent Tenant Activity</h3>
+                    <button onClick={() => setActiveTab('tenants')} className="text-xs font-bold text-[#00c569] hover:underline cursor-pointer">
+                      View All
+                    </button>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">Maintenance Hub Locked</h4>
-                  <p className="text-xs text-slate-500 max-w-xs mt-1 mb-4">
-                    Upgrade to an enterprise landlord plan to unlock tenant ticketing and repair tracking.
-                  </p>
-                  <Button size="sm" onClick={() => setActiveTab('settings')}>
-                    Upgrade Plan
-                  </Button>
+
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {tenantList.slice(0, 4).map((t) => {
+                      const tProp = properties.find(p => p.id === t.propertyId);
+                      return (
+                        <div key={t.id} className="py-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-8.5 w-8.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
+                              {t.name?.charAt(0).toUpperCase() || 'T'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{t.name}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{t.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="text-center hidden sm:block">
+                            <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                              {tProp?.title || 'Assigned Unit'}
+                            </span>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white tabular-nums">
+                              {tProp?.price ? `KES ${tProp.price.toLocaleString()}` : 'KES 0'}
+                            </span>
+                            <p className="text-[10px] font-bold text-[#00c569] capitalize">{t.status}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {tenantList.length === 0 && (
+                      <div className="py-8 text-center text-xs text-slate-400">
+                        No tenants enrolled yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
+
+              {/* ── Right Column: Spline Chart + Donut Breakdown ──────────────── */}
+              <div className="space-y-6">
+                <EdukaSplineChart payments={payments} />
+                <EdukaDonutChart />
+              </div>
             </div>
           </div>
         )}

@@ -134,74 +134,57 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
         paddingTop: isNative ? 'var(--sat)' : undefined
       }}
     >
-      {/* Brand & Breadcrumb Container */}
+      {/* Greeting Header (Eduka Style) */}
       {!isNative && (
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2.5">
-            <img 
-              src={platformBranding?.brandLogoUrl || tenantConfig.logoUrl} 
-              alt={platformBranding?.name || tenantConfig.appName} 
-              className="h-7.5 w-7.5 object-contain rounded-xl border border-slate-200/60 dark:border-slate-700 bg-white p-0.5" 
-              width="30" 
-              height="30" 
-            />
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white tracking-tight">
-                {platformBranding?.name || tenantConfig.appName}
-              </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/60">
-                {profile?.subscriptionPlan || (profile?.isSuperAdmin ? 'Admin' : 'Basic')}
-              </span>
-            </div>
-          </div>
+          <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
+            {new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 18 ? 'Good Afternoon' : 'Good Evening'}, {profile?.displayName?.split(' ')[0] || 'User'}! 
+            <span className="text-base">👋</span>
+          </h2>
         </div>
       )}
 
-      {/* Right Side Controls */}
+      {/* Right Side Controls (Eduka Style) */}
       {user ? (
-        <div className={`topbar-right pointer-events-auto flex items-center gap-4 ${
+        <div className={`topbar-right pointer-events-auto flex items-center gap-3.5 ${
           isNative 
             ? 'bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-full shadow-sm border border-slate-200/80 dark:border-slate-800' 
             : ''
         }`}>
           {!isNative && (
-            <div className="hidden md:flex items-center gap-3 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <button 
-                onClick={handlePushNotificationRequest}
-                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer relative"
-              >
-                Notice
-                {unreadCount > 0 && (
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-rose-500 ml-1 mb-1.5" />
-                )}
-              </button>
-              <span className="text-slate-300 dark:text-slate-700">|</span>
-              <button 
-                onClick={onHelpClick}
-                className="hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-              >
-                Help center
-              </button>
+            <div className="hidden md:flex items-center gap-2.5 bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700 rounded-full px-3.5 py-1.5 text-xs text-slate-400 w-60">
+              <FontAwesomeIcon icon={faSearch} className="h-3 w-3 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search properties or tenants..." 
+                className="bg-transparent border-none outline-hidden text-xs text-slate-700 dark:text-slate-200 placeholder:text-slate-400 w-full"
+              />
             </div>
           )}
+
+          {/* Notifications Button */}
+          <button
+            onClick={handlePushNotificationRequest}
+            className="h-8.5 w-8.5 rounded-full bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center relative cursor-pointer"
+            title="Notifications"
+          >
+            <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+            )}
+          </button>
 
           {/* User Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger render={
               <button 
-                className="flex items-center gap-2 p-0.5 rounded-full hover:ring-2 hover:ring-slate-900/10 active:scale-95 transition-all cursor-pointer"
+                className="h-8.5 w-8.5 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-xs hover:ring-2 hover:ring-slate-900/10 active:scale-95 transition-all cursor-pointer relative"
               >
-                <div className="h-8.5 w-8.5 rounded-full overflow-hidden bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-xs relative">
-                  {profile?.avatarUrl ? (
-                    <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
-                  ) : (
-                    profile?.displayName?.charAt(0).toUpperCase() || 'U'
-                  )}
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 border border-white" />
-                  )}
-                </div>
-                <FontAwesomeIcon icon={faChevronDown} className="h-2.5 w-2.5 text-slate-400 hidden sm:block mr-1" />
+                {profile?.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
+                ) : (
+                  profile?.displayName?.charAt(0).toUpperCase() || 'U'
+                )}
               </button>
             } />
             <DropdownMenuContent align="end" className="w-72 p-2 mt-2 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl animate-in fade-in zoom-in-95 duration-150">

@@ -179,38 +179,31 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
       <button
         key={id}
         onClick={() => handleNavClick(id)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-left transition-all duration-150 group cursor-pointer ${
+        className={`w-full relative flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-left transition-all duration-150 group cursor-pointer ${
           isActive
-            ? 'bg-rose-50 text-rose-600 font-bold shadow-2xs dark:bg-rose-950/30 dark:text-rose-400'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
+            ? 'text-[#00c569] font-bold bg-[#00c569]/5 dark:bg-[#00c569]/10'
+            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
         }`}
       >
-        <div
-          className={`h-7.5 w-7.5 rounded-xl flex items-center justify-center shrink-0 transition-all ${
-            isActive
-              ? 'bg-rose-500 text-white shadow-xs'
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200'
-          }`}
-        >
-          <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-        </div>
+        {isActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full bg-[#00c569]" />
+        )}
+
+        <FontAwesomeIcon 
+          icon={icon} 
+          className={`h-4 w-4 shrink-0 transition-colors ${
+            isActive ? 'text-[#00c569]' : 'text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
+          }`} 
+        />
 
         <span className="text-xs tracking-tight flex-1 truncate">
           {label}
         </span>
 
         {hasUnread && (
-          <span className="flex h-2 w-2 relative shrink-0 mr-0.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          <span className="h-5 min-w-[20px] px-1.5 rounded-full bg-[#00c569] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+            {unreadCount}
           </span>
-        )}
-
-        {isActive && (
-          <FontAwesomeIcon
-            icon={faChevronRight}
-            className="h-2.5 w-2.5 text-rose-400 dark:text-rose-300"
-          />
         )}
       </button>
     );
@@ -218,41 +211,29 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
 
   return (
     <aside
-      className="hidden sm:flex flex-col w-64 h-full shrink-0 border-r border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 justify-between select-none overflow-hidden z-30"
+      className="hidden sm:flex flex-col w-60 h-full shrink-0 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 justify-between select-none overflow-hidden z-30"
     >
-      {/* ── Brand / Status Header ──────────────────────────── */}
-      <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0">
+      {/* ── Brand / Header ──────────────────────────── */}
+      <div className="p-5 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <img
-            src={tenantConfig.logoUrl}
-            alt={tenantConfig.appName}
-            className="h-7 w-7 object-contain rounded-lg border border-slate-200/60 dark:border-slate-700 bg-white p-0.5 shrink-0"
-          />
-          <div className="min-w-0">
-            <div className="text-xs font-bold text-slate-900 dark:text-white tracking-tight truncate">
-              {tenantConfig.appName} OS
-            </div>
-            <div className="text-[10px] text-slate-400 font-medium tracking-wide truncate">
-              Command Node
-            </div>
+          <div className="h-8 w-8 rounded-xl bg-[#00c569]/10 flex items-center justify-center text-[#00c569] font-black text-sm shrink-0">
+            <FontAwesomeIcon icon={faHome} className="h-4 w-4" />
           </div>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0" title="System Status: Connected">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
+          <div className="text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center">
+            myboma<span className="text-[#00c569] text-xl leading-none">.</span>
+          </div>
         </div>
       </div>
 
       {/* ── Main Navigation Sections ─────────────────────────── */}
-      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+      <nav className="flex-1 px-3 py-2 space-y-4 overflow-y-auto">
         {navSections.map((section, idx) => (
           <div key={idx} className="space-y-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 py-1">
-              {section.title}
-            </p>
+            {section.title && (
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-4 py-1">
+                {section.title}
+              </p>
+            )}
             <div className="space-y-0.5">
               {section.items.map((item) => (
                 <NavButton key={item.id} {...item} />
@@ -262,52 +243,27 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
         ))}
       </nav>
 
-      {/* ── Bottom Section: Profile + Settings + Sign Out ───── */}
-      <div className="mt-auto shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-2.5 px-1 py-1">
-          <div className="relative shrink-0">
-            <div className="h-8 w-8 rounded-lg overflow-hidden bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
-              ) : (
-                profile.displayName?.charAt(0).toUpperCase() || 'U'
-              )}
-            </div>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-              {profile.displayName || 'User'}
-            </p>
-            <div className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border text-[9px] font-semibold uppercase tracking-wider mt-0.5 ${roleStyle.bg} ${roleStyle.text} ${roleStyle.border}`}>
-              <FontAwesomeIcon icon={faShieldAlt} className="h-2 w-2" />
-              {profile.isSuperAdmin ? 'Super Admin' : roleStyle.label}
-            </div>
-          </div>
-        </div>
+      {/* ── Bottom Section: Support & Sign Out (Eduka Style) ───── */}
+      <div className="mt-auto shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 space-y-1">
+        <button
+          onClick={() => handleNavClick('settings')}
+          className={`w-full flex items-center gap-3.5 px-4 py-2 rounded-xl text-left text-xs font-medium transition-all cursor-pointer ${
+            activeTab === 'settings'
+              ? 'text-[#00c569] font-bold bg-[#00c569]/5'
+              : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <FontAwesomeIcon icon={faCog} className="h-3.5 w-3.5 text-slate-400" />
+          <span>Settings</span>
+        </button>
 
-        <div className="grid grid-cols-2 gap-1.5 pt-1">
-          <button
-            onClick={() => handleNavClick('settings')}
-            className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-            title="System Settings"
-          >
-            <FontAwesomeIcon icon={faCog} className="h-3 w-3" />
-            <span>Settings</span>
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border border-rose-200/60 bg-rose-50/50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/20 dark:border-rose-800/40 dark:text-rose-400 transition-all cursor-pointer"
-            title="Sign out of MYBOMA"
-          >
-            <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3" />
-            <span>Sign Out</span>
-          </button>
-        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3.5 px-4 py-2 rounded-xl text-left text-xs font-medium text-slate-500 hover:text-rose-600 hover:bg-rose-50/60 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+        >
+          <FontAwesomeIcon icon={faSignOutAlt} className="h-3.5 w-3.5 text-slate-400 hover:text-rose-500" />
+          <span>Logout</span>
+        </button>
       </div>
     </aside>
   );
