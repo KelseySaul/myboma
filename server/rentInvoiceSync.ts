@@ -6,6 +6,7 @@
  */
 import {and, eq, lt} from 'drizzle-orm';
 import {db, schema} from '../db/client.ts';
+import {activeLeaseIdsByProperty} from './leases.ts';
 import {
   billingDateInDays,
   billingMonthKey,
@@ -23,11 +24,14 @@ type InvoicePayload = ReturnType<typeof buildRentInvoicePayload>;
 
 const insertInvoices = async (rows: InvoicePayload[]) => {
   if (rows.length === 0) return 0;
+  // Stamp each invoice with the tenancy it bills.
+  const leaseIds = await activeLeaseIdsByProperty([...new Set(rows.map((row) => row.propertyId))]);
   const inserted = await db
     .insert(schema.rentPayments)
     .values(
       rows.map((row) => ({
         ...row,
+        leaseId: leaseIds.get(row.propertyId) ?? null,
         amount: String(row.amount),
         status: row.status as 'pending' | 'overdue',
         createdAt: new Date(row.createdAt),

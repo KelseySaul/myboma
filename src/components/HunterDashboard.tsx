@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getAvailableProperties, getLandlordPublicContact, createBooking } from '../lib/api';
+import { getLandlordPublicContact, createBooking } from '../lib/api';
 import { UserProfile } from '../App';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,7 +36,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { differenceInDays, parseISO, format } from 'date-fns';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
-import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
+import { useAvailableProperties } from '../lib/queries';
 
 interface Property {
   id: string;
@@ -85,8 +85,12 @@ export default function HunterDashboard({
   externalSearchTerm?: string;
   onExternalSearchChange?: (v: string) => void;
 }) {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Polls the public available-listings endpoint (shared TanStack Query cache).
+  const { data: availableProperties, isPending: loading, error: propertiesError } = useAvailableProperties();
+  const properties = (availableProperties ?? []) as Property[];
+  useEffect(() => {
+    if (propertiesError) console.error('Failed to load available properties:', propertiesError);
+  }, [propertiesError]);
   const [paying, setPaying] = useState(false);
   const [_internalSearchTerm, _setInternalSearchTerm] = useState('');
   const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : _internalSearchTerm;
@@ -122,30 +126,6 @@ export default function HunterDashboard({
     });
   };
 
-  // Polls the public available-listings endpoint — replaces the old Supabase Realtime
-  // subscription on properties where status=available.
-  useEffect(() => {
-    let isActive = true;
-
-    const fetchProperties = async () => {
-      try {
-        const props = await getAvailableProperties();
-        if (isActive) setProperties(props as Property[]);
-      } catch (err) {
-        console.error('Failed to load available properties:', err);
-      } finally {
-        if (isActive) setLoading(false);
-      }
-    };
-
-    fetchProperties();
-    const interval = setInterval(whenVisible(fetchProperties), DASHBOARD_POLL_MS);
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   const filteredProperties = properties
     .filter(p => 

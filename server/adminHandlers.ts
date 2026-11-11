@@ -1,4 +1,6 @@
 import type {Response} from 'express';
+import {addPlatformMembership, membershipRoleFor} from './memberships.ts';
+import {withSystemAccess} from '../db/requestContext.ts';
 import {eq, ne, and, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 import {APIError} from 'better-auth';
@@ -123,7 +125,8 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
 
   const email = body.email.toLowerCase();
   const platformId = actor.isSuperAdmin ? (body.platformId ?? actor.platformId ?? null) : (actor.platformId ?? null);
-  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : body.landlordId;
+  // Every invitation records who created it, so the creator (and RLS) can see it later.
+  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : (body.landlordId ?? actor.uid);
 
   // 1. Try to create the auth user. signUpEmail also runs databaseHooks.user.create.after
   // (server/auth.ts), which seeds a baseline public.users row from these same fields.
@@ -243,13 +246,23 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     landlordId: landlordId ?? null,
   };
 
+  // System access: the caller (landlord/agency) is authorized above but isn't a platform
+  // admin, so the membership policy would refuse their insert.
+  await withSystemAccess(() =>
+    addPlatformMembership(platformId, uid!, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role})),
+  );
+
   // Stale invitation rows for a brand-new account are replaced; there is no user yet
   // whose relationships could be hijacked.
-  const [invitation] = await db
-    .insert(schema.invitations)
-    .values(invitationValues)
-    .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
-    .returning();
+  // System access: a stale invitation for this brand-new account may belong to someone
+  // else (invisible to the caller under RLS) and must still be replaced.
+  const [invitation] = await withSystemAccess(() =>
+    db
+      .insert(schema.invitations)
+      .values(invitationValues)
+      .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
+      .returning(),
+  );
 
   console.log(`[Provisioning] Provisioned ${body.role} ${uid} (landlord: ${landlordId ?? 'none'})`);
   res.status(201).json({uid, email, invitation});
@@ -350,21 +363,31 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
       }
     }
 
-    // 2. Delete the auth user — cascades to public.users (FK onDelete: 'cascade') and to
-    // Better-Auth's own session/account rows.
-    await db.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
-
-    // 3. Purge invitations, unassign properties, and cancel unpaid invoices for the user email
-    if (targetUser?.email) {
-      const email = targetUser.email.trim().toLowerCase();
+    // 2+3 in ONE transaction: delete the auth user (cascades to public.users and Better-Auth
+    // session/account rows), purge invitations, unassign units and cancel unpaid invoices.
+    // A failure part-way used to leave orphaned tenancies and invoices behind.
+    const email = targetUser.email.trim().toLowerCase();
+    // System access: authorization was decided above; cleanup must reach every tenancy and
+    // invoice of this account, not just the rows visible to the caller under RLS.
+    await withSystemAccess(() => db.transaction(async (tx) => {
+      await tx
+        .update(schema.leases)
+        .set({status: 'ended', endDate: new Date().toISOString().slice(0, 10), endedAt: new Date()})
+        .where(
+          and(
+            eq(schema.leases.status, 'active'),
+            or(eq(schema.leases.tenantUserId, targetUid), sql`lower(${schema.leases.tenantEmail}) = ${email}`),
+          ),
+        );
+      await tx.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
       // Exact (case-insensitive) matches: ilike treated '_' in emails as a wildcard and
       // could wipe other people's tenancies and invoices.
-      await db.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${email}`);
-      await db
+      await tx.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${email}`);
+      await tx
         .update(schema.properties)
         .set({tenantId: null, status: 'available'})
         .where(or(sql`lower(${schema.properties.tenantId}) = ${email}`, eq(schema.properties.tenantId, targetUid)));
-      await db
+      await tx
         .delete(schema.rentPayments)
         .where(
           and(
@@ -372,7 +395,7 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
             ne(schema.rentPayments.status, 'paid'),
           ),
         );
-    }
+    }));
 
     res.json({deleted: true});
   } catch (err: any) {

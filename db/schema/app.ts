@@ -11,6 +11,8 @@ import {
   unique,
   index,
   uniqueIndex,
+  integer,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { authUser } from './auth';
@@ -41,6 +43,7 @@ export const subscriptionStatusEnum = pgEnum('subscription_status', ['none', 'pe
 export const landlordSubPaymentChannelEnum = pgEnum('landlord_sub_payment_channel', ['mpesa', 'bank', 'stripe', 'pesapal']);
 export const landlordSubPaymentStatusEnum = pgEnum('landlord_sub_payment_status', ['pending', 'confirmed', 'rejected']);
 export const rentPayoutMethodEnum = pgEnum('rent_payout_method', ['cash', 'mpesa', 'bank']);
+export const leaseStatusEnum = pgEnum('lease_status', ['active', 'ended']);
 
 export const platforms = pgTable('platforms', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -161,6 +164,8 @@ export const rentPayments = pgTable('rentPayments', {
   providerCheckoutRequestId: text('providerCheckoutRequestId'),
   providerMerchantRequestId: text('providerMerchantRequestId'),
   paymentMetadata: jsonb('paymentMetadata').notNull().default({}),
+  // The tenancy this invoice bills. Nullable for invoices created before leases existed.
+  leaseId: uuid('leaseId').references((): AnyPgColumn => leases.id, { onDelete: 'set null' }),
   settlementStatus: settlementStatusEnum('settlementStatus'),
   settlementReference: text('settlementReference'),
   settledAt: timestamp('settledAt', { withTimezone: true }),
@@ -320,4 +325,55 @@ export const paymentAttempts = pgTable('payment_attempts', {
 }, (t) => [
   index('payment_attempts_rent_payment_idx').on(t.rentPaymentId),
   index('payment_attempts_merchant_idx').on(t.merchantReference),
+]);
+
+/**
+ * A tenancy: who rents which unit, from when, on what terms. Replaces the overloaded
+ * properties.tenantId text column (email OR uid) as the source of truth for the
+ * tenant relationship. `tenantUserId` is the normalized reference (set as soon as the
+ * tenant has an account); `tenantEmail` is kept for invited tenants who haven't signed up.
+ * properties.tenantId / rentPayments.tenantId remain as denormalized legacy references
+ * so existing clients keep working.
+ */
+export const leases = pgTable('leases', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformId: uuid('platformId').references(() => platforms.id, { onDelete: 'cascade' }),
+  propertyId: uuid('propertyId').notNull().references(() => properties.id, { onDelete: 'cascade' }),
+  landlordId: uuid('landlordId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  tenantUserId: uuid('tenantUserId').references(() => users.uid, { onDelete: 'set null' }),
+  tenantEmail: text('tenantEmail').notNull(),
+  status: leaseStatusEnum('status').notNull().default('active'),
+  startDate: date('startDate').notNull(),
+  endDate: date('endDate'),
+  rentAmount: numeric('rentAmount', { precision: 14, scale: 2 }).notNull(),
+  dueDay: integer('dueDay').notNull().default(1),
+  depositAmount: numeric('depositAmount', { precision: 14, scale: 2 }).notNull().default('0'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp('endedAt', { withTimezone: true }),
+}, (t) => [
+  // At most one active tenancy per unit.
+  uniqueIndex('leases_one_active_per_property_uq').on(t.propertyId).where(sql`${t.status} = 'active'`),
+  index('leases_tenant_user_idx').on(t.tenantUserId),
+  index('leases_tenant_email_idx').on(sql`lower(${t.tenantEmail})`),
+  index('leases_landlord_idx').on(t.landlordId),
+]);
+
+export const membershipRoleEnum = pgEnum('membership_role', ['owner', 'admin', 'manager', 'landlord', 'tenant', 'member']);
+
+/**
+ * Who belongs to which platform (organization), and as what. Replaces the single
+ * users.platformId column as the long-term source of truth: a person can belong to more
+ * than one platform (e.g. a tenant of two agencies), and staff roles (owner, admin,
+ * manager) are explicit instead of being inferred from isAdmin/role. users.platformId is
+ * kept in sync as the user's primary platform while authorization migrates.
+ */
+export const platformMemberships = pgTable('platform_memberships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformId: uuid('platformId').notNull().references(() => platforms.id, { onDelete: 'cascade' }),
+  userId: uuid('userId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  role: membershipRoleEnum('role').notNull().default('member'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique('platform_memberships_platform_user_uq').on(t.platformId, t.userId),
+  index('platform_memberships_user_idx').on(t.userId),
 ]);

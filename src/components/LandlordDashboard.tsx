@@ -6,7 +6,6 @@ import {
   uploadFile,
   markRentPaymentManual,
   sendRentReminder as sendRentReminderRequest,
-  getLandlordDashboard,
   syncRentInvoices,
   createBuilding,
   updateBuilding,
@@ -49,7 +48,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
 import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
-import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useLandlordDashboard } from '../lib/queries';
+import { clearQueryCache } from '../lib/queryClient';
 
 interface Building {
   id: string;
@@ -261,35 +262,51 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   // payments, bookings, expenses, invitations, notifications) — replaces the old seven
   // Supabase Realtime channels. The endpoint also runs the automatic rent-invoice sync
   // that used to happen client-side (see server/rentInvoiceSync.ts).
-  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
-  fetchDashboard.current = async () => {
-    try {
-      const data = await getLandlordDashboard();
-      setBuildings(data.buildings as Building[]);
-      setProperties(data.properties as Property[]);
-      setRequests(data.requests as MaintenanceRequest[]);
-      setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
-      setBookings(data.bookings as Booking[]);
-      setExpenses(data.expenses as Expense[]);
-      setInvitations(data.invitations as Invitation[]);
-      setNotifications(data.notifications);
-    } catch (err) {
-      console.error('Landlord dashboard fetch failed:', err);
-      toast.error('Could not load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // (Now a TanStack Query keyed by uid, so impersonation switches never share a cache.)
+  // Query data is copied into local state because handlers below update it optimistically.
+  const queryClient = useQueryClient();
 
+  // Catch-up invoice generation once per visit (the daily cron is the primary path);
+  // the dashboard GET itself never writes, so the first fetch waits for the sync.
+  const [syncedUid, setSyncedUid] = useState<string | null>(null);
   useEffect(() => {
-    // Catch-up invoice generation once per visit (the daily cron is the primary path);
-    // the dashboard GET itself never writes.
+    let isActive = true;
     syncRentInvoices()
       .catch(() => undefined)
-      .finally(() => fetchDashboard.current());
-    const interval = setInterval(whenVisible(() => fetchDashboard.current()), DASHBOARD_POLL_MS);
-    return () => clearInterval(interval);
+      .finally(() => {
+        if (isActive) setSyncedUid(profile.uid);
+      });
+    return () => {
+      isActive = false;
+    };
   }, [profile.uid]);
+
+  const { data: dashboardData, error: dashboardError, errorUpdatedAt: dashboardErrorAt } = useLandlordDashboard(
+    profile.uid,
+    { enabled: syncedUid === profile.uid },
+  );
+
+  useEffect(() => {
+    if (!dashboardData) return;
+    setBuildings(dashboardData.buildings as Building[]);
+    setProperties(dashboardData.properties as Property[]);
+    setRequests(dashboardData.requests as MaintenanceRequest[]);
+    setPayments(dashboardData.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+    setBookings(dashboardData.bookings as Booking[]);
+    setExpenses(dashboardData.expenses as Expense[]);
+    setInvitations(dashboardData.invitations as Invitation[]);
+    setNotifications(dashboardData.notifications);
+    setLoading(false);
+  }, [dashboardData]);
+
+  useEffect(() => {
+    if (!dashboardError) return;
+    console.error('Landlord dashboard fetch failed:', dashboardError);
+    toast.error('Could not load dashboard data');
+    setLoading(false);
+  }, [dashboardError, dashboardErrorAt]);
+
+  const refetchDashboard = () => queryClient.invalidateQueries({ queryKey: queryKeys.landlordDashboard(profile.uid) });
 
   const filteredProperties = properties.filter(p => {
     const matchesStatus = propertyStatusFilter === 'all' || p.status === propertyStatusFilter;
@@ -581,7 +598,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
-  const refreshLandlordPayments = () => fetchDashboard.current();
+  const refreshLandlordPayments = () => refetchDashboard();
 
   const handleRecordExpense = async () => {
     try {
@@ -648,6 +665,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleLogout = async () => {
     await authClient.signOut({});
+    clearQueryCache();
     toast.success('Signed out');
   };
 
@@ -864,6 +882,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAsRead = async (id: string) => {
     try {
       await markNotificationRead(id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       toast.success('Marked as read');
     } catch (err: any) {
@@ -875,6 +894,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAllAsRead = async () => {
     try {
       await markAllNotificationsRead();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       toast.success('All notifications marked as read');
     } catch (err: any) {
@@ -889,6 +909,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteNotification = async (id: string) => {
     try {
       await deleteNotificationRequest(id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast.success('Notification deleted');
     } catch (err: any) {

@@ -2,8 +2,10 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
 import nodemailer from 'nodemailer';
-import { eq } from 'drizzle-orm';
-import { db } from '../db/client.js';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+// Auth is trusted system code: it always uses the owner connection, never a user's
+// RLS-scoped request transaction (provisioning calls signUpEmail inside a request).
+import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 
 // Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
@@ -77,6 +79,12 @@ async function seedProfileForNewAuthUser(
     termsVersion,
     privacyVersion,
   });
+
+  // Tenancies created by email invitation now point at the real account (uid).
+  await db
+    .update(schema.leases)
+    .set({ tenantUserId: authUser.id })
+    .where(and(sql`lower(${schema.leases.tenantEmail}) = ${normalizedEmail}`, isNull(schema.leases.tenantUserId)));
 }
 
 /** Applies a pending admin invitation once the invitee has proven they own the mailbox. */

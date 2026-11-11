@@ -1,5 +1,6 @@
 import {Capacitor} from '@capacitor/core';
 import {getStoredToken} from '../lib/auth-client';
+import {stripImageMetadata} from './imageSanitize';
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
@@ -23,6 +24,8 @@ let impersonatedUserId: string | null = null;
 export const setImpersonatedUser = (uid: string | null) => {
   impersonatedUserId = uid;
 };
+/** The user GET requests are currently served as (null when not impersonating). */
+export const getImpersonatedUser = () => impersonatedUserId;
 
 export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Promise<T> => {
   const isNative = Capacitor.isNativePlatform();
@@ -77,8 +80,10 @@ export const uploadFile = async (file: File | Blob, fileName: string, subpath?: 
     throw new Error('You must be signed in to continue.');
   }
 
+  // Strip EXIF (GPS location etc.) client-side before the photo ever leaves the device.
+  const sanitized = await stripImageMetadata(file);
   const formData = new FormData();
-  formData.append('file', file, fileName);
+  formData.append('file', sanitized, fileName);
   if (subpath) formData.append('subpath', subpath);
 
   const response = await fetch(`${apiBaseUrl()}${clientPrefix()}/uploads`, {

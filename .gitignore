@@ -14,3 +14,6 @@ r2keys.docx
 
 # Stale copy of an old git directory (was accidentally committed)
 .git_old/
+
+# Claude Code agent worktrees
+.claude/worktrees/

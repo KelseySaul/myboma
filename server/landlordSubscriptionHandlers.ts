@@ -144,50 +144,56 @@ export const activateLandlordSubscription = async (
   if (!existing) throw new Error('Subscription payment record not found');
   if (existing.status === 'confirmed') return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
 
-  // Conditional update so concurrent callback + IPN deliveries activate exactly once.
-  const claimed = await db
-    .update(schema.landlordSubscriptionPayments)
-    .set({
-      status: 'confirmed',
-      receiptNumber,
-      receiptText: landlordReceipt,
-      paymentReference: input.paymentReference,
-      periodStart,
-      periodEnd,
-    })
-    .where(
-      and(
-        eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId),
-        ne(schema.landlordSubscriptionPayments.status, 'confirmed'),
-      ),
-    )
-    .returning({id: schema.landlordSubscriptionPayments.id});
+  // Claim the payment and grant the plan atomically: concurrent callback + IPN deliveries
+  // activate exactly once, and a failure can't leave a confirmed payment without a plan.
+  const activated = await db.transaction(async (tx) => {
+    // Conditional update so concurrent callback + IPN deliveries activate exactly once.
+    const claimed = await tx
+      .update(schema.landlordSubscriptionPayments)
+      .set({
+        status: 'confirmed',
+        receiptNumber,
+        receiptText: landlordReceipt,
+        paymentReference: input.paymentReference,
+        periodStart,
+        periodEnd,
+      })
+      .where(
+        and(
+          eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId),
+          ne(schema.landlordSubscriptionPayments.status, 'confirmed'),
+        ),
+      )
+      .returning({id: schema.landlordSubscriptionPayments.id});
 
-  if (claimed.length === 0) return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
+    if (claimed.length === 0) return false;
 
-  // Pro Plus grants the agency-admin role (scoped, plan-backed — see isAgencyAdmin in
-  // app.ts); it never sets isAdmin. Platform admins keep their role whatever they buy.
-  const isPlatformAdmin = Boolean(current?.isAdmin || current?.isSuperAdmin);
-  const nextRole = isPlatformAdmin ? (current?.role ?? 'admin') : input.tier === 'proplus' ? 'admin' : 'landlord';
+    // Pro Plus grants the agency-admin role (scoped, plan-backed — see isAgencyAdmin in
+    // app.ts); it never sets isAdmin. Platform admins keep their role whatever they buy.
+    const isPlatformAdmin = Boolean(current?.isAdmin || current?.isSuperAdmin);
+    const nextRole = isPlatformAdmin ? (current?.role ?? 'admin') : input.tier === 'proplus' ? 'admin' : 'landlord';
 
-  await db
-    .update(schema.users)
-    .set({
-      role: nextRole,
-      subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
-      subscriptionStatus: 'active',
-      subscriptionExpiresAt: periodEnd,
-    })
-    .where(eq(schema.users.uid, input.landlordId));
+    await tx
+      .update(schema.users)
+      .set({
+        role: nextRole,
+        subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: periodEnd,
+      })
+      .where(eq(schema.users.uid, input.landlordId));
 
-  // Sync the subscription to any landlords managed by this admin
-  await db
-    .update(schema.users)
-    .set({
-      subscriptionStatus: 'active',
-      subscriptionExpiresAt: periodEnd,
-    })
-    .where(eq(schema.users.managedByAdminId, input.landlordId));
+    // Sync the subscription to any landlords managed by this admin
+    await tx
+      .update(schema.users)
+      .set({
+        subscriptionStatus: 'active',
+        subscriptionExpiresAt: periodEnd,
+      })
+      .where(eq(schema.users.managedByAdminId, input.landlordId));
+    return true;
+  });
+  if (!activated) return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
 
   const summary = `${input.landlordName} subscribed to ${label} (${input.paymentReference}).`;
   await deps.insertNotification({
