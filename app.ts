@@ -3204,16 +3204,13 @@ bffRouter.delete(
     // Tenant accounts are NOT deleted here: properties.tenantId is landlord-editable, so a
     // landlord could point it at any email (an admin's included) and have it wiped. Removing
     // the units unassigns the tenants; their accounts are deleted explicitly if needed.
-    // One transaction (neon-http batch): either the units and the building go, or nothing.
-    const deleteBuilding = db.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
-    if (props.length > 0) {
-      await db.batch([
-        db.delete(schema.properties).where(inArray(schema.properties.id, props.map((p) => p.id))),
-        deleteBuilding,
-      ]);
-    } else {
-      await deleteBuilding;
-    }
+    // One transaction: either the units and the building go, or nothing does.
+    await db.transaction(async (tx) => {
+      if (props.length > 0) {
+        await tx.delete(schema.properties).where(inArray(schema.properties.id, props.map((p) => p.id)));
+      }
+      await tx.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
+    });
     await recordAudit(req.profile!, 'BUILDING_DELETE', 'building', req.params.id, {units: props.length});
 
     res.json({deleted: true});

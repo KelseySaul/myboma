@@ -350,21 +350,20 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
       }
     }
 
-    // 2. Delete the auth user — cascades to public.users (FK onDelete: 'cascade') and to
-    // Better-Auth's own session/account rows.
-    await db.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
-
-    // 3. Purge invitations, unassign properties, and cancel unpaid invoices for the user email
-    if (targetUser?.email) {
-      const email = targetUser.email.trim().toLowerCase();
+    // 2+3 in ONE transaction: delete the auth user (cascades to public.users and Better-Auth
+    // session/account rows), purge invitations, unassign units and cancel unpaid invoices.
+    // A failure part-way used to leave orphaned tenancies and invoices behind.
+    const email = targetUser.email.trim().toLowerCase();
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
       // Exact (case-insensitive) matches: ilike treated '_' in emails as a wildcard and
       // could wipe other people's tenancies and invoices.
-      await db.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${email}`);
-      await db
+      await tx.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${email}`);
+      await tx
         .update(schema.properties)
         .set({tenantId: null, status: 'available'})
         .where(or(sql`lower(${schema.properties.tenantId}) = ${email}`, eq(schema.properties.tenantId, targetUid)));
-      await db
+      await tx
         .delete(schema.rentPayments)
         .where(
           and(
@@ -372,7 +371,7 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
             ne(schema.rentPayments.status, 'paid'),
           ),
         );
-    }
+    });
 
     res.json({deleted: true});
   } catch (err: any) {
