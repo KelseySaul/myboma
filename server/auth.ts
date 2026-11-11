@@ -92,7 +92,7 @@ async function applyAdminInvitationAfterVerification(authUser: { id: string; ema
     .where(eq(schema.users.uid, authUser.id));
 }
 
-let mailer: nodemailer.Transporter | null | undefined;
+let mailer: ReturnType<typeof nodemailer.createTransport> | null | undefined;
 const getMailer = () => {
   if (mailer !== undefined) return mailer;
   mailer =

@@ -9,6 +9,7 @@ import express, {type ErrorRequestHandler, type NextFunction, type Request, type
 import multer from 'multer';
 import {buildObjectKey, getObjectStream, uploadObject} from './server/storage.ts';
 import rateLimit from 'express-rate-limit';
+import {sharedRateLimitStore} from './server/rateLimitStore.ts';
 import helmet from 'helmet';
 import nodemailer from 'nodemailer';
 import path from 'path';
@@ -1678,6 +1679,7 @@ const healthHandler = (_req: Request, res: Response) => {
 };
 
 const publicLimiter = rateLimit({
+  store: sharedRateLimitStore('publicLimiter'),
   windowMs: 15 * 60 * 1000,
   limit: 300,
   standardHeaders: true,
@@ -1688,6 +1690,7 @@ const publicLimiter = rateLimit({
 // NOTE: these limiters use the in-memory store, which is per serverless instance. For a
 // global limit, back them with a shared store (e.g. Upstash Redis) or Vercel WAF rules.
 const credentialLimiter = rateLimit({
+  store: sharedRateLimitStore('credentialLimiter'),
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: true,
@@ -1696,6 +1699,7 @@ const credentialLimiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
+  store: sharedRateLimitStore('authLimiter'),
   windowMs: 5 * 60 * 1000,
   limit: 600,
   standardHeaders: true,
@@ -1704,6 +1708,7 @@ const authLimiter = rateLimit({
 });
 
 const paymentLimiter = rateLimit({
+  store: sharedRateLimitStore('paymentLimiter'),
   windowMs: 60 * 1000,
   limit: 12,
   standardHeaders: true,
@@ -1712,6 +1717,7 @@ const paymentLimiter = rateLimit({
 });
 
 const webhookLimiter = rateLimit({
+  store: sharedRateLimitStore('webhookLimiter'),
   windowMs: 60 * 1000,
   limit: 180,
   standardHeaders: true,
@@ -1720,6 +1726,7 @@ const webhookLimiter = rateLimit({
 });
 
 const waitlistLimiter = rateLimit({
+  store: sharedRateLimitStore('waitlistLimiter'),
   windowMs: 15 * 60 * 1000,
   limit: 20,
   standardHeaders: true,
@@ -1842,14 +1849,8 @@ app.get('/api/public/properties/available', publicLimiter, asyncHandler(async (r
   res.json(rows.map((p) => ({...p, price: Number(p.price)})));
 }));
 
-/** Public file serving — mirrors the old Supabase bucket, which had public=true and a
- * "Property images are public" SELECT policy on storage.objects with no auth required. */
-app.get('/api/files/*', publicLimiter, asyncHandler(async (req, res) => {
-  const key = (req.params as unknown as string[])[0];
-  if (!key) {
-    res.status(400).json({error: 'Missing file key'});
-    return;
-  }
+/** Streams a stored object as an inert image (or a forced download). */
+const streamStoredObject = async (key: string, res: Response, cacheControl: string) => {
   try {
     const object = await getObjectStream(key);
     // Only ever serve stored files as inert images; anything else downloads as bytes.
@@ -1859,7 +1860,7 @@ app.get('/api/files/*', publicLimiter, asyncHandler(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     if (contentType === 'application/octet-stream') res.setHeader('Content-Disposition', 'attachment');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', cacheControl);
     const body = object.Body as NodeJS.ReadableStream | undefined;
     if (!body) {
       res.status(404).json({error: 'Not found'});
@@ -1873,6 +1874,22 @@ app.get('/api/files/*', publicLimiter, asyncHandler(async (req, res) => {
     }
     throw err;
   }
+};
+
+/** Public file serving for marketing assets (listing photos, avatars, platform logos).
+ * Private documents (receipts, IDs, expense evidence) live under `<uid>/private/` and are
+ * NEVER served here — see the authenticated /files/private route on the BFF. */
+app.get('/api/files/*', publicLimiter, asyncHandler(async (req, res) => {
+  const key = (req.params as unknown as string[])[0];
+  if (!key || key.includes('..')) {
+    res.status(400).json({error: 'Missing file key'});
+    return;
+  }
+  if (key.split('/')[1] === 'private') {
+    res.status(404).json({error: 'Not found'});
+    return;
+  }
+  await streamStoredObject(key, res, 'public, max-age=31536000, immutable');
 }));
 
 app.post(
@@ -2012,7 +2029,37 @@ bffRouter.post(
     const subpath = sanitizeUploadSubpath(req.body?.subpath);
     const key = buildObjectKey(req.profile!.uid, `upload.${detected.ext}`, subpath);
     await uploadObject(key, file.buffer, detected.mime);
-    res.status(201).json({url: `${appBaseUrl}/api/files/${key}`});
+    // `private/...` subpaths (receipts, IDs, expense evidence) are only reachable through
+    // the authenticated route; everything else is a public marketing asset.
+    const isPrivate = subpath?.split('/')[0] === 'private';
+    const url = isPrivate ? `${appBaseUrl}${req.baseUrl}/files/${key}` : `${appBaseUrl}/api/files/${key}`;
+    res.status(201).json({url, private: isPrivate});
+  }),
+);
+
+/** Private documents: the uploader, a super admin, or a platform admin of the uploader's
+ * platform. Short private cache only — never shared/CDN cached. */
+bffRouter.get(
+  '/files/*',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const key = (req.params as unknown as string[])[0];
+    if (!key || key.includes('..') || key.split('/')[1] !== 'private') {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    const ownerUid = key.split('/')[0];
+    const actor = req.impersonator ?? req.profile!;
+    let allowed = actor.uid === ownerUid || Boolean(actor.isSuperAdmin);
+    if (!allowed && actor.isAdmin && actor.platformId) {
+      const owner = await db.query.users.findFirst({where: eq(schema.users.uid, ownerUid), columns: {platformId: true}});
+      allowed = owner?.platformId === actor.platformId;
+    }
+    if (!allowed) {
+      res.status(404).json({error: 'Not found'});
+      return;
+    }
+    await streamStoredObject(key, res, 'private, max-age=300');
   }),
 );
 
