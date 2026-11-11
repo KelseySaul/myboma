@@ -246,7 +246,11 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     landlordId: landlordId ?? null,
   };
 
-  await addPlatformMembership(platformId, uid, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role}));
+  // System access: the caller (landlord/agency) is authorized above but isn't a platform
+  // admin, so the membership policy would refuse their insert.
+  await withSystemAccess(() =>
+    addPlatformMembership(platformId, uid!, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role})),
+  );
 
   // Stale invitation rows for a brand-new account are replaced; there is no user yet
   // whose relationships could be hijacked.
@@ -363,10 +367,12 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
     // session/account rows), purge invitations, unassign units and cancel unpaid invoices.
     // A failure part-way used to leave orphaned tenancies and invoices behind.
     const email = targetUser.email.trim().toLowerCase();
-    await db.transaction(async (tx) => {
+    // System access: authorization was decided above; cleanup must reach every tenancy and
+    // invoice of this account, not just the rows visible to the caller under RLS.
+    await withSystemAccess(() => db.transaction(async (tx) => {
       await tx
         .update(schema.leases)
-        .set({status: 'ended', endedAt: new Date()})
+        .set({status: 'ended', endDate: new Date().toISOString().slice(0, 10), endedAt: new Date()})
         .where(
           and(
             eq(schema.leases.status, 'active'),
@@ -389,7 +395,7 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
             ne(schema.rentPayments.status, 'paid'),
           ),
         );
-    });
+    }));
 
     res.json({deleted: true});
   } catch (err: any) {

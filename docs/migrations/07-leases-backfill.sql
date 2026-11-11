@@ -3,7 +3,8 @@
 -- Idempotent: units that already have an active lease are skipped.
 
 INSERT INTO leases ("platformId", "propertyId", "landlordId", "tenantUserId", "tenantEmail", status, "startDate", "rentAmount")
-SELECT p."platformId",
+SELECT DISTINCT ON (p.id)
+       p."platformId",
        p.id,
        p."landlordId",
        COALESCE(u_by_email.uid, u_by_id.uid),
@@ -19,7 +20,8 @@ LEFT JOIN users u_by_email ON lower(u_by_email.email) = lower(p."tenantId")
 LEFT JOIN users u_by_id ON u_by_id.uid::text = p."tenantId"
 WHERE p."tenantId" IS NOT NULL
   AND p.status = 'rented'
-  AND NOT EXISTS (SELECT 1 FROM leases l WHERE l."propertyId" = p.id AND l.status = 'active');
+  AND NOT EXISTS (SELECT 1 FROM leases l WHERE l."propertyId" = p.id AND l.status = 'active')
+ORDER BY p.id, u_by_email."createdAt" NULLS LAST;
 
 -- Link invoices to the lease of the same unit + tenant.
 UPDATE "rentPayments" rp
