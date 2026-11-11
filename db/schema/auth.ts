@@ -29,9 +29,9 @@ export const authAccount = pgTable('account', {
   userId: uuid('userId').notNull().references(() => authUser.id, { onDelete: 'cascade' }),
   accountId: text('accountId').notNull(),
   providerId: text('providerId').notNull(),
-  // Distinguishes e.g. local credential auth from OAuth for the same providerId; see
-  // @better-auth/core's accountSchema (createLocalAccountIssuer/createOAuthAccountIssuer).
-  issuer: text('issuer').notNull(),
+  // Added (required) by Better Auth 1.7.0-1.7.2 and no longer written since 1.7.3; kept
+  // nullable for existing rows. See docs/migrations/06-better-auth-issuer.sql.
+  issuer: text('issuer'),
   accessToken: text('accessToken'),
   refreshToken: text('refreshToken'),
   accessTokenExpiresAt: timestamp('accessTokenExpiresAt', { withTimezone: true }),
