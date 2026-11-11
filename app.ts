@@ -499,6 +499,55 @@ const updateRentPayment = async (
     .where(eq(schema.rentPayments.id, rentPaymentId));
 };
 
+/** Records a provider checkout attempt in the ledger (idempotent per provider reference). */
+const recordPaymentAttempt = async (input: {
+  rentPaymentId: string;
+  provider: 'stripe' | 'mpesa' | 'pesapal';
+  providerReference?: string | null;
+  merchantReference?: string | null;
+  amount: number | string;
+}) => {
+  if (!input.providerReference) return;
+  await db
+    .insert(schema.paymentAttempts)
+    .values({
+      rentPaymentId: input.rentPaymentId,
+      provider: input.provider,
+      providerReference: input.providerReference,
+      merchantReference: input.merchantReference ?? null,
+      amount: String(input.amount),
+    })
+    .onConflictDoNothing()
+    .catch((error) => Sentry.captureException(error));
+};
+
+/** Resolves an invoice from any of its checkout attempts, falling back to the legacy columns. */
+const findRentPaymentByProviderReference = async (providerReference: string, merchantReference?: string) => {
+  const attempt = await db.query.paymentAttempts.findFirst({
+    where: merchantReference
+      ? or(eq(schema.paymentAttempts.providerReference, providerReference), eq(schema.paymentAttempts.merchantReference, merchantReference))
+      : eq(schema.paymentAttempts.providerReference, providerReference),
+    columns: {rentPaymentId: true},
+  });
+  if (attempt?.rentPaymentId) {
+    const payment = await db.query.rentPayments.findFirst({where: eq(schema.rentPayments.id, attempt.rentPaymentId)});
+    if (payment) return payment;
+  }
+  const byCheckoutId = await db.query.rentPayments.findFirst({
+    where: eq(schema.rentPayments.providerCheckoutRequestId, providerReference),
+  });
+  if (byCheckoutId || !merchantReference) return byCheckoutId ?? null;
+  return (await db.query.rentPayments.findFirst({where: eq(schema.rentPayments.providerMerchantRequestId, merchantReference)})) ?? null;
+};
+
+const markPaymentAttempt = async (providerReference: string, status: 'succeeded' | 'failed') => {
+  await db
+    .update(schema.paymentAttempts)
+    .set({status})
+    .where(eq(schema.paymentAttempts.providerReference, providerReference))
+    .catch((error) => Sentry.captureException(error));
+};
+
 const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
   const ONE_SIGNAL_APP_ID = "16fe44a9-e285-4d7d-85f0-8b82014b9a71";
   const ONE_SIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY; 
@@ -721,6 +770,7 @@ const createStripeCheckout = asyncHandler(async (req, res) => {
     },
   });
 
+  await recordPaymentAttempt({rentPaymentId: payment.id, provider: 'stripe', providerReference: session.id, amount: payment.amount});
   await updateRentPayment(
     payment.id,
     {
@@ -1031,17 +1081,8 @@ const findSubscriptionPaymentByPesapalReference = async (
   return byMerchantRef ?? null;
 };
 
-const findRentPaymentByPesapalReference = async (orderTrackingId: string, merchantReference?: string) => {
-  const byCheckoutId = await db.query.rentPayments.findFirst({
-    where: eq(schema.rentPayments.providerCheckoutRequestId, orderTrackingId),
-  });
-  if (byCheckoutId || !merchantReference) return byCheckoutId ?? null;
-
-  const byMerchantRef = await db.query.rentPayments.findFirst({
-    where: eq(schema.rentPayments.providerMerchantRequestId, merchantReference),
-  });
-  return byMerchantRef ?? null;
-};
+const findRentPaymentByPesapalReference = (orderTrackingId: string, merchantReference?: string) =>
+  findRentPaymentByProviderReference(orderTrackingId, merchantReference);
 
 const pesapalStatusFlags = (status: PesapalTransactionStatus) => {
   const statusCode = Number(status.status_code);
@@ -1241,6 +1282,13 @@ const createPesapalRentCheckout = asyncHandler(async (req, res) => {
     cancellationUrl: cancelUrl || `${trimTrailingSlash(appBaseUrl)}/?rent_payment=cancelled&provider=pesapal`,
   });
 
+  await recordPaymentAttempt({
+    rentPaymentId: payment.id,
+    provider: 'pesapal',
+    providerReference: order.order_tracking_id,
+    merchantReference: order.merchant_reference || merchantReference,
+    amount: payment.amount,
+  });
   await updateRentPayment(
     payment.id,
     {
@@ -1388,6 +1436,13 @@ const initiateMpesaRent = asyncHandler(async (req, res) => {
     return;
   }
 
+  await recordPaymentAttempt({
+    rentPaymentId: payment.id,
+    provider: 'mpesa',
+    providerReference: body.CheckoutRequestID,
+    merchantReference: body.MerchantRequestID,
+    amount: payment.amount,
+  });
   await updateRentPayment(
     payment.id,
     {
@@ -1474,9 +1529,8 @@ const handleMpesaCallback = asyncHandler(async (req, res) => {
     return;
   }
 
-  const payment = await db.query.rentPayments.findFirst({
-    where: eq(schema.rentPayments.providerCheckoutRequestId, checkoutRequestId),
-  });
+  const payment = await findRentPaymentByProviderReference(checkoutRequestId);
+  await markPaymentAttempt(checkoutRequestId, callback.ResultCode === 0 ? 'succeeded' : 'failed');
 
   if (!payment) {
     res.json({ResultCode: 0, ResultDesc: 'Accepted'});
@@ -1486,6 +1540,16 @@ const handleMpesaCallback = asyncHandler(async (req, res) => {
   const rentPayment = payment as unknown as RentPaymentRecord;
   // Safaricom retries callbacks; an invoice that is already paid is simply acknowledged.
   if (rentPayment.status === 'paid') {
+    // A successful payment on a different attempt than the one that settled the invoice is
+    // real money taken twice — flag it for refund instead of silently dropping it.
+    const settledByThisAttempt = (rentPayment.paymentMetadata as Record<string, unknown> | null)?.checkoutRequestId === checkoutRequestId;
+    if (callback.ResultCode === 0 && !settledByThisAttempt) {
+      Sentry.captureMessage(`Duplicate M-Pesa payment ${checkoutRequestId} on already-paid invoice ${rentPayment.id}`);
+      await recordAudit(null, 'DUPLICATE_PAYMENT_NEEDS_REFUND', 'rentPayment', rentPayment.id, {
+        checkoutRequestId,
+        mpesaReceiptNumber: receiptNumber ?? null,
+      });
+    }
     res.json({ResultCode: 0, ResultDesc: 'Accepted'});
     return;
   }
