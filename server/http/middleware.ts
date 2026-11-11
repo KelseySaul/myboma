@@ -74,7 +74,8 @@ export const recordAudit = async (
   metadata?: Record<string, unknown>,
 ) => {
   try {
-    await db.insert(schema.auditLogs).values({
+    // Savepoint: a failed audit insert must not abort the request's RLS transaction.
+    await db.transaction((tx) => tx.insert(schema.auditLogs).values({
       userId: actor?.uid ?? null,
       userEmail: actor?.email ?? null,
       platformId: actor?.platformId ?? null,
@@ -82,7 +83,7 @@ export const recordAudit = async (
       resource,
       resourceId,
       metadata: {...(metadata ?? {}), source: 'server'},
-    });
+    }));
   } catch (error) {
     console.error('[Audit] Failed to record', action, error);
     Sentry.captureException(error);

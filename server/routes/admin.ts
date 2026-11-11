@@ -1,5 +1,5 @@
 import {and, desc, eq, inArray, isNull, or, sql} from 'drizzle-orm';
-import {addPlatformMembership} from '../memberships.ts';
+import {withSystemAccess} from '../../db/requestContext.ts';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
@@ -306,13 +306,23 @@ export function registerAdminRoutes(bffRouter: Router) {
       const slugBase = actor.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'platform';
       const slug = `${slugBase}-${actor.uid.slice(0, 8)}`;
 
-      const [platform] = await db
-        .insert(schema.platforms)
-        .values({name: `${actor.displayName}'s Platform`, slug, status: 'active'})
-        .returning({id: schema.platforms.id});
-
-      await db.update(schema.users).set({platformId: platform.id}).where(eq(schema.users.uid, actor.uid));
-      await addPlatformMembership(platform.id, actor.uid, 'owner');
+      // One system transaction: the platform, the caller's owner membership and their profile
+      // link commit together (the membership can't be written under the caller's RLS scope,
+      // which has no platform yet).
+      const platform = await withSystemAccess(() =>
+        db.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(schema.platforms)
+            .values({name: `${actor.displayName}'s Platform`, slug, status: 'active'})
+            .returning({id: schema.platforms.id});
+          await tx.update(schema.users).set({platformId: created.id}).where(eq(schema.users.uid, actor.uid));
+          await tx
+            .insert(schema.platformMemberships)
+            .values({platformId: created.id, userId: actor.uid, role: 'owner'})
+            .onConflictDoNothing();
+          return created;
+        }),
+      );
 
       res.json({status: 'created', platformId: platform.id});
     }),

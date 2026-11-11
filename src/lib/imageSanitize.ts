@@ -24,10 +24,14 @@ export const stripImageMetadata = async (file: File | Blob): Promise<Blob> => {
     context.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
-    // PNG keeps transparency (logos); photos become WebP.
-    const outputType = file.type === 'image/png' ? 'image/png' : 'image/webp';
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, 0.88));
-    return blob ?? file;
+    const encode = (type: string) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, 0.88));
+    // PNG keeps transparency (logos); photos become WebP. WebViews that can't encode WebP
+    // (iOS < 17) silently return PNG, which bloats photos past the upload limit — fall
+    // back to JPEG in that case.
+    if (file.type === 'image/png') return (await encode('image/png')) ?? file;
+    const webp = await encode('image/webp');
+    if (webp?.type === 'image/webp') return webp;
+    return (await encode('image/jpeg')) ?? file;
   } catch {
     return file;
   }
