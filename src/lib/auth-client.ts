@@ -4,8 +4,7 @@ import { Capacitor } from '@capacitor/core';
 // Replaces src/supabase.ts. Web uses Better-Auth's normal cookie session (works for
 // the Google OAuth redirect flow, which has no XHR response to read a bearer token
 // from). The Capacitor WebView can't reliably use cross-origin cookies, so native
-// uses the bearer plugin instead, storing the token itself — same "remember me"
-// persistence model (localStorage vs sessionStorage) as the old Supabase client.
+// uses the bearer plugin instead, storing the token itself in the OS keystore.
 
 const IS_NATIVE = Capacitor.isNativePlatform();
 
@@ -14,40 +13,69 @@ const REMEMBER_KEY = 'myboma-remember-auth';
 
 const canUseBrowserStorage = () => typeof window !== 'undefined' && !!window.localStorage && !!window.sessionStorage;
 
+/**
+ * Native bearer token storage. The token lives in memory for the running session and, when
+ * "remember me" is on, in the OS keystore (iOS Keychain / Android Keystore) via
+ * @aparajita/capacitor-secure-storage — never in WebView localStorage, where any XSS
+ * could read it. `authStorageReady` must resolve before the first API call (main.tsx).
+ */
+let cachedToken: string | null = null;
+
 export const getAuthPersistence = () => {
   if (!canUseBrowserStorage()) return false;
   return window.localStorage.getItem(REMEMBER_KEY) === 'true';
 };
 
-const activeStorage = () => (getAuthPersistence() ? window.localStorage : window.sessionStorage);
+const loadSecureStorage = () => import('@aparajita/capacitor-secure-storage').then((m) => m.SecureStorage);
+
+const persistToken = async (token: string | null) => {
+  if (!IS_NATIVE) return;
+  const storage = await loadSecureStorage();
+  if (token && getAuthPersistence()) await storage.setItem(TOKEN_KEY, token);
+  else await storage.removeItem(TOKEN_KEY);
+};
+
+export const authStorageReady: Promise<void> = (async () => {
+  if (!IS_NATIVE) return;
+  try {
+    // One-time migration off the old WebView storage.
+    const legacy = canUseBrowserStorage()
+      ? window.localStorage.getItem(TOKEN_KEY) ?? window.sessionStorage.getItem(TOKEN_KEY)
+      : null;
+    if (canUseBrowserStorage()) {
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.sessionStorage.removeItem(TOKEN_KEY);
+    }
+    const storage = await loadSecureStorage();
+    cachedToken = (await storage.getItem(TOKEN_KEY)) ?? legacy;
+    if (legacy) await persistToken(cachedToken);
+  } catch (error) {
+    console.error('[auth] Secure token storage unavailable:', error);
+  }
+})();
 
 /** Only meaningful on native (bearer storage); on web this maps to signIn's own `rememberMe` flag. */
 export const setAuthPersistence = (remember: boolean) => {
   if (!canUseBrowserStorage()) return;
-  const currentToken = window.sessionStorage.getItem(TOKEN_KEY) ?? window.localStorage.getItem(TOKEN_KEY);
-
-  if (remember) {
-    window.localStorage.setItem(REMEMBER_KEY, 'true');
-    if (currentToken) window.localStorage.setItem(TOKEN_KEY, currentToken);
-    window.sessionStorage.removeItem(TOKEN_KEY);
-  } else {
-    window.localStorage.removeItem(REMEMBER_KEY);
-    if (currentToken) window.sessionStorage.setItem(TOKEN_KEY, currentToken);
-    window.localStorage.removeItem(TOKEN_KEY);
-  }
+  if (remember) window.localStorage.setItem(REMEMBER_KEY, 'true');
+  else window.localStorage.removeItem(REMEMBER_KEY);
+  void persistToken(cachedToken).catch(() => undefined);
 };
 
-export const getStoredToken = () => (IS_NATIVE && canUseBrowserStorage() ? activeStorage().getItem(TOKEN_KEY) : null);
+export const getStoredToken = () => (IS_NATIVE ? cachedToken : null);
 
 const setStoredToken = (token: string) => {
-  if (!canUseBrowserStorage()) return;
-  activeStorage().setItem(TOKEN_KEY, token);
+  cachedToken = token;
+  void persistToken(token).catch(() => undefined);
 };
 
 export const clearStoredToken = () => {
-  if (!canUseBrowserStorage()) return;
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.sessionStorage.removeItem(TOKEN_KEY);
+  cachedToken = null;
+  if (canUseBrowserStorage()) {
+    window.localStorage.removeItem(TOKEN_KEY);
+    window.sessionStorage.removeItem(TOKEN_KEY);
+  }
+  void persistToken(null).catch(() => undefined);
 };
 
 const useGateway = import.meta.env.VITE_USE_GATEWAY === 'true' && !IS_NATIVE;
