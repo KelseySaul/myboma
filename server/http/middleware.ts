@@ -1,4 +1,6 @@
 import * as Sentry from '@sentry/node';
+import {isRlsEnabled} from '../../db/requestContext.ts';
+import {runInRlsScope} from '../../db/rlsScope.ts';
 import {eq} from 'drizzle-orm';
 import {type NextFunction, type Request, type Response} from 'express';
 import rateLimit from 'express-rate-limit';
@@ -169,6 +171,24 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
   req.profile = profile;
   req.clientKind = getClientKind(req);
   Sentry.setUser({id: session.user.id});
+
+  // Database-enforced tenant boundary (docs/migrations/08-row-level-security.sql): the rest
+  // of the request runs in one transaction scoped to this user's identity. When
+  // impersonating, the scope is the target user's (read-only, see above).
+  if (isRlsEnabled()) {
+    await runInRlsScope(
+      {
+        uid: profile.uid,
+        email: profile.email,
+        platformId: profile.platformId ?? null,
+        isAdmin: Boolean(profile.isAdmin),
+        isSuperAdmin: Boolean(profile.isSuperAdmin),
+      },
+      res,
+      next,
+    );
+    return;
+  }
   next();
 });
 

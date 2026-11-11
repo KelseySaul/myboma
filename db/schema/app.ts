@@ -357,3 +357,23 @@ export const leases = pgTable('leases', {
   index('leases_tenant_email_idx').on(sql`lower(${t.tenantEmail})`),
   index('leases_landlord_idx').on(t.landlordId),
 ]);
+
+export const membershipRoleEnum = pgEnum('membership_role', ['owner', 'admin', 'manager', 'landlord', 'tenant', 'member']);
+
+/**
+ * Who belongs to which platform (organization), and as what. Replaces the single
+ * users.platformId column as the long-term source of truth: a person can belong to more
+ * than one platform (e.g. a tenant of two agencies), and staff roles (owner, admin,
+ * manager) are explicit instead of being inferred from isAdmin/role. users.platformId is
+ * kept in sync as the user's primary platform while authorization migrates.
+ */
+export const platformMemberships = pgTable('platform_memberships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformId: uuid('platformId').notNull().references(() => platforms.id, { onDelete: 'cascade' }),
+  userId: uuid('userId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  role: membershipRoleEnum('role').notNull().default('member'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  unique('platform_memberships_platform_user_uq').on(t.platformId, t.userId),
+  index('platform_memberships_user_idx').on(t.userId),
+]);
