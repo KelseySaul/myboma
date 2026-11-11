@@ -282,7 +282,11 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   };
 
   useEffect(() => {
-    fetchDashboard.current();
+    // Catch-up invoice generation once per visit (the daily cron is the primary path);
+    // the dashboard GET itself never writes.
+    syncRentInvoices()
+      .catch(() => undefined)
+      .finally(() => fetchDashboard.current());
     const interval = setInterval(whenVisible(() => fetchDashboard.current()), DASHBOARD_POLL_MS);
     return () => clearInterval(interval);
   }, [profile.uid]);

@@ -18,6 +18,12 @@ const publicRequest = async <T>(path: string): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+/** Super-admin support view: when set, GET requests are served as this user (read-only). */
+let impersonatedUserId: string | null = null;
+export const setImpersonatedUser = (uid: string | null) => {
+  impersonatedUserId = uid;
+};
+
 export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Promise<T> => {
   const isNative = Capacitor.isNativePlatform();
   const token = isNative ? getStoredToken() : null;
@@ -34,6 +40,10 @@ export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Pro
     headers: {
       'Content-Type': 'application/json',
       ...(token ? {Authorization: `Bearer ${token}`} : {}),
+      // Never on /session: that call must keep returning the admin's own identity.
+      ...(impersonatedUserId && path !== '/session' && (!options.method || options.method === 'GET')
+        ? {'X-Impersonate-User': impersonatedUserId}
+        : {}),
       ...(options.headers || {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),

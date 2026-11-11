@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { authClient } from './lib/auth-client';
-import { getSession, completePasswordReset } from './lib/api';
+import { getSession, completePasswordReset, bffRequest, setImpersonatedUser } from './lib/api';
 import LandingPage from './components/LandingPage';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -262,14 +262,18 @@ export default function App() {
       console.warn("Unauthorized impersonation attempt");
       return;
     }
+    // Dashboards now really load the target's data (server honours X-Impersonate-User for
+    // super admins, read-only); the start is audited server-side.
+    setImpersonatedUser(target.uid);
     setImpersonatedProfile(target);
-    logAudit('ADMIN_IMPERSONATE_START', 'user', target.uid, { targetEmail: target.email });
+    void bffRequest(`/admin/impersonation/${target.uid}`, { method: 'POST' }).catch(() => undefined);
   };
 
   const handleExitImpersonation = () => {
     if (impersonatedProfile) {
       logAudit('ADMIN_IMPERSONATE_END', 'user', impersonatedProfile.uid, { targetEmail: impersonatedProfile.email });
     }
+    setImpersonatedUser(null);
     setImpersonatedProfile(null);
   };
 
