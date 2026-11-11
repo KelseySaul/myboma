@@ -1,4 +1,4 @@
-import {and, eq, gte, ilike, inArray, lte, sql} from 'drizzle-orm';
+import {and, eq, gte, inArray, lte, sql} from 'drizzle-orm';
 import {db, schema} from '../db/client.ts';
 import {canViewRentPayment, isAdmin} from '../db/authz.ts';
 import {toActor} from './types.ts';
@@ -115,7 +115,7 @@ export const handleSendRentReminder = async (
   // 3. Fetch tenant info (tenantId historically holds either an email or a uid)
   const tenantId = String(payment.tenantId);
   const tenant = tenantId.includes('@')
-    ? await db.query.users.findFirst({where: ilike(schema.users.email, tenantId), columns: {email: true}})
+    ? await db.query.users.findFirst({where: sql`lower(${schema.users.email}) = ${tenantId.toLowerCase()}`, columns: {email: true}})
     : await db.query.users.findFirst({where: eq(schema.users.uid, tenantId), columns: {email: true}});
 
   const tenantEmail = tenant?.email || payment.tenantId;
@@ -171,19 +171,39 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
     })
     .from(schema.rentPayments)
     .innerJoin(schema.properties, eq(schema.properties.id, schema.rentPayments.propertyId))
-    .where(and(eq(schema.rentPayments.status, 'pending'), lte(schema.rentPayments.dueDate, cutoff)));
+    .where(
+      and(
+        // Overdue rows must be included: the overdue refresh flips past-due invoices from
+        // 'pending' to 'overdue', which previously silenced every overdue notice.
+        inArray(schema.rentPayments.status, ['pending', 'overdue']),
+        lte(schema.rentPayments.dueDate, cutoff),
+      ),
+    );
 
   if (rows.length === 0) return;
 
   // We need to fetch all landlords and check their plans
   const landlordIds = [...new Set(rows.map((r) => r.payment.landlordId))];
   const landlords = await db
-    .select({uid: schema.users.uid, subscriptionPlan: schema.users.subscriptionPlan})
+    .select({
+      uid: schema.users.uid,
+      subscriptionPlan: schema.users.subscriptionPlan,
+      subscriptionStatus: schema.users.subscriptionStatus,
+      subscriptionExpiresAt: schema.users.subscriptionExpiresAt,
+    })
     .from(schema.users)
     .where(inArray(schema.users.uid, landlordIds));
 
+  // Automations are a Pro / Pro Plus feature, and only while the plan is paid up.
   const proLandlordIds = new Set(
-    landlords.filter((l) => l.subscriptionPlan?.includes('pro') || l.subscriptionPlan?.includes('proplus')).map((l) => l.uid),
+    landlords
+      .filter((l) => {
+        const tier = l.subscriptionPlan?.split(':')[0];
+        const active =
+          l.subscriptionStatus === 'active' && (!l.subscriptionExpiresAt || new Date(l.subscriptionExpiresAt) > today);
+        return active && (tier === 'pro' || tier === 'proplus');
+      })
+      .map((l) => l.uid),
   );
 
   for (const row of rows) {
@@ -231,7 +251,7 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
 
     if (recentNotifs.length > 0) continue; // Already reminded today
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       insertNotification({
         recipientEmail: tenantEmail.toLowerCase(),
         platformId,
@@ -248,5 +268,8 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
       }),
       sendOneSignalPushNotification(tenantEmail, title, message),
     ]);
+    for (const result of results) {
+      if (result.status === 'rejected') console.error(`[Reminders] Delivery failed for payment ${payment.id}:`, result.reason);
+    }
   }
 };

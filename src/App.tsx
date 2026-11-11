@@ -1,18 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { authClient } from './lib/auth-client';
 import { getSession, completePasswordReset } from './lib/api';
 import LandingPage from './components/LandingPage';
-import LandlordDashboard from './components/LandlordDashboard';
-import TenantDashboard from './components/TenantDashboard';
-import HunterDashboard from './components/HunterDashboard';
-import AdminDashboard from './components/AdminDashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import SettingsPage from './components/SettingsPage';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
 import { tenantConfig } from './config/tenant';
+
+// Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
+// bundles, and the landing page loads without any dashboard code at all.
+const LandlordDashboard = lazy(() => import('./components/LandlordDashboard'));
+const TenantDashboard = lazy(() => import('./components/TenantDashboard'));
+const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+
+const DashboardFallback = () => (
+  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Loading…</p>
+  </div>
+);
 
 import { logAudit } from './lib/audit';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -44,6 +53,7 @@ import OneSignalWeb from 'react-onesignal';
 import OneSignalNative from '@onesignal/capacitor-plugin';
 import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
+import { PROFILE_POLL_MS, whenVisible } from './lib/polling';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
 
 let oneSignalWebInitialized = false;
@@ -354,7 +364,7 @@ export default function App() {
   // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
   useEffect(() => {
     if (!user?.id) return;
-    const interval = setInterval(() => {
+    const interval = setInterval(whenVisible(() => {
       getSession()
         .then(({ profile: profileData }) => {
           const p = normalizeProfile(profileData);
@@ -362,7 +372,7 @@ export default function App() {
           setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
         })
         .catch(() => {});
-    }, 30000);
+    }), PROFILE_POLL_MS);
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -397,11 +407,9 @@ export default function App() {
           const { profile: data } = await getSession().catch(() => ({ profile: null as any }));
 
           const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
-          console.log(`[Polling Activation] Attempt ${attempts}: status=${data?.subscriptionStatus}, role=${data?.role}, hasExpiry=${!!data?.subscriptionExpiresAt}`);
           
           if (isActive || attempts > 50) {
             clearInterval(poll);
-            console.log(`[Polling Finished] isActive=${isActive}, timing out=${attempts > 50}`);
             await refreshProfile();
             
             if (isActive) {
@@ -654,7 +662,7 @@ export default function App() {
                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticating Session...</p>
                </div>
             ) : (
-              <>
+              <Suspense fallback={<DashboardFallback />}>
                 {/* Settings page — rendered for all roles when activeTab === 'settings' */}
                 {activeTab === 'settings' && <SettingsPage profile={activeProfile!} />}
 
@@ -709,7 +717,7 @@ export default function App() {
                     )}
                   </>
                 )}
-              </>
+              </Suspense>
             )}
           </div>
           <Footer />

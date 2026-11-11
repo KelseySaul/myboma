@@ -1,5 +1,5 @@
 import {randomUUID} from 'crypto';
-import {eq} from 'drizzle-orm';
+import {and, eq, ne, sql} from 'drizzle-orm';
 import type {Response} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../db/client.ts';
@@ -16,7 +16,7 @@ import {
   type SubscriptionTier,
 } from '../src/lib/landlordSubscription.ts';
 
-const tierSchema = z.enum(['basic', 'starter', 'growth', 'pro', 'proplus']);
+const tierSchema = z.enum(['basic', 'starter', 'pro', 'proplus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -96,7 +96,15 @@ export const activateLandlordSubscription = async (
     paymentReference: string;
   },
 ) => {
-  const periodStart = new Date();
+  const current = await db.query.users.findFirst({
+    where: eq(schema.users.uid, input.landlordId),
+    columns: {role: true, isAdmin: true, isSuperAdmin: true, subscriptionStatus: true, subscriptionExpiresAt: true},
+  });
+  // Early renewals extend from the current expiry instead of discarding the paid remainder.
+  const now = new Date();
+  const currentExpiry = current?.subscriptionExpiresAt ? new Date(current.subscriptionExpiresAt) : null;
+  const periodStart =
+    current?.subscriptionStatus === 'active' && currentExpiry && currentExpiry > now ? currentExpiry : now;
   const periodEnd = new Date(periodStart);
   periodEnd.setMonth(periodEnd.getMonth() + getBillingMonths(input.billing));
 
@@ -136,7 +144,8 @@ export const activateLandlordSubscription = async (
   if (!existing) throw new Error('Subscription payment record not found');
   if (existing.status === 'confirmed') return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
 
-  await db
+  // Conditional update so concurrent callback + IPN deliveries activate exactly once.
+  const claimed = await db
     .update(schema.landlordSubscriptionPayments)
     .set({
       status: 'confirmed',
@@ -146,12 +155,25 @@ export const activateLandlordSubscription = async (
       periodStart,
       periodEnd,
     })
-    .where(eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId));
+    .where(
+      and(
+        eq(schema.landlordSubscriptionPayments.id, input.subscriptionPaymentId),
+        ne(schema.landlordSubscriptionPayments.status, 'confirmed'),
+      ),
+    )
+    .returning({id: schema.landlordSubscriptionPayments.id});
+
+  if (claimed.length === 0) return {alreadyActive: true, receiptNumber, receiptText: landlordReceipt};
+
+  // Pro Plus grants the agency-admin role (scoped, plan-backed — see isAgencyAdmin in
+  // app.ts); it never sets isAdmin. Platform admins keep their role whatever they buy.
+  const isPlatformAdmin = Boolean(current?.isAdmin || current?.isSuperAdmin);
+  const nextRole = isPlatformAdmin ? (current?.role ?? 'admin') : input.tier === 'proplus' ? 'admin' : 'landlord';
 
   await db
     .update(schema.users)
     .set({
-      role: input.tier === 'proplus' ? 'admin' : 'landlord',
+      role: nextRole,
       subscriptionPlan: encodeSubscriptionPlan(input.tier, input.billing),
       subscriptionStatus: 'active',
       subscriptionExpiresAt: periodEnd,
@@ -213,10 +235,12 @@ export const saveLandlordPayoutProfile = async (
 ) => {
   await db
     .update(schema.users)
+    // Never touches `role` or an already-active subscription: entitlements are granted
+    // only by activateLandlordSubscription once the payment is confirmed.
     .set({
-      role: body.tier === 'proplus' ? 'admin' : 'landlord',
+      // A renewal must not knock a currently active landlord out while they pay.
+      subscriptionStatus: sql`CASE WHEN ${schema.users.subscriptionStatus} = 'active' THEN 'active'::subscription_status ELSE 'pending'::subscription_status END`,
       rentPayoutMethod: body.rentPayoutMethod,
-      subscriptionStatus: 'pending',
       cashPayoutNotes: body.cashPayoutNotes?.trim() || null,
       mpesaSettlementPhone:
         body.rentPayoutMethod === 'mpesa' ? (body.mpesaSettlementPhone?.trim() ?? null) : null,
@@ -252,4 +276,20 @@ export const createPendingSubscriptionPayment = async (input: {
     .returning({id: schema.landlordSubscriptionPayments.id, plan: schema.landlordSubscriptionPayments.plan, amount: schema.landlordSubscriptionPayments.amount});
 
   return {id: row.id, plan: row.plan, amount: Number(row.amount)};
+};
+
+/**
+ * Daily job: lapsed subscriptions become 'expired', and a lapsed Pro Plus agency loses the
+ * plan-backed admin role. Platform admins (isAdmin/isSuperAdmin) are never demoted here.
+ */
+export const expireLapsedSubscriptions = async () => {
+  const expired = await db
+    .update(schema.users)
+    .set({
+      subscriptionStatus: 'expired',
+      role: sql`CASE WHEN ${schema.users.role} = 'admin' AND NOT ${schema.users.isAdmin} AND NOT ${schema.users.isSuperAdmin} THEN 'landlord'::user_role ELSE ${schema.users.role} END`,
+    })
+    .where(and(eq(schema.users.subscriptionStatus, 'active'), sql`${schema.users.subscriptionExpiresAt} < now()`))
+    .returning({uid: schema.users.uid});
+  return expired.length;
 };

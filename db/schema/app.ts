@@ -9,7 +9,10 @@ import {
   date,
   jsonb,
   unique,
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { authUser } from './auth';
 
 // Mirrors supabase-setup.sql 1:1. Every text column that previously had a
@@ -81,7 +84,11 @@ export const users = pgTable('users', {
   subscriptionPlan: text('subscriptionPlan'),
   subscriptionStatus: subscriptionStatusEnum('subscriptionStatus').notNull().default('none'),
   subscriptionExpiresAt: timestamp('subscriptionExpiresAt', { withTimezone: true }),
-});
+}, (t) => [
+  index('users_platform_idx').on(t.platformId),
+  index('users_managed_by_idx').on(t.managedByAdminId),
+  index('users_email_lower_idx').on(sql`lower(${t.email})`),
+]);
 
 export const buildings = pgTable('buildings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -90,7 +97,10 @@ export const buildings = pgTable('buildings', {
   name: text('name').notNull(),
   address: text('address'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('buildings_landlord_idx').on(t.landlordId),
+  index('buildings_platform_idx').on(t.platformId),
+]);
 
 export const properties = pgTable('properties', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -109,7 +119,13 @@ export const properties = pgTable('properties', {
   // Historically loose: holds either a uid or an email. Preserved as-is.
   tenantId: text('tenantId'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('properties_landlord_idx').on(t.landlordId),
+  index('properties_platform_idx').on(t.platformId),
+  index('properties_building_idx').on(t.buildingId),
+  index('properties_status_created_idx').on(t.status, t.createdAt),
+  index('properties_tenant_lower_idx').on(sql`lower(${t.tenantId})`),
+]);
 
 export const maintenanceRequests = pgTable('maintenanceRequests', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -122,7 +138,11 @@ export const maintenanceRequests = pgTable('maintenanceRequests', {
   status: maintenanceStatusEnum('status').notNull().default('pending'),
   priority: maintenancePriorityEnum('priority').notNull().default('medium'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('maintenance_landlord_idx').on(t.landlordId),
+  index('maintenance_property_idx').on(t.propertyId),
+  index('maintenance_tenant_idx').on(t.tenantId),
+]);
 
 export const rentPayments = pgTable('rentPayments', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -145,7 +165,21 @@ export const rentPayments = pgTable('rentPayments', {
   settlementReference: text('settlementReference'),
   settledAt: timestamp('settledAt', { withTimezone: true }),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('rent_payments_landlord_due_idx').on(t.landlordId, t.dueDate),
+  index('rent_payments_property_idx').on(t.propertyId),
+  index('rent_payments_tenant_lower_idx').on(sql`lower(${t.tenantId})`),
+  index('rent_payments_status_due_idx').on(t.status, t.dueDate),
+  index('rent_payments_checkout_idx').on(t.providerCheckoutRequestId),
+  index('rent_payments_merchant_idx').on(t.providerMerchantRequestId),
+  // One invoice per tenancy per billing month. Makes concurrent invoice syncs safe
+  // (inserts use ON CONFLICT DO NOTHING). See docs/migrations/05-* for the dedupe step.
+  uniqueIndex('rent_payments_one_per_month_uq').on(
+    t.propertyId,
+    sql`lower(${t.tenantId})`,
+    sql`date_trunc('month', ${t.dueDate}::timestamp)`,
+  ),
+]);
 
 export const bookings = pgTable('bookings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -159,7 +193,11 @@ export const bookings = pgTable('bookings', {
   status: bookingStatusEnum('status').notNull().default('confirmed'),
   paymentReference: text('paymentReference'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('bookings_landlord_idx').on(t.landlordId),
+  index('bookings_property_idx').on(t.propertyId),
+  index('bookings_hunter_idx').on(t.hunterId),
+]);
 
 export const expenses = pgTable('expenses', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -172,7 +210,10 @@ export const expenses = pgTable('expenses', {
   expenseDate: date('expenseDate').notNull().defaultNow(),
   receiptUrl: text('receiptUrl'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('expenses_landlord_idx').on(t.landlordId),
+  index('expenses_property_idx').on(t.propertyId),
+]);
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -184,7 +225,9 @@ export const notifications = pgTable('notifications', {
   propertyId: uuid('propertyId').references(() => properties.id, { onDelete: 'set null' }),
   read: boolean('read').notNull().default(false),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('notifications_recipient_read_idx').on(sql`lower(${t.recipientEmail})`, t.read),
+]);
 
 export const invitations = pgTable('invitations', {
   email: text('email').primaryKey(),
@@ -194,7 +237,10 @@ export const invitations = pgTable('invitations', {
   role: userRoleEnum('role').notNull().default('tenant'),
   landlordId: uuid('landlordId').references(() => users.uid, { onDelete: 'cascade' }),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('invitations_landlord_idx').on(t.landlordId),
+  index('invitations_platform_idx').on(t.platformId),
+]);
 
 export const propertyManagers = pgTable('property_managers', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -205,6 +251,7 @@ export const propertyManagers = pgTable('property_managers', {
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique().on(table.propertyId, table.userId),
+  index('property_managers_user_idx').on(table.userId),
 ]);
 
 export const auditLogs = pgTable('audit_logs', {
@@ -217,7 +264,10 @@ export const auditLogs = pgTable('audit_logs', {
   resourceId: text('resourceId'),
   metadata: jsonb('metadata'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('audit_logs_created_idx').on(t.createdAt),
+  index('audit_logs_user_idx').on(t.userId),
+]);
 
 export const waitlistSignups = pgTable('waitlistSignups', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -246,4 +296,7 @@ export const landlordSubscriptionPayments = pgTable('landlordSubscriptionPayment
   periodStart: timestamp('periodStart', { withTimezone: true }).notNull().defaultNow(),
   periodEnd: timestamp('periodEnd', { withTimezone: true }).notNull(),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('landlord_sub_payments_landlord_idx').on(t.landlordId),
+  index('landlord_sub_payments_checkout_idx').on(t.providerCheckoutRequestId),
+]);

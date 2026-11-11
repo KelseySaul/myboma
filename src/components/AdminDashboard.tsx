@@ -63,6 +63,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface Platform {
   id: string;
@@ -242,14 +243,14 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   useEffect(() => {
     setLoading(true);
     fetchDashboard.current();
-    const interval = setInterval(() => fetchDashboard.current(), 30000);
+    const interval = setInterval(whenVisible(() => fetchDashboard.current()), DASHBOARD_POLL_MS);
     return () => clearInterval(interval);
   }, [profile.platformId, profile.isSuperAdmin, selectedPlatformId]);
 
   useEffect(() => {
     fetchAuditLogs();
     if (!profile.isSuperAdmin) return;
-    const interval = setInterval(fetchAuditLogs, 30000);
+    const interval = setInterval(whenVisible(fetchAuditLogs), DASHBOARD_POLL_MS);
     return () => clearInterval(interval);
   }, [fetchAuditLogs]);
 

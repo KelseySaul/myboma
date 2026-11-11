@@ -23,6 +23,7 @@ import {
   faChartPie,
 } from '@fortawesome/free-solid-svg-icons';
 import { tenantConfig } from '../config/tenant';
+import { UNREAD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface SidebarProps {
   profile: UserProfile;
@@ -153,7 +154,7 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
     };
 
     fetchUnread();
-    const interval = setInterval(fetchUnread, 20000);
+    const interval = setInterval(whenVisible(fetchUnread), UNREAD_POLL_MS);
 
     return () => {
       isActive = false;

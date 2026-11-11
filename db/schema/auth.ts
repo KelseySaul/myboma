@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, uuid, index } from 'drizzle-orm/pg-core';
 
 // Better-Auth core tables. Ids are UUIDs (see server/auth.ts `advanced.database.generateId`)
 // so they can be referenced directly from db/schema/app.ts's users.uid FK.
@@ -22,7 +22,7 @@ export const authSession = pgTable('session', {
   userAgent: text('userAgent'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [index('session_user_idx').on(t.userId)]);
 
 export const authAccount = pgTable('account', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -41,7 +41,7 @@ export const authAccount = pgTable('account', {
   password: text('password'),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [index('account_user_idx').on(t.userId)]);
 
 export const authVerification = pgTable('verification', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -50,4 +50,4 @@ export const authVerification = pgTable('verification', {
   expiresAt: timestamp('expiresAt', { withTimezone: true }).notNull(),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [index('verification_identifier_idx').on(t.identifier)]);

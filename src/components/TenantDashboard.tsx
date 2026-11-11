@@ -49,6 +49,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface MaintenanceRequest {
   id: string;
@@ -166,7 +167,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     };
 
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 30000);
+    const interval = setInterval(whenVisible(fetchDashboard), DASHBOARD_POLL_MS);
 
     return () => {
       isActive = false;

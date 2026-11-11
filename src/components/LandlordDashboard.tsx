@@ -49,6 +49,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
 import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
+import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface Building {
   id: string;
@@ -95,7 +96,8 @@ interface RentPayment {
   propertyId: string;
   landlordId: string;
   amount: number;
-  status: 'paid' | 'pending' | 'overdue';
+  status: 'paid' | 'pending' | 'overdue' | 'verifying';
+  paymentMetadata?: Record<string, unknown>;
   dueDate: string;
   paidAt?: any;
   receiptUrl?: string;
@@ -281,7 +283,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   useEffect(() => {
     fetchDashboard.current();
-    const interval = setInterval(() => fetchDashboard.current(), 30000);
+    const interval = setInterval(whenVisible(() => fetchDashboard.current()), DASHBOARD_POLL_MS);
     return () => clearInterval(interval);
   }, [profile.uid]);
 
@@ -1066,7 +1068,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
               <StatCard
                 title="Revenue Collected"
                 value={formatCurrencyCompact(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
-                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending dues`}
+                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue' || p.status === 'verifying').length} pending dues`}
                 icon={<FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />}
                 accent="emerald"
               />
@@ -1648,7 +1650,13 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                               {payment.status === 'paid' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Paid</Badge>}
                               {payment.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
                               {payment.status === 'pending' && <Badge className="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border-amber-100 dark:border-amber-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Pending</Badge>}
+                              {payment.status === 'verifying' && <Badge className="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Awaiting confirmation</Badge>}
                             </div>
+                            {payment.status === 'verifying' && payment.paymentMetadata?.submittedReceipt && (
+                              <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                                Tenant code: {String(payment.paymentMetadata.submittedReceipt)}
+                              </div>
+                            )}
                             <div className="text-xs text-zinc-500 truncate">{prop?.unitNumber ? `Unit ${prop.unitNumber}` : prop?.location || 'N/A'}</div>
                           </div>
                         </div>
