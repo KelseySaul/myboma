@@ -5,7 +5,6 @@ import {
   createStripeRentCheckout,
   initiateMpesaRentPayment,
   markRentPaymentManual,
-  getTenantDashboard,
   createMaintenanceRequest,
   markNotificationRead as markNotificationReadRequest,
   updateMyProfile,
@@ -49,7 +48,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useTenantDashboard } from '../lib/queries';
 
 interface MaintenanceRequest {
   id: string;
@@ -145,35 +145,27 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     priority: 'medium' as const,
   });
 
-  // Polls the consolidated tenant dashboard endpoint — replaces the old four
-  // Supabase Realtime channels (properties/maintenanceRequests/rentPayments/notifications).
+  // Polls the consolidated tenant dashboard endpoint (TanStack Query, keyed by uid) —
+  // replaces the old four Supabase Realtime channels. Query data is copied into local
+  // state because handlers below update it optimistically.
+  const queryClient = useQueryClient();
+  const { data: dashboardData, error: dashboardError } = useTenantDashboard(profile.uid);
+
   useEffect(() => {
-    let isActive = true;
+    if (!dashboardData) return;
+    setProperty(dashboardData.property as Property | null);
+    setLandlord(dashboardData.landlord as Landlord | null);
+    setRequests(dashboardData.requests as MaintenanceRequest[]);
+    setPayments(dashboardData.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+    setNotifications(dashboardData.notifications as Notification[]);
+    setLoading(false);
+  }, [dashboardData]);
 
-    const fetchDashboard = async () => {
-      try {
-        const data = await getTenantDashboard();
-        if (!isActive) return;
-        setProperty(data.property as Property | null);
-        setLandlord(data.landlord as Landlord | null);
-        setRequests(data.requests as MaintenanceRequest[]);
-        setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
-        setNotifications(data.notifications as Notification[]);
-      } catch (err) {
-        console.error('Tenant dashboard fetch failed:', err);
-      } finally {
-        if (isActive) setLoading(false);
-      }
-    };
-
-    fetchDashboard();
-    const interval = setInterval(whenVisible(fetchDashboard), DASHBOARD_POLL_MS);
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [profile.uid, profile.email]);
+  useEffect(() => {
+    if (!dashboardError) return;
+    console.error('Tenant dashboard fetch failed:', dashboardError);
+    setLoading(false);
+  }, [dashboardError]);
 
   const handleReportIssue = async () => {
     if (!newRequest.title || !newRequest.description) {
@@ -208,6 +200,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
     try {
       setNotifications((prev) => prev.map((n) => (n.id === id ? {...n, read: true} : n)));
       await markNotificationReadRequest(id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
     } catch (error) {
       console.error("Error marking notification read:", error);
     }
