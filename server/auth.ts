@@ -3,7 +3,9 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
 import nodemailer from 'nodemailer';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { db } from '../db/client.js';
+// Auth is trusted system code: it always uses the owner connection, never a user's
+// RLS-scoped request transaction (provisioning calls signUpEmail inside a request).
+import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 
 // Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
