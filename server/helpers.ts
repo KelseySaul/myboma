@@ -1,3 +1,4 @@
+import {timingSafeEqual} from 'node:crypto';
 import type {NextFunction, Request, Response} from 'express';
 
 export const buildAllowedRedirectOrigins = (appBaseUrl: string, corsOrigins: string) => {
@@ -34,23 +35,35 @@ export const assertAllowedRedirectUrl = (url: string | undefined, allowedOrigins
   }
 };
 
+const safeEqual = (a: string, b: string) => {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+};
+
+/**
+ * Fails closed in every environment: an unauthenticated STK callback lets anyone mark
+ * rent paid. Safaricom cannot send custom headers, so the secret normally arrives as
+ * `?secret=` on the registered CallBackURL (app.ts appends it automatically).
+ */
 export const verifyMpesaCallback =
-  (isProduction: boolean) => (req: Request, res: Response, next: NextFunction) => {
+  (_isProduction?: boolean) => (req: Request, res: Response, next: NextFunction) => {
     const secret = process.env.MPESA_CALLBACK_SECRET;
     if (!secret) {
-      if (isProduction) {
-        res.status(503).json({ResultCode: 1, ResultDesc: 'M-Pesa callback secret is not configured'});
-        return;
-      }
-      next();
+      res.status(503).json({ResultCode: 1, ResultDesc: 'M-Pesa callback secret is not configured'});
       return;
     }
 
-    const provided =
+    const headerSecret =
       req.headers['x-mpesa-callback-secret'] ||
       req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+    const provided = String(
+      (typeof req.query?.secret === 'string' ? req.query.secret : undefined) ??
+        (Array.isArray(headerSecret) ? headerSecret[0] : headerSecret) ??
+        '',
+    );
 
-    if (provided !== secret) {
+    if (!safeEqual(provided, secret)) {
       res.status(401).json({ResultCode: 1, ResultDesc: 'Unauthorized callback'});
       return;
     }

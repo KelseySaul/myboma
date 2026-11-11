@@ -1,15 +1,21 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
-import { eq } from 'drizzle-orm';
-import { db } from '../db/client.js';
+import nodemailer from 'nodemailer';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+// Auth is trusted system code: it always uses the owner connection, never a user's
+// RLS-scoped request transaction (provisioning calls signUpEmail inside a request).
+import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 
-const ALLOWED_ROLES = ['landlord', 'tenant', 'hunter', 'admin'] as const;
-type Role = (typeof ALLOWED_ROLES)[number];
+// Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
+// admin rights are only ever granted by a super admin (provisioning / role endpoint)
+// or by an admin invitation once the invitee has proven ownership of the mailbox.
+const SELF_SIGNUP_ROLES = ['landlord', 'tenant', 'hunter'] as const;
+type Role = (typeof SELF_SIGNUP_ROLES)[number] | 'admin';
 
 function resolveRole(candidate: unknown): Role {
-  return typeof candidate === 'string' && (ALLOWED_ROLES as readonly string[]).includes(candidate)
+  return typeof candidate === 'string' && (SELF_SIGNUP_ROLES as readonly string[]).includes(candidate)
     ? (candidate as Role)
     : 'hunter';
 }
@@ -22,7 +28,10 @@ function resolveRole(candidate: unknown): Role {
  * There is no Postgres trigger system here, so this runs as a databaseHooks.user.create
  * "after" hook instead — same effect, same idempotent upsert-by-uid semantics.
  */
-async function seedProfileForNewAuthUser(authUser: { id: string; email?: string | null; name?: string | null }, requestBody: Record<string, unknown> | undefined) {
+async function seedProfileForNewAuthUser(
+  authUser: { id: string; email?: string | null; name?: string | null; emailVerified?: boolean | null },
+  requestBody: Record<string, unknown> | undefined,
+) {
   if (!authUser.email) throw new Error(`New auth user ${authUser.id} has no email; cannot provision a profile.`);
   const normalizedEmail = authUser.email.trim().toLowerCase();
 
@@ -30,7 +39,10 @@ async function seedProfileForNewAuthUser(authUser: { id: string; email?: string 
     where: eq(schema.invitations.email, normalizedEmail),
   });
 
-  const resolvedRole = resolveRole(invited?.role ?? requestBody?.intended_role);
+  // An admin invitation is honoured only for a mailbox that is already verified (e.g.
+  // Google OAuth). Email/password signups get it later via afterEmailVerification.
+  const resolvedRole: Role =
+    invited?.role === 'admin' && authUser.emailVerified ? 'admin' : resolveRole(invited?.role ?? requestBody?.intended_role);
   const displayName = (requestBody?.full_name as string | undefined) || invited?.displayName || authUser.name || 'User';
   const phone = (requestBody?.phone as string | undefined) || invited?.phone || null;
   const mustChangePassword = Boolean(requestBody?.must_change_password);
@@ -67,7 +79,41 @@ async function seedProfileForNewAuthUser(authUser: { id: string; email?: string 
     termsVersion,
     privacyVersion,
   });
+
+  // Tenancies created by email invitation now point at the real account (uid).
+  await db
+    .update(schema.leases)
+    .set({ tenantUserId: authUser.id })
+    .where(and(sql`lower(${schema.leases.tenantEmail}) = ${normalizedEmail}`, isNull(schema.leases.tenantUserId)));
 }
+
+/** Applies a pending admin invitation once the invitee has proven they own the mailbox. */
+async function applyAdminInvitationAfterVerification(authUser: { id: string; email?: string | null }) {
+  if (!authUser.email) return;
+  const invited = await db.query.invitations.findFirst({
+    where: eq(schema.invitations.email, authUser.email.trim().toLowerCase()),
+  });
+  if (invited?.role !== 'admin') return;
+  await db
+    .update(schema.users)
+    .set({ role: 'admin', isAdmin: true, platformId: invited.platformId ?? null })
+    .where(eq(schema.users.uid, authUser.id));
+}
+
+let mailer: ReturnType<typeof nodemailer.createTransport> | null | undefined;
+const getMailer = () => {
+  if (mailer !== undefined) return mailer;
+  mailer =
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+      ? nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT || 587),
+          secure: process.env.SMTP_SECURE === 'true',
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        })
+      : null;
+  return mailer;
+};
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -83,6 +129,38 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
+    // Off by default so existing (unverified) accounts are not locked out. Turn on with
+    // REQUIRE_EMAIL_VERIFICATION=true once existing users have been backfilled/verified.
+    requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      const transport = getMailer();
+      if (!transport) {
+        console.warn(`[auth] SMTP not configured; cannot send verification email to ${user.email}`);
+        return;
+      }
+      await transport.sendMail({
+        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+        to: user.email,
+        subject: 'Verify your MyBoma email',
+        text: `Welcome to MyBoma. Confirm your email address by opening this link:
+
+${url}
+
+If you did not sign up, ignore this email.`,
+      });
+    },
+    afterEmailVerification: async (user) => {
+      await applyAdminInvitationAfterVerification(user);
+    },
+  },
+  session: {
+    // Avoids a session-table round trip on every API request; revocation takes effect
+    // within maxAge.
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
   socialProviders: process.env.GOOGLE_CLIENT_ID
     ? {

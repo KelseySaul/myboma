@@ -1,5 +1,7 @@
 import type {Response} from 'express';
-import {eq, ilike, ne, and} from 'drizzle-orm';
+import {addPlatformMembership, membershipRoleFor} from './memberships.ts';
+import {withSystemAccess} from '../db/requestContext.ts';
+import {eq, ne, and, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 import {APIError} from 'better-auth';
 import {auth} from './auth.ts';
@@ -71,43 +73,89 @@ export const syncSuperAdminFromEnv = async (
   return updated as unknown as UserProfileRecord;
 };
 
-export const assertCanProvision = (actor: UserProfileRecord, body: z.infer<typeof provisionUserSchema>) => {
-  if (actor.isSuperAdmin) return;
-
-  if (actor.role === 'landlord' && ['tenant', 'landlord', 'hunter'].includes(body.role)) {
-    if (body.role === 'tenant' && body.landlordId && body.landlordId !== actor.uid) {
-      const error = new Error('You can only provision tenants for your own account.');
-      (error as any).statusCode = 403;
-      throw error;
-    }
-    return;
-  }
-
-  if ((actor.isAdmin || actor.role === 'admin') && ['tenant', 'landlord', 'hunter', 'admin'].includes(body.role)) {
-    if (body.platformId && actor.platformId && body.platformId !== actor.platformId) {
-      const error = new Error('Cannot provision users outside your platform.');
-      (error as any).statusCode = 403;
-      throw error;
-    }
-    return;
-  }
-
-  const error = new Error('You are not allowed to provision this user type.');
+const forbidden = (message: string) => {
+  const error = new Error(message);
   (error as any).statusCode = 403;
-  throw error;
+  return error;
 };
 
-export const handleProvisionUser = async (req: AuthenticatedRequest, res: Response) => {
+/**
+ * Who may create which accounts:
+ * - super admin: anything, including other admins.
+ * - platform admin (isAdmin): tenants/landlords/hunters inside their own platform only.
+ * - Pro Plus agency admin / landlord: tenants for themselves; agencies may also add
+ *   managed landlords. Nobody but a super admin can mint an admin.
+ */
+export const assertCanProvision = (
+  actor: UserProfileRecord,
+  body: z.infer<typeof provisionUserSchema>,
+  isAgencyAdmin = false,
+) => {
+  if (actor.isSuperAdmin) return;
+  if (body.role === 'admin') throw forbidden('Only a super admin can create admin accounts.');
+
+  if (actor.isAdmin) {
+    if (!actor.platformId) throw forbidden('Your admin account is not attached to a platform.');
+    if (body.platformId && body.platformId !== actor.platformId) {
+      throw forbidden('Cannot provision users outside your platform.');
+    }
+    return;
+  }
+
+  if (body.platformId && body.platformId !== (actor.platformId ?? null)) {
+    throw forbidden('Cannot provision users outside your platform.');
+  }
+
+  if (body.role === 'tenant') {
+    if (body.landlordId && body.landlordId !== actor.uid) {
+      throw forbidden('You can only provision tenants for your own account.');
+    }
+    if (actor.role === 'landlord' || isAgencyAdmin) return;
+  }
+
+  if (body.role === 'landlord' && isAgencyAdmin) return;
+
+  throw forbidden('You are not allowed to provision this user type.');
+};
+
+export const handleProvisionUser = async (req: AuthenticatedRequest, res: Response, isAgencyAdmin = false) => {
   const body = req.validatedBody as z.infer<typeof provisionUserSchema>;
   const actor = req.profile!;
-  assertCanProvision(actor, body);
+  assertCanProvision(actor, body, isAgencyAdmin);
 
   const email = body.email.toLowerCase();
-  const platformId = body.platformId ?? actor.platformId ?? null;
-  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : body.landlordId;
+  const platformId = actor.isSuperAdmin ? (body.platformId ?? actor.platformId ?? null) : (actor.platformId ?? null);
+  // Every invitation records who created it, so the creator (and RLS) can see it later.
+  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : (body.landlordId ?? actor.uid);
 
   // 1. Try to create the auth user. signUpEmail also runs databaseHooks.user.create.after
   // (server/auth.ts), which seeds a baseline public.users row from these same fields.
+  // Provisioning creates NEW accounts only. Updating an existing user from here let any
+  // landlord rewrite someone else's role, admin flags and rent routing.
+  const alreadyRegistered = await db.query.users.findFirst({
+    where: sql`lower(${schema.users.email}) = ${email}`,
+    columns: {uid: true, role: true},
+  });
+  if (alreadyRegistered) {
+    // A landlord adding an already-registered tenant just records the link; it never
+    // touches the user's profile, and never steals another landlord's invitation.
+    if (body.role === 'tenant' && (alreadyRegistered.role === 'tenant' || alreadyRegistered.role === 'hunter')) {
+      // hunter -> tenant is the only change allowed: it grants no extra privilege.
+      if (alreadyRegistered.role === 'hunter') {
+        await db.update(schema.users).set({role: 'tenant'}).where(eq(schema.users.uid, alreadyRegistered.uid));
+      }
+      const [invitation] = await db
+        .insert(schema.invitations)
+        .values({email, displayName: body.displayName, phone: body.phone ?? null, role: 'tenant', platformId, landlordId: landlordId ?? null})
+        .onConflictDoNothing()
+        .returning();
+      res.status(200).json({uid: alreadyRegistered.uid, email, invitation: invitation ?? null, existing: true});
+      return;
+    }
+    res.status(409).json({error: 'An account with this email already exists.'});
+    return;
+  }
+
   let uid: string | undefined;
   try {
     const signUpResult = await auth.api.signUpEmail({
@@ -122,17 +170,14 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     });
     uid = signUpResult.user.id;
   } catch (err) {
-    // If the user already exists, look them up by email instead of failing.
     const isDuplicate = err instanceof APIError && err.status === 'UNPROCESSABLE_ENTITY';
-    if (!isDuplicate) {
-      res.status(400).json({error: err instanceof Error ? err.message : 'Failed to create user'});
+    if (isDuplicate) {
+      res.status(409).json({error: 'An account with this email already exists.'});
       return;
     }
-    const existingProfile = await db.query.users.findFirst({
-      where: ilike(schema.users.email, email),
-      columns: {uid: true},
-    });
-    uid = existingProfile?.uid;
+    console.error('[Provisioning] signUpEmail failed:', err);
+    res.status(400).json({error: 'Failed to create user'});
+    return;
   }
 
   if (!uid) {
@@ -166,9 +211,20 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     bankAccountName: body.rentRouting === 'direct' ? (body.bankAccountName ?? null) : null,
     ...(isManagedLandlord
       ? {
-          subscriptionPlan: actor.subscriptionPlan ?? 'pro_plus:monthly',
-          subscriptionStatus: (actor.subscriptionStatus ?? 'active') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
-          subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt) : new Date('2099-12-31T23:59:59Z'),
+          // Landlords managed by a platform admin are covered by the platform; landlords
+          // managed by a Pro Plus agency inherit the agency's plan (and are extended when
+          // the agency renews — see activateLandlordSubscription).
+          ...(actor.isAdmin || actor.isSuperAdmin
+            ? {
+                subscriptionPlan: 'proplus:yearly',
+                subscriptionStatus: 'active' as const,
+                subscriptionExpiresAt: new Date('2099-12-31T23:59:59Z'),
+              }
+            : {
+                subscriptionPlan: actor.subscriptionPlan ?? null,
+                subscriptionStatus: (actor.subscriptionStatus ?? 'none') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
+                subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt) : null,
+              }),
         }
       : {}),
   };
@@ -190,13 +246,21 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     landlordId: landlordId ?? null,
   };
 
-  const [invitation] = await db
-    .insert(schema.invitations)
-    .values(invitationValues)
-    .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
-    .returning();
+  await addPlatformMembership(platformId, uid, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role}));
 
-  console.log(`[Provisioning] Successfully provisioned ${body.role}: ${email} (UID: ${uid}, Landlord: ${landlordId})`);
+  // Stale invitation rows for a brand-new account are replaced; there is no user yet
+  // whose relationships could be hijacked.
+  // System access: a stale invitation for this brand-new account may belong to someone
+  // else (invisible to the caller under RLS) and must still be replaced.
+  const [invitation] = await withSystemAccess(() =>
+    db
+      .insert(schema.invitations)
+      .values(invitationValues)
+      .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
+      .returning(),
+  );
+
+  console.log(`[Provisioning] Provisioned ${body.role} ${uid} (landlord: ${landlordId ?? 'none'})`);
   res.status(201).json({uid, email, invitation});
 };
 
@@ -227,7 +291,7 @@ export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response
     res.status(403).json({error: 'Cannot modify a super admin'});
     return;
   }
-  if (!actor.isSuperAdmin && actor.platformId && target.platformId !== actor.platformId) {
+  if (!actor.isSuperAdmin && (!actor.platformId || target.platformId !== actor.platformId)) {
     res.status(403).json({error: 'User is outside your platform'});
     return;
   }
@@ -250,58 +314,86 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
     }
 
     // 1. Fetch user details first to check permissions and delete invitations/assignments
-    console.log(`[handleDeleteUser] Attempting to delete targetUid: "${targetUid}" by actor: ${actor.uid}`);
-
     const targetUser = await db.query.users.findFirst({
       where: eq(schema.users.uid, targetUid),
-      columns: {email: true, platformId: true, role: true},
+      columns: {email: true, platformId: true, role: true, isAdmin: true, isSuperAdmin: true, managedByAdminId: true, createdAt: true},
     });
-
-    console.log(`[handleDeleteUser] Fetch result - targetUser:`, targetUser);
 
     if (!targetUser) {
       res.status(404).json({error: 'User not found'});
       return;
     }
 
+    if (targetUser.isSuperAdmin && !actor.isSuperAdmin) {
+      res.status(403).json({error: 'Cannot delete a super admin'});
+      return;
+    }
+
     if (!actor.isSuperAdmin) {
       let isCreator = false;
-      if (!actor.isAdmin) {
+      if (!actor.isAdmin && !targetUser.isAdmin && ['tenant', 'landlord'].includes(targetUser.role)) {
+        // "Creator" means the account was created from this actor's invitation (the
+        // invitation predates the account) or is a landlord they manage — merely
+        // linking an existing user later must not grant the power to delete them.
         const inv = await db.query.invitations.findFirst({
           where: eq(schema.invitations.email, targetUser.email),
-          columns: {landlordId: true},
+          columns: {landlordId: true, createdAt: true},
         });
-        if (inv && inv.landlordId === actor.uid) {
-          isCreator = true;
-        }
+        // Provisioning writes the user row a moment before the invitation, so allow a
+        // short window; an invitation added long after the account existed doesn't count.
+        const PROVISION_WINDOW_MS = 5 * 60 * 1000;
+        isCreator =
+          targetUser.managedByAdminId === actor.uid ||
+          Boolean(
+            inv &&
+              inv.landlordId === actor.uid &&
+              inv.createdAt.getTime() <= targetUser.createdAt.getTime() + PROVISION_WINDOW_MS,
+          );
       }
 
-      if (!isCreator && (!actor.isAdmin || targetUser.platformId !== actor.platformId)) {
+      const isPlatformAdminOfTarget =
+        Boolean(actor.isAdmin) && Boolean(actor.platformId) && targetUser.platformId === actor.platformId && !targetUser.isAdmin;
+      if (!isCreator && !isPlatformAdminOfTarget) {
         res.status(403).json({error: 'You do not have permission to delete this user.'});
         return;
       }
     }
 
-    // 2. Delete the auth user — cascades to public.users (FK onDelete: 'cascade') and to
-    // Better-Auth's own session/account rows.
-    await db.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
-
-    // 3. Purge invitations, unassign properties, and cancel unpaid invoices for the user email
-    if (targetUser?.email) {
-      const email = targetUser.email.trim().toLowerCase();
-      await db.delete(schema.invitations).where(ilike(schema.invitations.email, email));
-      await db
+    // 2+3 in ONE transaction: delete the auth user (cascades to public.users and Better-Auth
+    // session/account rows), purge invitations, unassign units and cancel unpaid invoices.
+    // A failure part-way used to leave orphaned tenancies and invoices behind.
+    const email = targetUser.email.trim().toLowerCase();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(schema.leases)
+        .set({status: 'ended', endedAt: new Date()})
+        .where(
+          and(
+            eq(schema.leases.status, 'active'),
+            or(eq(schema.leases.tenantUserId, targetUid), sql`lower(${schema.leases.tenantEmail}) = ${email}`),
+          ),
+        );
+      await tx.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
+      // Exact (case-insensitive) matches: ilike treated '_' in emails as a wildcard and
+      // could wipe other people's tenancies and invoices.
+      await tx.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${email}`);
+      await tx
         .update(schema.properties)
         .set({tenantId: null, status: 'available'})
-        .where(ilike(schema.properties.tenantId, email));
-      await db
+        .where(or(sql`lower(${schema.properties.tenantId}) = ${email}`, eq(schema.properties.tenantId, targetUid)));
+      await tx
         .delete(schema.rentPayments)
-        .where(and(ilike(schema.rentPayments.tenantId, email), ne(schema.rentPayments.status, 'paid')));
-    }
+        .where(
+          and(
+            or(sql`lower(${schema.rentPayments.tenantId}) = ${email}`, eq(schema.rentPayments.tenantId, targetUid)),
+            ne(schema.rentPayments.status, 'paid'),
+          ),
+        );
+    });
 
     res.json({deleted: true});
   } catch (err: any) {
     console.error('Error in handleDeleteUser:', err);
-    res.status(500).json({error: err.message || 'Internal Server Error'});
+    res.status(500).json({error: 'Failed to delete user'});
   }
 };

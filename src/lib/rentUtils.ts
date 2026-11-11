@@ -1,4 +1,5 @@
-export type RentPaymentStatus = 'paid' | 'pending' | 'overdue';
+/** 'verifying' = tenant submitted an M-Pesa/bank code that the landlord must confirm. */
+export type RentPaymentStatus = 'paid' | 'pending' | 'overdue' | 'verifying';
 
 export interface TenantIdentity {
   uid: string;
@@ -11,7 +12,7 @@ export const normalizeRentPayment = <T extends {status?: string; tenantId?: stri
 ): T & {status: RentPaymentStatus; tenantId: string; amount: number} => {
   const rawStatus = String(payment.status || 'pending').toLowerCase();
   const status: RentPaymentStatus =
-    rawStatus === 'paid' ? 'paid' : rawStatus === 'overdue' ? 'overdue' : 'pending';
+    rawStatus === 'paid' ? 'paid' : rawStatus === 'overdue' ? 'overdue' : rawStatus === 'verifying' ? 'verifying' : 'pending';
 
   return {
     ...payment,

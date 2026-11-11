@@ -1,0 +1,21 @@
+{
+  "name": "MyBoma Property OS",
+  "short_name": "MyBoma",
+  "description": "Rent collection, tenants, maintenance and listings for Kenyan landlords, tenants and house hunters.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "lang": "en-KE",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "/screenshots/mobile-dashboard.webp", "type": "image/webp", "form_factor": "narrow" },
+    { "src": "/screenshots/mobile-tenants.webp", "type": "image/webp", "form_factor": "narrow" }
+  ]
+}

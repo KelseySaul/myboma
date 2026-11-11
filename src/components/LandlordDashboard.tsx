@@ -6,7 +6,6 @@ import {
   uploadFile,
   markRentPaymentManual,
   sendRentReminder as sendRentReminderRequest,
-  getLandlordDashboard,
   syncRentInvoices,
   createBuilding,
   updateBuilding,
@@ -49,6 +48,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { OccupancyDonutChart, RentCollectionBarChart, FinancialYieldGrid } from './AnalyticsCharts';
 import { formatCurrencyFull, formatCurrencyCompact, formatNumberCompact } from '../lib/formatters';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys, useLandlordDashboard } from '../lib/queries';
+import { clearQueryCache } from '../lib/queryClient';
 
 interface Building {
   id: string;
@@ -95,7 +97,8 @@ interface RentPayment {
   propertyId: string;
   landlordId: string;
   amount: number;
-  status: 'paid' | 'pending' | 'overdue';
+  status: 'paid' | 'pending' | 'overdue' | 'verifying';
+  paymentMetadata?: Record<string, unknown>;
   dueDate: string;
   paidAt?: any;
   receiptUrl?: string;
@@ -259,31 +262,51 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   // payments, bookings, expenses, invitations, notifications) — replaces the old seven
   // Supabase Realtime channels. The endpoint also runs the automatic rent-invoice sync
   // that used to happen client-side (see server/rentInvoiceSync.ts).
-  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
-  fetchDashboard.current = async () => {
-    try {
-      const data = await getLandlordDashboard();
-      setBuildings(data.buildings as Building[]);
-      setProperties(data.properties as Property[]);
-      setRequests(data.requests as MaintenanceRequest[]);
-      setPayments(data.payments.map((row) => normalizeRentPayment(row as RentPayment)));
-      setBookings(data.bookings as Booking[]);
-      setExpenses(data.expenses as Expense[]);
-      setInvitations(data.invitations as Invitation[]);
-      setNotifications(data.notifications);
-    } catch (err) {
-      console.error('Landlord dashboard fetch failed:', err);
-      toast.error('Could not load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // (Now a TanStack Query keyed by uid, so impersonation switches never share a cache.)
+  // Query data is copied into local state because handlers below update it optimistically.
+  const queryClient = useQueryClient();
+
+  // Catch-up invoice generation once per visit (the daily cron is the primary path);
+  // the dashboard GET itself never writes, so the first fetch waits for the sync.
+  const [syncedUid, setSyncedUid] = useState<string | null>(null);
+  useEffect(() => {
+    let isActive = true;
+    syncRentInvoices()
+      .catch(() => undefined)
+      .finally(() => {
+        if (isActive) setSyncedUid(profile.uid);
+      });
+    return () => {
+      isActive = false;
+    };
+  }, [profile.uid]);
+
+  const { data: dashboardData, error: dashboardError, errorUpdatedAt: dashboardErrorAt } = useLandlordDashboard(
+    profile.uid,
+    { enabled: syncedUid === profile.uid },
+  );
 
   useEffect(() => {
-    fetchDashboard.current();
-    const interval = setInterval(() => fetchDashboard.current(), 30000);
-    return () => clearInterval(interval);
-  }, [profile.uid]);
+    if (!dashboardData) return;
+    setBuildings(dashboardData.buildings as Building[]);
+    setProperties(dashboardData.properties as Property[]);
+    setRequests(dashboardData.requests as MaintenanceRequest[]);
+    setPayments(dashboardData.payments.map((row) => normalizeRentPayment(row as RentPayment)));
+    setBookings(dashboardData.bookings as Booking[]);
+    setExpenses(dashboardData.expenses as Expense[]);
+    setInvitations(dashboardData.invitations as Invitation[]);
+    setNotifications(dashboardData.notifications);
+    setLoading(false);
+  }, [dashboardData]);
+
+  useEffect(() => {
+    if (!dashboardError) return;
+    console.error('Landlord dashboard fetch failed:', dashboardError);
+    toast.error('Could not load dashboard data');
+    setLoading(false);
+  }, [dashboardError, dashboardErrorAt]);
+
+  const refetchDashboard = () => queryClient.invalidateQueries({ queryKey: queryKeys.landlordDashboard(profile.uid) });
 
   const filteredProperties = properties.filter(p => {
     const matchesStatus = propertyStatusFilter === 'all' || p.status === propertyStatusFilter;
@@ -575,7 +598,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     }
   };
 
-  const refreshLandlordPayments = () => fetchDashboard.current();
+  const refreshLandlordPayments = () => refetchDashboard();
 
   const handleRecordExpense = async () => {
     try {
@@ -642,6 +665,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   const handleLogout = async () => {
     await authClient.signOut({});
+    clearQueryCache();
     toast.success('Signed out');
   };
 
@@ -858,6 +882,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAsRead = async (id: string) => {
     try {
       await markNotificationRead(id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       toast.success('Marked as read');
     } catch (err: any) {
@@ -869,6 +894,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleMarkAllAsRead = async () => {
     try {
       await markAllNotificationsRead();
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       toast.success('All notifications marked as read');
     } catch (err: any) {
@@ -883,6 +909,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const handleDeleteNotification = async (id: string) => {
     try {
       await deleteNotificationRequest(id);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
       setNotifications(prev => prev.filter(n => n.id !== id));
       toast.success('Notification deleted');
     } catch (err: any) {
@@ -1066,7 +1093,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
               <StatCard
                 title="Revenue Collected"
                 value={formatCurrencyCompact(payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0))}
-                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue').length} pending dues`}
+                description={`${payments.filter(p => p.status === 'pending' || p.status === 'overdue' || p.status === 'verifying').length} pending dues`}
                 icon={<FontAwesomeIcon icon={faWallet} className="text-emerald-500 h-4 w-4" />}
                 accent="emerald"
               />
@@ -1648,7 +1675,13 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                               {payment.status === 'paid' && <Badge className="bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border-emerald-100 dark:border-emerald-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Paid</Badge>}
                               {payment.status === 'overdue' && <Badge className="bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border-rose-100 dark:border-rose-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Overdue</Badge>}
                               {payment.status === 'pending' && <Badge className="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border-amber-100 dark:border-amber-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Pending</Badge>}
+                              {payment.status === 'verifying' && <Badge className="bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/20 h-4 px-1.5 text-[8px] uppercase tracking-wider font-black">Awaiting confirmation</Badge>}
                             </div>
+                            {payment.status === 'verifying' && payment.paymentMetadata?.submittedReceipt && (
+                              <div className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 truncate">
+                                Tenant code: {String(payment.paymentMetadata.submittedReceipt)}
+                              </div>
+                            )}
                             <div className="text-xs text-zinc-500 truncate">{prop?.unitNumber ? `Unit ${prop.unitNumber}` : prop?.location || 'N/A'}</div>
                           </div>
                         </div>

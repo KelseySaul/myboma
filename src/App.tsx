@@ -1,18 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { authClient } from './lib/auth-client';
-import { getSession, completePasswordReset } from './lib/api';
+import { getSession, completePasswordReset, bffRequest, setImpersonatedUser } from './lib/api';
 import LandingPage from './components/LandingPage';
-import LandlordDashboard from './components/LandlordDashboard';
-import TenantDashboard from './components/TenantDashboard';
-import HunterDashboard from './components/HunterDashboard';
-import AdminDashboard from './components/AdminDashboard';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
-import SettingsPage from './components/SettingsPage';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
 import { tenantConfig } from './config/tenant';
+
+// Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
+// bundles, and the landing page loads without any dashboard code at all.
+const LandlordDashboard = lazy(() => import('./components/LandlordDashboard'));
+const TenantDashboard = lazy(() => import('./components/TenantDashboard'));
+const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+
+const DashboardFallback = () => (
+  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Loading…</p>
+  </div>
+);
 
 import { logAudit } from './lib/audit';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -44,6 +53,8 @@ import OneSignalWeb from 'react-onesignal';
 import OneSignalNative from '@onesignal/capacitor-plugin';
 import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
+import { queryClient, clearQueryCache } from './lib/queryClient';
+import { queryKeys, useSessionProfile } from './lib/queries';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
 
 let oneSignalWebInitialized = false;
@@ -252,14 +263,18 @@ export default function App() {
       console.warn("Unauthorized impersonation attempt");
       return;
     }
+    // Dashboards now really load the target's data (server honours X-Impersonate-User for
+    // super admins, read-only); the start is audited server-side.
+    setImpersonatedUser(target.uid);
     setImpersonatedProfile(target);
-    logAudit('ADMIN_IMPERSONATE_START', 'user', target.uid, { targetEmail: target.email });
+    void bffRequest(`/admin/impersonation/${target.uid}`, { method: 'POST' }).catch(() => undefined);
   };
 
   const handleExitImpersonation = () => {
     if (impersonatedProfile) {
       logAudit('ADMIN_IMPERSONATE_END', 'user', impersonatedProfile.uid, { targetEmail: impersonatedProfile.email });
     }
+    setImpersonatedUser(null);
     setImpersonatedProfile(null);
   };
 
@@ -305,7 +320,11 @@ export default function App() {
 
     const loadProfile = async (retryCount = 0): Promise<void> => {
       try {
-        const { profile: profileData } = await getSession();
+        // Seeds the shared session query, so the polling query below doesn't refetch it.
+        const { profile: profileData } = await queryClient.fetchQuery({
+          queryKey: queryKeys.session(user!.id),
+          queryFn: getSession,
+        });
         if (!isMounted) return;
         const p = normalizeProfile(profileData);
         setProfile(p);
@@ -339,6 +358,8 @@ export default function App() {
       setProfile(null);
       setActiveView(null);
       setError(null);
+      // Signed out (by any path): drop every cached query so nothing leaks to the next user.
+      clearQueryCache();
       syncOneSignalIdentity(null);
       setLoading(false);
       clearTimeout(safetyTimeout);
@@ -352,19 +373,13 @@ export default function App() {
 
   // Polls for profile changes (role/subscription updates made elsewhere, e.g. by an
   // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
+  const { data: sessionData } = useSessionProfile(user?.id);
   useEffect(() => {
-    if (!user?.id) return;
-    const interval = setInterval(() => {
-      getSession()
-        .then(({ profile: profileData }) => {
-          const p = normalizeProfile(profileData);
-          setProfile(p);
-          setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
-        })
-        .catch(() => {});
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [user?.id]);
+    if (!sessionData) return;
+    const p = normalizeProfile(sessionData.profile);
+    setProfile(p);
+    setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
+  }, [sessionData]);
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
@@ -397,11 +412,9 @@ export default function App() {
           const { profile: data } = await getSession().catch(() => ({ profile: null as any }));
 
           const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
-          console.log(`[Polling Activation] Attempt ${attempts}: status=${data?.subscriptionStatus}, role=${data?.role}, hasExpiry=${!!data?.subscriptionExpiresAt}`);
           
           if (isActive || attempts > 50) {
             clearInterval(poll);
-            console.log(`[Polling Finished] isActive=${isActive}, timing out=${attempts > 50}`);
             await refreshProfile();
             
             if (isActive) {
@@ -654,7 +667,7 @@ export default function App() {
                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticating Session...</p>
                </div>
             ) : (
-              <>
+              <Suspense fallback={<DashboardFallback />}>
                 {/* Settings page — rendered for all roles when activeTab === 'settings' */}
                 {activeTab === 'settings' && <SettingsPage profile={activeProfile!} />}
 
@@ -709,7 +722,7 @@ export default function App() {
                     )}
                   </>
                 )}
-              </>
+              </Suspense>
             )}
           </div>
           <Footer />
@@ -960,6 +973,7 @@ export default function App() {
                 onClick={async () => {
                   setIsMobileMenuOpen(false);
                   await authClient.signOut({});
+                  clearQueryCache();
                   toast.success('Signed out');
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"

@@ -1,5 +1,6 @@
 import {Capacitor} from '@capacitor/core';
 import {getStoredToken} from '../lib/auth-client';
+import {stripImageMetadata} from './imageSanitize';
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
@@ -18,6 +19,14 @@ const publicRequest = async <T>(path: string): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+/** Super-admin support view: when set, GET requests are served as this user (read-only). */
+let impersonatedUserId: string | null = null;
+export const setImpersonatedUser = (uid: string | null) => {
+  impersonatedUserId = uid;
+};
+/** The user GET requests are currently served as (null when not impersonating). */
+export const getImpersonatedUser = () => impersonatedUserId;
+
 export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Promise<T> => {
   const isNative = Capacitor.isNativePlatform();
   const token = isNative ? getStoredToken() : null;
@@ -34,6 +43,10 @@ export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Pro
     headers: {
       'Content-Type': 'application/json',
       ...(token ? {Authorization: `Bearer ${token}`} : {}),
+      // Never on /session: that call must keep returning the admin's own identity.
+      ...(impersonatedUserId && path !== '/session' && (!options.method || options.method === 'GET')
+        ? {'X-Impersonate-User': impersonatedUserId}
+        : {}),
       ...(options.headers || {}),
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -67,8 +80,10 @@ export const uploadFile = async (file: File | Blob, fileName: string, subpath?: 
     throw new Error('You must be signed in to continue.');
   }
 
+  // Strip EXIF (GPS location etc.) client-side before the photo ever leaves the device.
+  const sanitized = await stripImageMetadata(file);
   const formData = new FormData();
-  formData.append('file', file, fileName);
+  formData.append('file', sanitized, fileName);
   if (subpath) formData.append('subpath', subpath);
 
   const response = await fetch(`${apiBaseUrl()}${clientPrefix()}/uploads`, {

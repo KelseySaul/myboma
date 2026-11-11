@@ -200,7 +200,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     try {
       await unsubscribeFromWaitlist({email: unsubscribeEmail.trim().toLowerCase()});
       setUnsubscribeEmail('');
-      toast.success(`You have been unsubscribed from ${tenantConfig.appName} emails.`);
+      toast.success(`If that address is subscribed, we have emailed it a one-click unsubscribe link.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not process your unsubscribe request.');
     } finally {

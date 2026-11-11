@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import {
   provisionUser,
   updateUserStatus,
   deleteUserAccount,
-  getAdminDashboard,
-  getAuditLogs,
   updateUserRole,
   createBuilding,
   updateBuilding,
@@ -63,6 +61,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAdminDashboard, useAuditLogs } from '../lib/queries';
 
 interface Platform {
   id: string;
@@ -201,57 +200,51 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   // Audit log state (SuperAdmin only)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditUserId, setAuditUserId] = useState<string>('all');
-  const [auditLoading, setAuditLoading] = useState(false);
 
-  const fetchAuditLogs = useCallback(async () => {
-    if (!profile.isSuperAdmin) return;
-    setAuditLoading(true);
-    try {
-      const data = await getAuditLogs(auditUserId);
-      setAuditLogs(data as AuditLog[]);
-    } catch (err) {
-      console.error('Failed to load audit logs:', err);
-    } finally {
-      setAuditLoading(false);
-    }
-  }, [profile.isSuperAdmin, auditUserId]);
+  const auditLogsQuery = useAuditLogs({ uid: profile.uid, userId: auditUserId }, Boolean(profile.isSuperAdmin));
+  const auditLoading = auditLogsQuery.isFetching;
+  useEffect(() => {
+    if (auditLogsQuery.data) setAuditLogs(auditLogsQuery.data as AuditLog[]);
+  }, [auditLogsQuery.data]);
+  useEffect(() => {
+    if (auditLogsQuery.error) console.error('Failed to load audit logs:', auditLogsQuery.error);
+  }, [auditLogsQuery.error]);
 
-  // Polls the consolidated admin dashboard endpoint — replaces the old five-table
-  // Supabase Realtime channel. Filtering (platform scope, admin-vs-superadmin reach)
-  // is now applied server-side; see /admin/dashboard in app.ts.
-  const fetchDashboard = useRef<() => Promise<void>>(async () => {});
-  fetchDashboard.current = async () => {
-    try {
-      const platformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? undefined : selectedPlatformId) : undefined;
-      const data = await getAdminDashboard(platformId);
-      setUsers(data.users as UserProfile[]);
-      setUserPage(1);
-      setProperties(data.properties);
-      setInvitations(data.invitations);
-      setRentPayments(data.payments);
-      setBuildings(data.buildings);
-      if (profile.isSuperAdmin) setPlatforms(data.platforms as Platform[]);
-    } catch (err) {
-      console.error('Admin dashboard fetch failed:', err);
-      toast.error('Could not load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Polls the consolidated admin dashboard endpoint (TanStack Query, keyed by viewer uid
+  // and platform scope) — replaces the old five-table Supabase Realtime channel.
+  // Filtering (platform scope, admin-vs-superadmin reach) is applied server-side; see
+  // /admin/dashboard in app.ts. Query data is copied into local state because handlers
+  // below update it optimistically.
+  const dashboardPlatformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? undefined : selectedPlatformId) : undefined;
+  const {
+    data: dashboardData,
+    error: dashboardError,
+    errorUpdatedAt: dashboardErrorAt,
+  } = useAdminDashboard({ uid: profile.uid, viewerPlatformId: profile.platformId, platformId: dashboardPlatformId });
+
+  // A scope change shows the loading state until that scope's data arrives (as before).
+  useEffect(() => {
+    if (!dashboardData && !dashboardError) setLoading(true);
+  }, [profile.uid, profile.platformId, dashboardPlatformId]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchDashboard.current();
-    const interval = setInterval(() => fetchDashboard.current(), 30000);
-    return () => clearInterval(interval);
-  }, [profile.platformId, profile.isSuperAdmin, selectedPlatformId]);
+    if (!dashboardData) return;
+    setUsers(dashboardData.users as UserProfile[]);
+    setUserPage(1);
+    setProperties(dashboardData.properties);
+    setInvitations(dashboardData.invitations);
+    setRentPayments(dashboardData.payments);
+    setBuildings(dashboardData.buildings);
+    if (profile.isSuperAdmin) setPlatforms(dashboardData.platforms as Platform[]);
+    setLoading(false);
+  }, [dashboardData]);
 
   useEffect(() => {
-    fetchAuditLogs();
-    if (!profile.isSuperAdmin) return;
-    const interval = setInterval(fetchAuditLogs, 30000);
-    return () => clearInterval(interval);
-  }, [fetchAuditLogs]);
+    if (!dashboardError) return;
+    console.error('Admin dashboard fetch failed:', dashboardError);
+    toast.error('Could not load dashboard data');
+    setLoading(false);
+  }, [dashboardError, dashboardErrorAt]);
 
   const handleUpdateRole = async () => {
     if (!selectedUserForRole) return;

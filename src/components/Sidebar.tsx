@@ -1,8 +1,6 @@
-import { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../lib/landlordSubscription';
 import { authClient } from '../lib/auth-client';
-import { getUnreadNotificationCount } from '../lib/api';
 import { toast } from 'sonner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -23,6 +21,8 @@ import {
   faChartPie,
 } from '@fortawesome/free-solid-svg-icons';
 import { tenantConfig } from '../config/tenant';
+import { useUnreadCount } from '../lib/queries';
+import { clearQueryCache } from '../lib/queryClient';
 
 interface SidebarProps {
   profile: UserProfile;
@@ -138,31 +138,12 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
   const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
   const roleStyle = ROLE_BADGE_STYLES[currentRole] ?? ROLE_BADGE_STYLES.hunter;
   const topOffset = isImpersonating ? '100px' : '56px';
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    if (!profile?.email) return;
-
-    let isActive = true;
-    const fetchUnread = () => {
-      getUnreadNotificationCount()
-        .then(({ count }) => {
-          if (isActive) setUnreadCount(count);
-        })
-        .catch(() => {});
-    };
-
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 20000);
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [profile?.email, profile?.uid]);
+  // Shared query: Navbar and Sidebar read the same cached count (one request per poll).
+  const { data: unreadCount = 0 } = useUnreadCount(profile?.email);
 
   const handleLogout = async () => {
     await authClient.signOut({});
+    clearQueryCache();
     toast.success('Signed out successfully');
   };
 

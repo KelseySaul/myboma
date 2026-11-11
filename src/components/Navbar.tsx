@@ -1,5 +1,5 @@
 import { authClient } from '../lib/auth-client';
-import { getUnreadNotificationCount, getPlatformBranding } from '../lib/api';
+import { getPlatformBranding } from '../lib/api';
 import { UserProfile, UserRole, promptForPush } from '../App';
 import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
@@ -28,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Capacitor } from '@capacitor/core';
+import { useUnreadCount } from '../lib/queries';
+import { clearQueryCache } from '../lib/queryClient';
 
 interface NavbarProps {
   user: any;
@@ -42,7 +44,8 @@ interface NavbarProps {
 
 export default function Navbar({ user, profile, activeView, setActiveView, setActiveTab, onLoginClick, isImpersonating, onHelpClick }: NavbarProps) {
   const { setTheme } = useTheme();
-  const [unreadCount, setUnreadCount] = useState(0);
+  // Shared query: Navbar and Sidebar read the same cached count (one request per poll).
+  const { data: unreadCount = 0 } = useUnreadCount(profile?.email);
   const [platformBranding, setPlatformBranding] = useState<{ brandLogoUrl?: string, brandPrimaryColor?: string, brandSecondaryColor?: string, name?: string } | null>(null);
 
   const isNative = Capacitor.isNativePlatform();
@@ -76,29 +79,9 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     }
   }, [profile?.platformId]);
 
-  useEffect(() => {
-    if (!profile?.email) return;
-
-    let isActive = true;
-    const fetchUnread = () => {
-      getUnreadNotificationCount()
-        .then(({ count }) => {
-          if (isActive) setUnreadCount(count);
-        })
-        .catch(() => {});
-    };
-
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 20000);
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [profile?.email, profile?.uid]);
-
   const handleLogout = async () => {
     await authClient.signOut({});
+    clearQueryCache();
     toast.success('Signed out successfully');
   };
 

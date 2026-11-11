@@ -13,6 +13,8 @@ export interface AuthenticatedRequest extends Request {
   clientKind?: ClientKind;
   authUser?: AuthUser;
   profile?: UserProfileRecord;
+  /** Set when a super admin is viewing as `profile` via X-Impersonate-User (read-only). */
+  impersonator?: UserProfileRecord;
   validatedBody?: unknown;
 }
 
@@ -45,6 +47,7 @@ export const toActor = (profile: UserProfileRecord): Actor => ({
 
 export interface RentPaymentRecord {
   id: string;
+  paymentMetadata?: Record<string, unknown> | null;
   tenantId: string;
   propertyId: string;
   landlordId: string;
