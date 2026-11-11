@@ -161,16 +161,20 @@ export const recordPaymentAttempt = async (input: {
   amount: number | string;
 }) => {
   if (!input.providerReference) return;
+  // Savepoint so a failure can't abort (and silently roll back) the surrounding request.
   await db
-    .insert(schema.paymentAttempts)
-    .values({
-      rentPaymentId: input.rentPaymentId,
-      provider: input.provider,
-      providerReference: input.providerReference,
-      merchantReference: input.merchantReference ?? null,
-      amount: String(input.amount),
-    })
-    .onConflictDoNothing()
+    .transaction((tx) =>
+      tx
+        .insert(schema.paymentAttempts)
+        .values({
+          rentPaymentId: input.rentPaymentId,
+          provider: input.provider,
+          providerReference: input.providerReference!,
+          merchantReference: input.merchantReference ?? null,
+          amount: String(input.amount),
+        })
+        .onConflictDoNothing(),
+    )
     .catch((error) => Sentry.captureException(error));
 };
 
@@ -195,9 +199,9 @@ export const findRentPaymentByProviderReference = async (providerReference: stri
 
 export const markPaymentAttempt = async (providerReference: string, status: 'succeeded' | 'failed') => {
   await db
-    .update(schema.paymentAttempts)
-    .set({status})
-    .where(eq(schema.paymentAttempts.providerReference, providerReference))
+    .transaction((tx) =>
+      tx.update(schema.paymentAttempts).set({status}).where(eq(schema.paymentAttempts.providerReference, providerReference)),
+    )
     .catch((error) => Sentry.captureException(error));
 };
 

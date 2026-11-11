@@ -50,7 +50,8 @@ export const insertNotification = async (payload: {
   propertyId?: string | null;
   read?: boolean;
 }) => {
-  await db.insert(schema.notifications).values(payload);
+  // Savepoint: callers often swallow notification failures; that must not abort their transaction.
+  await db.transaction((tx) => tx.insert(schema.notifications).values(payload));
 
   const user = await db.query.users.findFirst({
     where: sql`lower(${schema.users.email}) = ${payload.recipientEmail.toLowerCase()}`,
