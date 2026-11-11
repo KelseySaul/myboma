@@ -21,4 +21,4 @@ export const joinWaitlist = (email: string) =>
   publicRequest<{status: 'subscribed'}>('/waitlist', {email, source: 'landing-page'});
 
 export const unsubscribeFromWaitlist = (input: {email?: string; token?: string}) =>
-  publicRequest<{status: 'unsubscribed'}>('/waitlist/unsubscribe', input);
+  publicRequest<{status: 'unsubscribed' | 'link_sent'}>('/waitlist/unsubscribe', input);

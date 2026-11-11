@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { differenceInDays, parseISO, format } from 'date-fns';
 import { faHeart } from '@fortawesome/free-solid-svg-icons';
+import { DASHBOARD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface Property {
   id: string;
@@ -138,7 +139,7 @@ export default function HunterDashboard({
     };
 
     fetchProperties();
-    const interval = setInterval(fetchProperties, 30000);
+    const interval = setInterval(whenVisible(fetchProperties), DASHBOARD_POLL_MS);
 
     return () => {
       isActive = false;

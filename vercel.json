@@ -6,6 +6,12 @@
       "includeFiles": "{app.ts,db/**,server/**,config/**,src/lib/**,src/legalDocuments.ts}"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/daily",
+      "schedule": "0 5 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

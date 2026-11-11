@@ -23,8 +23,12 @@ export type Actor = {
 
 const email = (value: string) => value.trim().toLowerCase();
 
-/** Postgres `IS NOT DISTINCT FROM` — null-safe equality used throughout the original policies. */
-const platformMatches = (a: string | null, b: string | null) => a === b;
+/**
+ * Platform scoping for admin checks. A null platform matches NOTHING: every self-signup
+ * landlord has platformId = null, so treating null === null as "same tenant" (the old
+ * `IS NOT DISTINCT FROM` port) let any platform-less admin manage all of them.
+ */
+const platformMatches = (a: string | null, b: string | null) => a !== null && a === b;
 
 export const isSuperAdmin = (actor: Actor) => actor.isSuperAdmin;
 export const isAdmin = (actor: Actor) => actor.isSuperAdmin || actor.isAdmin;
@@ -285,7 +289,7 @@ export async function canSendNotification(
   notificationPlatformId: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(actor)) return true;
-  if (isAdmin(actor) && (notificationPlatformId === null || platformMatches(actor.platformId, notificationPlatformId))) {
+  if (isAdmin(actor) && platformMatches(actor.platformId, notificationPlatformId)) {
     return true;
   }
 

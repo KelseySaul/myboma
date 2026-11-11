@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Capacitor } from '@capacitor/core';
+import { UNREAD_POLL_MS, whenVisible } from '../lib/polling';
 
 interface NavbarProps {
   user: any;
@@ -89,7 +90,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
     };
 
     fetchUnread();
-    const interval = setInterval(fetchUnread, 20000);
+    const interval = setInterval(whenVisible(fetchUnread), UNREAD_POLL_MS);
 
     return () => {
       isActive = false;
