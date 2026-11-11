@@ -300,3 +300,24 @@ export const landlordSubscriptionPayments = pgTable('landlordSubscriptionPayment
   index('landlord_sub_payments_landlord_idx').on(t.landlordId),
   index('landlord_sub_payments_checkout_idx').on(t.providerCheckoutRequestId),
 ]);
+
+/**
+ * One row per provider checkout attempt (Stripe session, Pesapal order, M-Pesa STK push).
+ * Previously every attempt overwrote rentPayments.providerCheckoutRequestId, so a payment
+ * completed on an earlier attempt could no longer be matched to its invoice. Callbacks now
+ * resolve the invoice through this ledger; providerReference is unique so a provider
+ * reference can never be attached to two invoices.
+ */
+export const paymentAttempts = pgTable('payment_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  rentPaymentId: uuid('rentPaymentId').references(() => rentPayments.id, { onDelete: 'cascade' }),
+  provider: paymentProviderEnum('provider').notNull(),
+  providerReference: text('providerReference').notNull().unique(),
+  merchantReference: text('merchantReference'),
+  amount: numeric('amount', { precision: 14, scale: 2 }).notNull(),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('payment_attempts_rent_payment_idx').on(t.rentPaymentId),
+  index('payment_attempts_merchant_idx').on(t.merchantReference),
+]);
