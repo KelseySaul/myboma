@@ -192,7 +192,7 @@ CREATE POLICY rls_delete ON notifications FOR DELETE USING (app_is_system() OR a
 -- invitations
 CREATE POLICY rls_read ON invitations FOR SELECT USING (
   app_is_system() OR app_is_super() OR app_is_me("landlordId") OR app_admin_of("platformId")
-  OR lower(email) = lower(app_ctx('user_email')));
+  OR app_manages_landlord("landlordId") OR lower(email) = lower(app_ctx('user_email')));
 CREATE POLICY rls_insert ON invitations FOR INSERT WITH CHECK (
   app_is_system() OR app_is_super() OR app_is_me("landlordId") OR app_admin_of("platformId"));
 CREATE POLICY rls_update ON invitations FOR UPDATE

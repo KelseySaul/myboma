@@ -28,29 +28,38 @@ export const getAuthPersistence = () => {
 
 const loadSecureStorage = () => import('@aparajita/capacitor-secure-storage').then((m) => m.SecureStorage);
 
-const persistToken = async (token: string | null) => {
-  if (!IS_NATIVE) return;
-  const storage = await loadSecureStorage();
-  if (token && getAuthPersistence()) await storage.setItem(TOKEN_KEY, token);
-  else await storage.removeItem(TOKEN_KEY);
+// Keystore writes are serialized so a slow setItem can't resurrect a token after sign-out.
+let persistQueue: Promise<void> = Promise.resolve();
+const persistToken = (token: string | null) => {
+  if (!IS_NATIVE) return Promise.resolve();
+  persistQueue = persistQueue
+    .catch(() => undefined)
+    .then(async () => {
+      const storage = await loadSecureStorage();
+      if (token && getAuthPersistence()) await storage.setItem(TOKEN_KEY, token);
+      else await storage.removeItem(TOKEN_KEY);
+    });
+  return persistQueue;
 };
 
 export const authStorageReady: Promise<void> = (async () => {
   if (!IS_NATIVE) return;
+  const legacy = canUseBrowserStorage()
+    ? window.localStorage.getItem(TOKEN_KEY) ?? window.sessionStorage.getItem(TOKEN_KEY)
+    : null;
   try {
-    // One-time migration off the old WebView storage.
-    const legacy = canUseBrowserStorage()
-      ? window.localStorage.getItem(TOKEN_KEY) ?? window.sessionStorage.getItem(TOKEN_KEY)
-      : null;
-    if (canUseBrowserStorage()) {
+    const storage = await loadSecureStorage();
+    cachedToken = (await storage.getItem(TOKEN_KEY)) ?? legacy;
+    if (legacy) {
+      await persistToken(cachedToken);
+      // Only drop the WebView copy once the keystore write has succeeded (an over-the-air
+      // JS update can reach an older native build that lacks the secure-storage plugin).
       window.localStorage.removeItem(TOKEN_KEY);
       window.sessionStorage.removeItem(TOKEN_KEY);
     }
-    const storage = await loadSecureStorage();
-    cachedToken = (await storage.getItem(TOKEN_KEY)) ?? legacy;
-    if (legacy) await persistToken(cachedToken);
   } catch (error) {
-    console.error('[auth] Secure token storage unavailable:', error);
+    console.error('[auth] Secure token storage unavailable; keeping existing session:', error);
+    cachedToken = legacy;
   }
 })();
 

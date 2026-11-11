@@ -28,8 +28,15 @@ const resolveTenantEmail = async (tenantRef: string) => {
 
 /** Ends any active lease on the unit and starts a new one for `tenantRef` (email or uid). */
 export const startLease = async (property: Property, tenantRef: string) => {
-  const [tenantUserId, tenantEmail] = await Promise.all([resolveTenantUserId(tenantRef), resolveTenantEmail(tenantRef)]);
   return db.transaction(async (tx) => {
+    // Lock the unit so concurrent assignments serialize, then follow whatever tenant the
+    // property row holds NOW: if another request assigned someone else after the caller's
+    // property update, the lease must match the property, not the stale argument.
+    const [locked] = await tx.execute<{tenantId: string | null}>(
+      sql`SELECT "tenantId" FROM properties WHERE id = ${property.id} FOR UPDATE`,
+    ).then((result) => result.rows);
+    const effectiveRef = locked?.tenantId ?? tenantRef;
+    const [tenantUserId, tenantEmail] = await Promise.all([resolveTenantUserId(effectiveRef), resolveTenantEmail(effectiveRef)]);
     const current = await tx.query.leases.findFirst({
       where: and(eq(schema.leases.propertyId, property.id), eq(schema.leases.status, 'active')),
     });

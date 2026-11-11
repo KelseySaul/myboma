@@ -1,7 +1,19 @@
 import type {Response} from 'express';
 import {sql} from 'drizzle-orm';
 import {rootDb} from './client.js';
-import {requestDbScope} from './requestContext.js';
+import {requestDbScope, type RequestDbScope} from './requestContext.js';
+
+const ABANDONED_REQUEST_GRACE_MS = 30_000;
+
+/** Stand-in for the request transaction after it has been closed: any use throws. */
+const poisonedTx = new Proxy(
+  {},
+  {
+    get() {
+      throw new Error('Database scope for this request has already ended.');
+    },
+  },
+);
 
 export type RlsIdentity = {
   uid: string;
@@ -36,15 +48,33 @@ export const runInRlsScope = (identity: RlsIdentity, res: Response, next: () => 
                set_config('app.is_super_admin', ${identity.isSuperAdmin ? 'true' : 'false'}, true)`);
       await tx.execute(sql`SET LOCAL ROLE myboma_rls`);
 
+      const scope: RequestDbScope = {tx};
       await new Promise<void>((resolve) => {
         res.end = ((...args: EndArgs) => {
           heldEnd = args;
           resolve();
           return res;
         }) as Response['end'];
-        res.once('close', resolve); // client went away
-        requestDbScope.run({tx}, next);
+        // If the client disconnects, the handler keeps running and normally still calls
+        // res.end. Only if it never does, give up after a grace period — and poison the
+        // scope first so late queries fail loudly instead of running on a connection that
+        // has gone back to the pool (where they would skip RLS or join another request).
+        res.once('close', () => {
+          if (heldEnd) return;
+          setTimeout(() => {
+            if (heldEnd) return;
+            scope.tx = poisonedTx;
+            resolve();
+          }, ABANDONED_REQUEST_GRACE_MS).unref();
+        });
+        requestDbScope.run(scope, next);
       });
+
+      if (scope.tx === poisonedTx) throw new Error('Request abandoned before responding; rolled back.');
+      // A query error that a handler caught and ignored leaves Postgres in an aborted
+      // transaction, where COMMIT silently becomes ROLLBACK. Probe first, so the client gets
+      // a 500 instead of a success response for writes that were discarded.
+      await tx.execute(sql`SELECT 1`);
     })
     .then(
       () => {

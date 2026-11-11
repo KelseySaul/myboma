@@ -17,3 +17,8 @@ r2keys.docx
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Native build artifacts are published as GitHub Release assets, not committed
+*.apk
+*.ipa
+*.aab
