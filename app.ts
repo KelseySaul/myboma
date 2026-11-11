@@ -50,7 +50,8 @@ import {toActor} from './server/types.ts';
 import {
   canCreateBooking,
   canCreateMaintenanceRequest,
-  canManageBuilding,
+  canAdministerBuilding,
+  canAdministerProperty,
   canManagePlatform,
   canManageProperty,
   canReadPlatformBranding,
@@ -89,12 +90,20 @@ const buildDeploymentOrigins = (): string[] => {
   add(process.env.VERCEL_URL);
   add(process.env.VERCEL_BRANCH_URL);
 
+  // Capacitor WebView origins (iOS uses capacitor://localhost; Android serves from
+  // https://localhost). These aren't http(s) URLs with a parseable origin, so add verbatim.
+  for (const nativeOrigin of ['capacitor://localhost', 'ionic://localhost', 'https://localhost', 'http://localhost']) {
+    origins.add(nativeOrigin);
+  }
+
   return [...origins];
 };
 
 const deploymentOrigins = buildDeploymentOrigins();
 const appBaseUrl = process.env.APP_BASE_URL || deploymentOrigins[0] || `http://localhost:${PORT}`;
-const allowedRedirectOrigins = new Set(deploymentOrigins);
+// Payment redirects may only return to real web origins, never the native WebView origins.
+const NATIVE_ORIGINS = new Set(['capacitor://localhost', 'ionic://localhost', 'https://localhost', 'http://localhost']);
+const allowedRedirectOrigins = new Set(deploymentOrigins.filter((origin) => !NATIVE_ORIGINS.has(origin)));
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -274,6 +283,33 @@ const mpesaCallbackSchema = z
   })
   .passthrough();
 
+/**
+ * Server-written audit trail. Client-posted audit entries (/audit-logs) are only a
+ * convenience; security-relevant events are recorded here, where they can't be skipped.
+ */
+const recordAudit = async (
+  actor: {uid: string; email: string; platformId?: string | null} | null,
+  action: string,
+  resource: string | null,
+  resourceId: string | null,
+  metadata?: Record<string, unknown>,
+) => {
+  try {
+    await db.insert(schema.auditLogs).values({
+      userId: actor?.uid ?? null,
+      userEmail: actor?.email ?? null,
+      platformId: actor?.platformId ?? null,
+      action,
+      resource,
+      resourceId,
+      metadata: {...(metadata ?? {}), source: 'server'},
+    });
+  } catch (error) {
+    console.error('[Audit] Failed to record', action, error);
+    Sentry.captureException(error);
+  }
+};
+
 const getClientKind = (req: Request): ClientKind => (req.baseUrl.includes('/mobile') ? 'mobile' : 'web');
 
 /** Server-side source of truth for "is this landlord paid up" — the UI gate is cosmetic. */
@@ -328,6 +364,28 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   // whoever registers that address first would inherit full platform control.
   if (session.user.emailVerified) {
     profile = await syncSuperAdminFromEnv(profile, isSuperAdminEmail);
+  }
+
+  // Support impersonation: a super admin may view the app AS another user by sending
+  // X-Impersonate-User. It is read-only (GET only) so support staff can't act on the
+  // user's behalf, and the start of every session is audited server-side.
+  const impersonateUid = req.headers['x-impersonate-user'];
+  if (typeof impersonateUid === 'string' && impersonateUid && impersonateUid !== profile.uid) {
+    if (!profile.isSuperAdmin) {
+      res.status(403).json({error: 'Impersonation requires super admin'});
+      return;
+    }
+    if (req.method !== 'GET') {
+      res.status(403).json({error: 'Impersonation is read-only. Exit impersonation to make changes.'});
+      return;
+    }
+    const target = await db.query.users.findFirst({where: eq(schema.users.uid, impersonateUid)});
+    if (!target) {
+      res.status(404).json({error: 'Impersonated user not found'});
+      return;
+    }
+    req.impersonator = profile;
+    profile = target as unknown as UserProfileRecord;
   }
 
   req.authUser = {id: session.user.id, email: session.user.email};
@@ -426,9 +484,17 @@ const updateRentPayment = async (
   payload: Record<string, unknown>,
   _fallbackPayload: Record<string, unknown> = {},
 ) => {
+  // paymentMetadata is MERGED (jsonb ||), never replaced: each provider attempt adds its
+  // evidence instead of erasing the previous attempt's reconciliation trail.
+  const {paymentMetadata, ...rest} = payload;
+  const set: Record<string, unknown> = {...rest};
+  if (paymentMetadata && typeof paymentMetadata === 'object') {
+    set.paymentMetadata = sql`coalesce(${schema.rentPayments.paymentMetadata}, '{}'::jsonb) || ${JSON.stringify(paymentMetadata)}::jsonb`;
+  }
+  if (Object.keys(set).length === 0) return;
   await db
     .update(schema.rentPayments)
-    .set(payload as Partial<typeof schema.rentPayments.$inferInsert>)
+    .set(set as Partial<typeof schema.rentPayments.$inferInsert>)
     .where(eq(schema.rentPayments.id, rentPaymentId));
 };
 
@@ -576,7 +642,7 @@ const markRentPaid = async ({
       paidAt: new Date(),
       paymentProvider: provider,
       providerReference,
-      paymentMetadata: metadata ?? {},
+      paymentMetadata: sql`coalesce(${schema.rentPayments.paymentMetadata}, '{}'::jsonb) || ${JSON.stringify(metadata ?? {})}::jsonb`,
     })
     .where(and(eq(schema.rentPayments.id, payment.id), ne(schema.rentPayments.status, 'paid')))
     .returning({id: schema.rentPayments.id});
@@ -1264,6 +1330,14 @@ const initiateMpesaRent = asyncHandler(async (req, res) => {
 
   const {rentPaymentId, phone} = getValidatedBody<z.infer<typeof mpesaRentSchema>>(req);
   const {payment, property} = await fetchPaymentContext(rentPaymentId, req.profile);
+
+  // One live STK prompt per invoice: a second tap within 2 minutes would push a second
+  // PIN prompt to the tenant's phone and risk paying twice.
+  const lastStk = Date.parse(String((payment.paymentMetadata as Record<string, unknown> | undefined)?.stkInitiatedAt ?? ''));
+  if (Number.isFinite(lastStk) && Date.now() - lastStk < 120_000) {
+    res.status(409).json({error: 'An M-Pesa prompt was already sent for this invoice. Check your phone or try again in 2 minutes.'});
+    return;
+  }
   const payerPhone = normalizeSafaricomPhone(phone || req.profile?.phone || '');
 
   if (!payerPhone) {
@@ -1323,6 +1397,7 @@ const initiateMpesaRent = asyncHandler(async (req, res) => {
         payerPhone,
         clientKind: req.clientKind,
         customerMessage: body.CustomerMessage,
+        stkInitiatedAt: new Date().toISOString(),
       },
     },
     {},
@@ -1505,8 +1580,8 @@ const settleMpesaToLandlord = async ({payment, landlord}: {payment: RentPaymentR
       PartyA: shortcode,
       PartyB: normalizeSafaricomPhone(landlord.mpesaSettlementPhone),
       Remarks: `MyBoma rent settlement ${payment.id}`,
-      QueueTimeOutURL: timeoutUrl,
-      ResultURL: resultUrl,
+      QueueTimeOutURL: mpesaCallbackUrlWithSecret(timeoutUrl),
+      ResultURL: mpesaCallbackUrlWithSecret(resultUrl),
       Occasion: 'Rent settlement',
     }),
   });
@@ -1524,6 +1599,46 @@ const settleMpesaToLandlord = async ({payment, landlord}: {payment: RentPaymentR
     {},
   );
 };
+
+/**
+ * Daraja B2C ResultURL / QueueTimeOutURL. Without these, settlements stayed 'initiated'
+ * forever and failed payouts to landlords went unnoticed.
+ */
+const handleMpesaB2cResult = (kind: 'result' | 'timeout') =>
+  asyncHandler(async (req, res) => {
+    const result = (req.body?.Result ?? {}) as {
+      ResultCode?: number | string;
+      ResultDesc?: string;
+      OriginatorConversationID?: string;
+      ConversationID?: string;
+      TransactionID?: string;
+    };
+    const originator = String(result.OriginatorConversationID ?? '');
+    const conversationId = String(result.ConversationID ?? '');
+    const paymentId = originator.startsWith('rent-') ? originator.slice(5) : null;
+
+    const payment = paymentId && uuidSchema.safeParse(paymentId).success
+      ? await db.query.rentPayments.findFirst({where: eq(schema.rentPayments.id, paymentId)})
+      : conversationId
+        ? await db.query.rentPayments.findFirst({where: eq(schema.rentPayments.settlementReference, conversationId)})
+        : null;
+
+    if (payment) {
+      const succeeded = kind === 'result' && Number(result.ResultCode) === 0;
+      await updateRentPayment(payment.id, {
+        settlementStatus: succeeded ? 'settled' : 'failed',
+        settledAt: succeeded ? new Date() : null,
+        settlementReference: result.TransactionID || conversationId || payment.settlementReference,
+        paymentMetadata: {settlementResult: {kind, code: result.ResultCode ?? null, desc: result.ResultDesc ?? null}},
+      });
+      if (!succeeded) {
+        Sentry.captureMessage(`M-Pesa B2C settlement ${kind} failure for rent payment ${payment.id}: ${result.ResultDesc ?? 'timeout'}`);
+        await recordAudit(null, 'SETTLEMENT_FAILED', 'rentPayment', payment.id, {kind, desc: result.ResultDesc ?? null});
+      }
+    }
+
+    res.json({ResultCode: 0, ResultDesc: 'Accepted'});
+  });
 
 const stripeWebhookHandler = asyncHandler(async (req, res) => {
   if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
@@ -1655,7 +1770,7 @@ app.use(
       callback(null, false);
     },
     credentials: true,
-    allowedHeaders: ['Authorization', 'Content-Type', 'Stripe-Signature', 'sentry-trace', 'baggage'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Stripe-Signature', 'sentry-trace', 'baggage', 'X-Impersonate-User'],
   }),
 );
 
@@ -1840,6 +1955,8 @@ app.post(
   verifyMpesaCallback(isProduction),
   handleMpesaCallback,
 );
+app.post('/api/webhooks/mpesa/b2c-result', webhookLimiter, verifyMpesaCallback(), handleMpesaB2cResult('result'));
+app.post('/api/webhooks/mpesa/b2c-timeout', webhookLimiter, verifyMpesaCallback(), handleMpesaB2cResult('timeout'));
 app.get('/api/payments/pesapal/callback', webhookLimiter, handlePesapalCallback);
 app.get('/api/webhooks/pesapal/ipn', webhookLimiter, handlePesapalIpn);
 app.post('/api/webhooks/pesapal/ipn', webhookLimiter, handlePesapalIpn);
@@ -1991,7 +2108,13 @@ bffRouter.get(
     const tenantMatch = (column: typeof schema.properties.tenantId | typeof schema.rentPayments.tenantId) =>
       or(eq(column, email), eq(column, uid));
 
-    const property = (await db.query.properties.findFirst({where: tenantMatch(schema.properties.tenantId)})) ?? null;
+    // A tenant can rent more than one unit; return all of them (newest first) and keep
+    // `property` as the primary one so existing clients keep working deterministically.
+    const tenantProperties = await db.query.properties.findMany({
+      where: or(sql`lower(${schema.properties.tenantId}) = ${email}`, eq(schema.properties.tenantId, uid)),
+      orderBy: desc(schema.properties.createdAt),
+    });
+    const property = tenantProperties[0] ?? null;
 
     let landlord = null;
     if (property) {
@@ -2028,7 +2151,7 @@ bffRouter.get(
       orderBy: desc(schema.notifications.createdAt),
     });
 
-    res.json({property, landlord, requests, payments, notifications});
+    res.json({property, properties: tenantProperties, landlord, requests, payments, notifications});
   }),
 );
 
@@ -2151,6 +2274,20 @@ bffRouter.post(
       res.status(400).json({error: 'End date must be after start date'});
       return;
     }
+    // No double-booking: reject any overlap with a pending/confirmed stay.
+    const overlapping = await db.query.bookings.findFirst({
+      where: and(
+        eq(schema.bookings.propertyId, property.id),
+        inArray(schema.bookings.status, ['pending', 'confirmed']),
+        sql`${schema.bookings.startDate} < ${body.endDate}`,
+        sql`${schema.bookings.endDate} > ${body.startDate}`,
+      ),
+      columns: {id: true},
+    });
+    if (overlapping) {
+      res.status(409).json({error: 'Those dates are already booked'});
+      return;
+    }
     const nights = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000));
     const totalPrice = property.type === 'bnb' ? Number(property.price) * nights : Number(property.price);
 
@@ -2242,39 +2379,37 @@ bffRouter.get(
       ? or(eq(schema.rentPayments.landlordId, actor.id), inArray(schema.rentPayments.propertyId, propertyIds))
       : eq(schema.rentPayments.landlordId, actor.id);
 
-    let rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
+    const rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
 
-    // Invoice generation now runs on the daily cron (/api/cron/daily); this on-load sync is
-    // a catch-up only. Each invoice is attributed to its property's owner inside the sync.
-    const sync = await syncAutomaticRentInvoices(properties as any, rentPaymentRows as any);
-    if (sync.created > 0 || sync.overdueUpdated > 0) {
-      rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
-    }
+    // Read-only: invoices are generated by the daily cron and POST /landlord/rent-invoices/sync,
+    // never as a side effect of a GET. Independent reads run in parallel.
     const payments = rentPaymentRows.map((p) => ({...p, amount: Number(p.amount)}));
 
-    const bookings = await db.query.bookings.findMany({
-      where: propertyIds.length
-        ? or(eq(schema.bookings.landlordId, actor.id), inArray(schema.bookings.propertyId, propertyIds))
-        : eq(schema.bookings.landlordId, actor.id),
-      orderBy: desc(schema.bookings.startDate),
-    });
-
-    const expenses = await db.query.expenses.findMany({
-      where: propertyIds.length
-        ? or(eq(schema.expenses.landlordId, actor.id), inArray(schema.expenses.propertyId, propertyIds))
-        : eq(schema.expenses.landlordId, actor.id),
-      orderBy: desc(schema.expenses.expenseDate),
-    });
-
-    const invitations =
-      actor.role === 'admin'
-        ? await db.query.invitations.findMany({where: eq(schema.invitations.platformId, actor.platformId ?? '')})
-        : await db.query.invitations.findMany({where: eq(schema.invitations.landlordId, actor.id)});
-
-    const notifications = await db.query.notifications.findMany({
-      where: sql`lower(${schema.notifications.recipientEmail}) = ${actor.email.toLowerCase()}`,
-      orderBy: desc(schema.notifications.createdAt),
-    });
+    const [bookings, expenses, invitations, notifications] = await Promise.all([
+      db.query.bookings.findMany({
+        where: propertyIds.length
+          ? or(eq(schema.bookings.landlordId, actor.id), inArray(schema.bookings.propertyId, propertyIds))
+          : eq(schema.bookings.landlordId, actor.id),
+        orderBy: desc(schema.bookings.startDate),
+        limit: 500,
+      }),
+      db.query.expenses.findMany({
+        where: propertyIds.length
+          ? or(eq(schema.expenses.landlordId, actor.id), inArray(schema.expenses.propertyId, propertyIds))
+          : eq(schema.expenses.landlordId, actor.id),
+        orderBy: desc(schema.expenses.expenseDate),
+        limit: 1000,
+      }),
+      // Agency admins see their own platform's invitations; a missing platform matches nothing.
+      actor.role === 'admin' && actor.platformId
+        ? db.query.invitations.findMany({where: eq(schema.invitations.platformId, actor.platformId)})
+        : db.query.invitations.findMany({where: eq(schema.invitations.landlordId, actor.id)}),
+      db.query.notifications.findMany({
+        where: sql`lower(${schema.notifications.recipientEmail}) = ${actor.email.toLowerCase()}`,
+        orderBy: desc(schema.notifications.createdAt),
+        limit: 100,
+      }),
+    ]);
 
     res.json({buildings, properties, requests, payments, bookings, expenses, invitations, notifications});
   }),
@@ -2367,7 +2502,7 @@ bffRouter.patch(
       res.status(404).json({error: 'Not found'});
       return;
     }
-    if (!(await canManageBuilding(actor, building))) {
+    if (!canAdministerBuilding(actor, building)) {
       res.status(403).json({error: 'Forbidden'});
       return;
     }
@@ -2387,7 +2522,7 @@ bffRouter.delete(
       res.status(404).json({error: 'Not found'});
       return;
     }
-    if (!(await canManageBuilding(actor, building))) {
+    if (!canAdministerBuilding(actor, building)) {
       res.status(403).json({error: 'Forbidden'});
       return;
     }
@@ -2500,6 +2635,10 @@ bffRouter.patch(
     }
 
     const body = getValidatedBody<z.infer<typeof propertyUpdateSchema>>(req);
+    if (body.price !== undefined && Number(body.price) !== Number(property.price) && !(await canAdministerProperty(actor, property))) {
+      res.status(403).json({error: 'Only the owner or a co-owner can change the rent'});
+      return;
+    }
     if (body.buildingId) {
       const building = await db.query.buildings.findFirst({
         where: and(eq(schema.buildings.id, body.buildingId), eq(schema.buildings.landlordId, property.landlordId)),
@@ -2541,11 +2680,12 @@ bffRouter.delete(
       res.status(404).json({error: 'Not found'});
       return;
     }
-    if (!(await canManageProperty(actor, property))) {
-      res.status(403).json({error: 'Forbidden'});
+    if (!(await canAdministerProperty(actor, property))) {
+      res.status(403).json({error: 'Only the owner or a co-owner can delete a unit'});
       return;
     }
     await db.delete(schema.properties).where(eq(schema.properties.id, req.params.id));
+    await recordAudit(req.profile!, 'PROPERTY_DELETE', 'property', property.id, {title: property.title});
     res.json({deleted: true});
   }),
 );
@@ -2684,6 +2824,19 @@ bffRouter.patch(
       res.status(403).json({error: 'Forbidden'});
       return;
     }
+    // The maintenance hub is a Pro/Pro Plus feature of the unit owner's plan.
+    if (!actor.isAdmin && !actor.isSuperAdmin) {
+      const owner = await db.query.users.findFirst({where: eq(schema.users.uid, request.landlordId)});
+      const tier = parseSubscriptionPlan(owner?.subscriptionPlan)?.tier;
+      const entitled =
+        Boolean(owner) &&
+        hasActiveSubscription(owner as unknown as UserProfileRecord) &&
+        Boolean(tier && SUBSCRIPTION_TIERS[tier].features.maintenanceHub);
+      if (!entitled && !(owner && (owner.isAdmin || owner.isSuperAdmin))) {
+        res.status(402).json({error: 'The maintenance hub requires a Pro or Pro Plus plan.'});
+        return;
+      }
+    }
     const {status} = getValidatedBody<{status: 'pending' | 'in-progress' | 'resolved'}>(req);
     const [updated] = await db
       .update(schema.maintenanceRequests)
@@ -2712,6 +2865,13 @@ bffRouter.post(
   asyncHandler(async (req, res) => {
     const body = getValidatedBody<z.infer<typeof expenseInputSchema>>(req);
     const actor = req.profile!;
+    if (body.propertyId) {
+      const property = await db.query.properties.findFirst({where: eq(schema.properties.id, body.propertyId)});
+      if (!property || !(await canManageProperty(toActor(actor), property))) {
+        res.status(403).json({error: 'You can only record expenses against your own units'});
+        return;
+      }
+    }
     const [expense] = await db
       .insert(schema.expenses)
       .values({...body, amount: String(body.amount), landlordId: actor.uid, platformId: actor.platformId ?? null})
@@ -2774,24 +2934,20 @@ bffRouter.get(
     const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
     const withLandlordScope = (col: any, base: any) => (isSuperAdmin(actor) ? base : and(base, eq(col, actor.id)));
 
-    let users = await db.query.users.findMany({
-      where: platformWhere(schema.users.platformId),
-      orderBy: desc(schema.users.createdAt),
-      limit: listLimit,
-    });
-
     // Plain admins only see users they've personally invited (as "landlordId" on the
-    // invitation), plus themselves — narrower than what RLS would have allowed, but
-    // this replicates the old client's own (more restrictive) query exactly.
-    if (!isSuperAdmin(actor)) {
-      const myInvites = await db.query.invitations.findMany({
-        where: eq(schema.invitations.landlordId, actor.id),
-        columns: {email: true},
-      });
-      const allowedEmails = new Set(myInvites.map((i) => i.email.toLowerCase()));
-      allowedEmails.add(actor.email.toLowerCase());
-      users = users.filter((u) => allowedEmails.has(u.email.toLowerCase()));
-    }
+    // invitation), plus themselves. Filtered in SQL — filtering after a LIMIT made older
+    // managed users silently disappear once the table grew past the limit.
+    const invitedByMe = isSuperAdmin(actor)
+      ? undefined
+      : or(
+          eq(schema.users.uid, actor.id),
+          sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${schema.invitations.landlordId} = ${actor.id})`,
+        );
+    const users = await db.query.users.findMany({
+      where: invitedByMe ? and(platformWhere(schema.users.platformId), invitedByMe) : platformWhere(schema.users.platformId),
+      orderBy: desc(schema.users.createdAt),
+      limit: isSuperAdmin(actor) ? listLimit : 2000,
+    });
 
     const properties = await db.query.properties.findMany({
       where: withLandlordScope(schema.properties.landlordId, platformWhere(schema.properties.platformId)),
@@ -2823,6 +2979,24 @@ bffRouter.get(
     const platforms = isSuperAdmin(actor) ? await db.query.platforms.findMany() : [];
 
     res.json({users, properties, invitations, payments, buildings, platforms});
+  }),
+);
+
+bffRouter.post(
+  '/admin/impersonation/:uid',
+  requireAuth,
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    const target = await db.query.users.findFirst({
+      where: eq(schema.users.uid, req.params.uid),
+      columns: {uid: true, email: true},
+    });
+    if (!target) {
+      res.status(404).json({error: 'User not found'});
+      return;
+    }
+    await recordAudit(req.profile!, 'ADMIN_IMPERSONATE_START', 'user', target.uid, {targetEmail: target.email});
+    res.json({ok: true});
   }),
 );
 
@@ -2884,6 +3058,10 @@ bffRouter.patch(
       .set({role: roleValue, isAdmin: nextIsAdmin, isSuperAdmin: isSuper})
       .where(eq(schema.users.uid, req.params.uid))
       .returning();
+    await recordAudit(req.profile!, 'USER_ROLE_CHANGE', 'user', target.uid, {
+      from: {role: target.role, isAdmin: target.isAdmin, isSuperAdmin: target.isSuperAdmin},
+      to: {role: roleValue, isAdmin: nextIsAdmin, isSuperAdmin: isSuper},
+    });
     res.json(updated);
   }),
 );
@@ -2902,7 +3080,7 @@ bffRouter.delete(
       res.status(404).json({error: 'Not found'});
       return;
     }
-    if (!(await canManageBuilding(actor, building))) {
+    if (!canAdministerBuilding(actor, building)) {
       res.status(403).json({error: 'Forbidden'});
       return;
     }
@@ -2915,10 +3093,17 @@ bffRouter.delete(
     // Tenant accounts are NOT deleted here: properties.tenantId is landlord-editable, so a
     // landlord could point it at any email (an admin's included) and have it wiped. Removing
     // the units unassigns the tenants; their accounts are deleted explicitly if needed.
+    // One transaction (neon-http batch): either the units and the building go, or nothing.
+    const deleteBuilding = db.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
     if (props.length > 0) {
-      await db.delete(schema.properties).where(inArray(schema.properties.id, props.map((p) => p.id)));
+      await db.batch([
+        db.delete(schema.properties).where(inArray(schema.properties.id, props.map((p) => p.id))),
+        deleteBuilding,
+      ]);
+    } else {
+      await deleteBuilding;
     }
-    await db.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
+    await recordAudit(req.profile!, 'BUILDING_DELETE', 'building', req.params.id, {units: props.length});
 
     res.json({deleted: true});
   }),
@@ -3068,7 +3253,13 @@ bffRouter.post(
   '/users/provision',
   requireAuth,
   validateBody(provisionUserSchema),
-  asyncHandler((req, res) => handleProvisionUser(req, res, isAgencyAdmin(req.profile!))),
+  asyncHandler(async (req, res) => {
+    await handleProvisionUser(req, res, isAgencyAdmin(req.profile!));
+    if (res.statusCode < 300) {
+      const body = req.validatedBody as {email: string; role: string};
+      await recordAudit(req.profile!, 'USER_PROVISION', 'user', body.email, {role: body.role});
+    }
+  }),
 );
 
 bffRouter.patch(
@@ -3076,10 +3267,23 @@ bffRouter.patch(
   requireAuth,
   requireAdmin,
   validateBody(suspendUserSchema),
-  asyncHandler(handleSuspendUser),
+  asyncHandler(async (req, res) => {
+    await handleSuspendUser(req, res);
+    if (res.statusCode < 300) {
+      await recordAudit(req.profile!, 'USER_STATUS_CHANGE', 'user', req.params.uid, req.validatedBody as Record<string, unknown>);
+    }
+  }),
 );
 
-bffRouter.delete('/users/:uid', requireAuth, requireAdmin, asyncHandler(handleDeleteUser));
+bffRouter.delete(
+  '/users/:uid',
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    await handleDeleteUser(req, res);
+    if (res.statusCode < 300) await recordAudit(req.profile!, 'USER_DELETE', 'user', req.params.uid);
+  }),
+);
 
 bffRouter.put(
   '/platforms/:id/branding',
@@ -3349,6 +3553,7 @@ bffRouter.post(
       providerReference: `MANUAL-${Date.now()}`,
       metadata: {markedBy: actor.uid, note: note ?? null},
     });
+    await recordAudit(actor, 'RENT_MARKED_PAID_MANUAL', 'rentPayment', rentPayment.id, {amount: rentPayment.amount, note: note ?? null});
 
     console.log(`[Manual Payment] Successfully marked payment ${paymentId} as paid by ${actor.email}`);
     res.json({status: 'paid', paymentId: rentPayment.id});
