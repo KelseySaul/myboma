@@ -102,7 +102,8 @@ DO $$
 DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['properties','buildings','rentPayments','leases','maintenanceRequests',
-                           'expenses','bookings','notifications','invitations','payment_attempts','audit_logs']
+                           'expenses','bookings','notifications','invitations','payment_attempts','audit_logs',
+                           'platform_memberships']
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     -- FORCE: the app connects as the table owner, which would otherwise bypass RLS.
@@ -215,6 +216,17 @@ CREATE POLICY rls_read ON audit_logs FOR SELECT USING (app_is_system() OR app_is
 CREATE POLICY rls_insert ON audit_logs FOR INSERT WITH CHECK (true);
 CREATE POLICY rls_update ON audit_logs FOR UPDATE USING (app_is_system()) WITH CHECK (app_is_system());
 CREATE POLICY rls_delete ON audit_logs FOR DELETE USING (app_is_system());
+
+-- platform_memberships: members see their own; platform admins manage their platform's.
+CREATE POLICY rls_read ON platform_memberships FOR SELECT USING (
+  app_is_system() OR app_is_super() OR app_is_me("userId") OR app_admin_of("platformId"));
+CREATE POLICY rls_insert ON platform_memberships FOR INSERT WITH CHECK (
+  app_is_system() OR app_is_super() OR app_admin_of("platformId"));
+CREATE POLICY rls_update ON platform_memberships FOR UPDATE
+  USING (app_is_system() OR app_is_super() OR app_admin_of("platformId"))
+  WITH CHECK (app_is_system() OR app_is_super() OR app_admin_of("platformId"));
+CREATE POLICY rls_delete ON platform_memberships FOR DELETE USING (
+  app_is_system() OR app_is_super() OR app_admin_of("platformId"));
 
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO myboma_rls;
 

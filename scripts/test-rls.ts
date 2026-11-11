@@ -23,6 +23,7 @@ try {
   await c.query('BEGIN');
   // Tables created by `db:push` on newer schemas; created here if missing so the policies apply.
   await c.query(`CREATE TABLE IF NOT EXISTS leases (id uuid primary key default gen_random_uuid(), "platformId" uuid, "propertyId" uuid, "landlordId" uuid, "tenantUserId" uuid, "tenantEmail" text, status text)`);
+  await c.query(`CREATE TABLE IF NOT EXISTS platform_memberships (id uuid primary key default gen_random_uuid(), "platformId" uuid, "userId" uuid, role text)`);
   await c.query(`CREATE TABLE IF NOT EXISTS payment_attempts (id uuid primary key default gen_random_uuid(), "rentPaymentId" uuid)`);
   await c.query(readFileSync('docs/migrations/08-row-level-security.sql', 'utf8'));
 

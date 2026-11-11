@@ -1,4 +1,5 @@
 import {and, desc, eq, inArray, isNull, or, sql} from 'drizzle-orm';
+import {addPlatformMembership} from '../memberships.ts';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
@@ -311,6 +312,7 @@ export function registerAdminRoutes(bffRouter: Router) {
         .returning({id: schema.platforms.id});
 
       await db.update(schema.users).set({platformId: platform.id}).where(eq(schema.users.uid, actor.uid));
+      await addPlatformMembership(platform.id, actor.uid, 'owner');
 
       res.json({status: 'created', platformId: platform.id});
     }),

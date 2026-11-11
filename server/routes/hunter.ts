@@ -1,4 +1,5 @@
 import {and, eq, inArray, sql} from 'drizzle-orm';
+import {withSystemAccess} from '../../db/requestContext.ts';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
@@ -75,7 +76,9 @@ export function registerHunterRoutes(bffRouter: Router) {
         return;
       }
       // No double-booking: reject any overlap with a pending/confirmed stay.
-      const overlapping = await db.query.bookings.findFirst({
+      // System access: the caller must not SEE other hunters' bookings (RLS), but the
+      // availability check has to consider them.
+      const overlapping = await withSystemAccess(() => db.query.bookings.findFirst({
         where: and(
           eq(schema.bookings.propertyId, property.id),
           inArray(schema.bookings.status, ['pending', 'confirmed']),
@@ -83,7 +86,7 @@ export function registerHunterRoutes(bffRouter: Router) {
           sql`${schema.bookings.endDate} > ${body.startDate}`,
         ),
         columns: {id: true},
-      });
+      }));
       if (overlapping) {
         res.status(409).json({error: 'Those dates are already booked'});
         return;

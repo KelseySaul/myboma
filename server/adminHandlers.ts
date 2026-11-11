@@ -1,4 +1,6 @@
 import type {Response} from 'express';
+import {addPlatformMembership, membershipRoleFor} from './memberships.ts';
+import {withSystemAccess} from '../db/requestContext.ts';
 import {eq, ne, and, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
 import {APIError} from 'better-auth';
@@ -123,7 +125,8 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
 
   const email = body.email.toLowerCase();
   const platformId = actor.isSuperAdmin ? (body.platformId ?? actor.platformId ?? null) : (actor.platformId ?? null);
-  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : body.landlordId;
+  // Every invitation records who created it, so the creator (and RLS) can see it later.
+  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : (body.landlordId ?? actor.uid);
 
   // 1. Try to create the auth user. signUpEmail also runs databaseHooks.user.create.after
   // (server/auth.ts), which seeds a baseline public.users row from these same fields.
@@ -243,13 +246,19 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     landlordId: landlordId ?? null,
   };
 
+  await addPlatformMembership(platformId, uid, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role}));
+
   // Stale invitation rows for a brand-new account are replaced; there is no user yet
   // whose relationships could be hijacked.
-  const [invitation] = await db
-    .insert(schema.invitations)
-    .values(invitationValues)
-    .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
-    .returning();
+  // System access: a stale invitation for this brand-new account may belong to someone
+  // else (invisible to the caller under RLS) and must still be replaced.
+  const [invitation] = await withSystemAccess(() =>
+    db
+      .insert(schema.invitations)
+      .values(invitationValues)
+      .onConflictDoUpdate({target: schema.invitations.email, set: invitationValues})
+      .returning(),
+  );
 
   console.log(`[Provisioning] Provisioned ${body.role} ${uid} (landlord: ${landlordId ?? 'none'})`);
   res.status(201).json({uid, email, invitation});
