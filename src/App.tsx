@@ -53,7 +53,8 @@ import OneSignalWeb from 'react-onesignal';
 import OneSignalNative from '@onesignal/capacitor-plugin';
 import { Capacitor } from '@capacitor/core';
 import { isLandlordSubscriptionActive } from './lib/landlordSubscription';
-import { PROFILE_POLL_MS, whenVisible } from './lib/polling';
+import { queryClient, clearQueryCache } from './lib/queryClient';
+import { queryKeys, useSessionProfile } from './lib/queries';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
 
 let oneSignalWebInitialized = false;
@@ -319,7 +320,11 @@ export default function App() {
 
     const loadProfile = async (retryCount = 0): Promise<void> => {
       try {
-        const { profile: profileData } = await getSession();
+        // Seeds the shared session query, so the polling query below doesn't refetch it.
+        const { profile: profileData } = await queryClient.fetchQuery({
+          queryKey: queryKeys.session(user!.id),
+          queryFn: getSession,
+        });
         if (!isMounted) return;
         const p = normalizeProfile(profileData);
         setProfile(p);
@@ -353,6 +358,8 @@ export default function App() {
       setProfile(null);
       setActiveView(null);
       setError(null);
+      // Signed out (by any path): drop every cached query so nothing leaks to the next user.
+      clearQueryCache();
       syncOneSignalIdentity(null);
       setLoading(false);
       clearTimeout(safetyTimeout);
@@ -366,19 +373,13 @@ export default function App() {
 
   // Polls for profile changes (role/subscription updates made elsewhere, e.g. by an
   // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
+  const { data: sessionData } = useSessionProfile(user?.id);
   useEffect(() => {
-    if (!user?.id) return;
-    const interval = setInterval(whenVisible(() => {
-      getSession()
-        .then(({ profile: profileData }) => {
-          const p = normalizeProfile(profileData);
-          setProfile(p);
-          setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
-        })
-        .catch(() => {});
-    }), PROFILE_POLL_MS);
-    return () => clearInterval(interval);
-  }, [user?.id]);
+    if (!sessionData) return;
+    const p = normalizeProfile(sessionData.profile);
+    setProfile(p);
+    setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
+  }, [sessionData]);
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
@@ -972,6 +973,7 @@ export default function App() {
                 onClick={async () => {
                   setIsMobileMenuOpen(false);
                   await authClient.signOut({});
+                  clearQueryCache();
                   toast.success('Signed out');
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"

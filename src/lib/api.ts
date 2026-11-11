@@ -24,6 +24,8 @@ let impersonatedUserId: string | null = null;
 export const setImpersonatedUser = (uid: string | null) => {
   impersonatedUserId = uid;
 };
+/** The user GET requests are currently served as (null when not impersonating). */
+export const getImpersonatedUser = () => impersonatedUserId;
 
 export const bffRequest = async <T>(path: string, options: ApiOptions = {}): Promise<T> => {
   const isNative = Capacitor.isNativePlatform();
