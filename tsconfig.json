@@ -22,5 +22,25 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": [
+    "app.ts",
+    "api",
+    "server",
+    "db",
+    "config",
+    "src",
+    "components",
+    "lib",
+    "tests",
+    "*.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "android",
+    "ios",
+    ".git_old",
+    "scripts"
+  ]
 }
