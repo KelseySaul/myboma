@@ -65,6 +65,7 @@ import {
 } from './db/authz.ts';
 import { handleSendRentReminder, processAutomatedRentReminders } from './server/notificationHandlers.ts';
 import { syncAllRentInvoices, syncAutomaticRentInvoices, ensureRentInvoiceForProperty } from './server/rentInvoiceSync.ts';
+import { endLeaseForProperty, endLeasesForTenant, startLease } from './server/leases.ts';
 import cron from 'node-cron';
 
 const app = express();
@@ -2262,7 +2263,12 @@ bffRouter.get(
       orderBy: desc(schema.notifications.createdAt),
     });
 
-    res.json({property, properties: tenantProperties, landlord, requests, payments, notifications});
+    const leases = await db.query.leases.findMany({
+      where: or(eq(schema.leases.tenantUserId, uid), sql`lower(${schema.leases.tenantEmail}) = ${email}`),
+      orderBy: desc(schema.leases.startDate),
+    });
+
+    res.json({property, properties: tenantProperties, leases, landlord, requests, payments, notifications});
   }),
 );
 
@@ -2770,6 +2776,11 @@ bffRouter.patch(
       .where(eq(schema.properties.id, req.params.id))
       .returning();
 
+    if (body.tenantId !== undefined || body.status !== undefined) {
+      if (updated.status === 'rented' && updated.tenantId) await startLease(updated, updated.tenantId);
+      else if (!updated.tenantId || updated.status === 'available') await endLeaseForProperty(updated.id);
+    }
+
     if (updated.status === 'rented' && updated.tenantId) {
       // Invoices always belong to the property's owner (never the manager/admin editing it),
       // because landlordId drives Stripe transfers and M-Pesa B2C payouts.
@@ -2859,6 +2870,7 @@ bffRouter.post(
       .set({tenantId: tenantEmail, status: 'rented'})
       .where(eq(schema.properties.id, body.propertyId))
       .returning();
+    await startLease(updated, tenantEmail);
 
     const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.propertyId, updated.id)});
     await ensureRentInvoiceForProperty(updated as any, tenantEmail, updated.landlordId, updated.platformId, payments as any, true);
@@ -2891,6 +2903,7 @@ bffRouter.post(
       .delete(schema.rentPayments)
       .where(and(sql`lower(${schema.rentPayments.tenantId}) = ${email}`, eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
 
+    await endLeasesForTenant(email, undefined, actor.uid);
     res.json({unassigned: true});
   }),
 );
@@ -2916,6 +2929,7 @@ bffRouter.delete(
       .delete(schema.rentPayments)
       .where(and(sql`lower(${schema.rentPayments.tenantId}) = ${email}`, eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
 
+    await endLeasesForTenant(email, undefined, actor.uid);
     res.json({deleted: true});
   }),
 );

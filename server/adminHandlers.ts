@@ -355,6 +355,15 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
     // A failure part-way used to leave orphaned tenancies and invoices behind.
     const email = targetUser.email.trim().toLowerCase();
     await db.transaction(async (tx) => {
+      await tx
+        .update(schema.leases)
+        .set({status: 'ended', endedAt: new Date()})
+        .where(
+          and(
+            eq(schema.leases.status, 'active'),
+            or(eq(schema.leases.tenantUserId, targetUid), sql`lower(${schema.leases.tenantEmail}) = ${email}`),
+          ),
+        );
       await tx.delete(schema.authUser).where(eq(schema.authUser.id, targetUid));
       // Exact (case-insensitive) matches: ilike treated '_' in emails as a wildcard and
       // could wipe other people's tenancies and invoices.
