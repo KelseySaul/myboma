@@ -883,8 +883,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   return (
     <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
       {/* ── Page header ─────────────────────────── */}
-      <div className="px-4 py-5 sm:px-6 md:px-8 bg-white dark:bg-zinc-950 border-b border-zinc-200/80 dark:border-zinc-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="border-b border-zinc-200/80 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6 sm:py-5 md:px-8">
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center sm:gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">
               {TAB_TITLES[activeTab || 'dashboard']?.title ?? 'Overview'}
@@ -894,7 +894,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="hidden flex-wrap items-center gap-2.5 sm:flex">
             <Button
               variant="outline"
               size="sm"
@@ -1150,14 +1150,14 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+                <div className="max-sm:hidden">
                   <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Users</CardTitle>
                   <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Search by name or email, filter by role, and manage access.
                   </CardDescription>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                  <div className="flex w-full items-stretch gap-2 sm:w-auto sm:items-center">
                     <div className="relative w-full sm:max-w-xs">
                       <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                       <Input 
@@ -1168,7 +1168,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       />
                     </div>
                     <select
-                      className="h-9 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
+                      className="h-9 w-32 shrink-0 cursor-pointer rounded-xl border border-slate-200/80 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-slate-900/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:w-auto"
                       value={userRoleFilter}
                       onChange={(e) => { setUserRoleFilter(e.target.value); setUserPage(1); }}
                     >
@@ -1432,7 +1432,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         {activeTab === 'pending' && (
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+              <div className="max-sm:hidden">
                 <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Pending invites</CardTitle>
                 <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   They have an invitation email but haven't set up their account. Links expire after 7 days.
@@ -1531,7 +1531,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
             <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                <div>
+                <div className="max-sm:hidden">
                   <CardTitle className="text-xl font-black">Properties</CardTitle>
                   <CardDescription className="font-medium text-zinc-500">Every unit with its landlord, price and status.</CardDescription>
                 </div>
@@ -1547,9 +1547,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Dialog open={isBulkAddOpen} onOpenChange={setIsBulkAddOpen}>
-                      <DialogTrigger render={<Button className="rounded-xl font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100" />}>
-                        <FontAwesomeIcon icon={faTools} className="mr-2 h-3 w-3" />
-                        Bulk Add
+                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-100 px-2 font-bold text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 sm:gap-2 sm:px-3" />}>
+                        <FontAwesomeIcon icon={faTools} className="h-3 w-3 sm:mr-2" />
+                        <span className="sm:hidden">Bulk</span><span className="hidden sm:inline">Bulk Add</span>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-[700px] p-0 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
@@ -1633,8 +1633,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     </Dialog>
 
                     <Dialog open={isAddBuildingOpen} onOpenChange={setIsAddBuildingOpen}>
-                      <DialogTrigger render={<Button className="rounded-xl font-bold bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100" />}>
-                        <FontAwesomeIcon icon={faPlus} className="mr-2 h-3 w-3" />
+                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-100 px-2 font-bold text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 sm:gap-2 sm:px-3" />}>
+                        <FontAwesomeIcon icon={faPlus} className="h-3 w-3 sm:mr-2" />
                         Building
                       </DialogTrigger>
                       <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
@@ -1693,9 +1693,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       </Dialog>
 
                       <Dialog open={isAddPropertyOpen} onOpenChange={setIsAddPropertyOpen}>
-                      <DialogTrigger render={<Button className="rounded-xl font-bold bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-955" />}>
-                        <FontAwesomeIcon icon={faPlus} className="mr-2 h-3 w-3" />
-                        Property
+                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-950 px-2 font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-955 sm:gap-2 sm:px-3" />}>
+                        <FontAwesomeIcon icon={faPlus} className="h-3 w-3 sm:mr-2" />
+                        <span className="sm:hidden">Add</span><span className="hidden sm:inline">Property</span>
                       </DialogTrigger>
                       <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900 max-w-[500px]">
                         <DialogHeader>
@@ -1927,7 +1927,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         {activeTab === 'platforms' && profile.isSuperAdmin && (
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
+              <div className="max-sm:hidden">
                 <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Platforms</CardTitle>
                 <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Agencies with their own workspace. Suspend or reactivate them here.
@@ -2028,7 +2028,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col xl:flex-row xl:items-center gap-4 justify-between">
-                <div>
+                <div className="max-sm:hidden">
                   <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-white">
                     <FontAwesomeIcon icon={faClipboardList} className="h-4 w-4 text-slate-400" />
                     System Audit Trail
