@@ -46,8 +46,8 @@ export default function LandlordSignupFields({
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
-        <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-600">
+      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+        <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-900">
           Choose your plan
         </Label>
         <div className="mt-3 grid gap-2">
@@ -67,8 +67,8 @@ export default function LandlordSignupFields({
                 : 'border-transparent bg-zinc-800 hover:border-amber-400/50';
             } else {
               stateClasses = isSelected
-                ? 'border-indigo-500 bg-white shadow-sm'
-                : 'border-transparent bg-white/60 hover:border-indigo-200';
+                ? 'border-zinc-950 bg-white shadow-sm'
+                : 'border-transparent bg-white/60 hover:border-zinc-300';
             }
 
             return (
@@ -80,7 +80,7 @@ export default function LandlordSignupFields({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs font-black ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{tier.label}</span>
-                  <span className={`text-[10px] font-black ${isProPlus ? 'text-amber-400' : 'text-indigo-600'}`}>
+                  <span className={`text-[10px] font-black ${isProPlus ? 'text-amber-400' : 'text-zinc-900'}`}>
                     {formatPlanPrice(tierAmount)}/{periodLabel}
                   </span>
                 </div>
@@ -104,7 +104,7 @@ export default function LandlordSignupFields({
               onClick={() => patch({ billing: period.id as BillingPeriod })}
               className={`flex-1 rounded-lg border-2 py-2 text-center transition-all ${
                 value.billing === period.id
-                  ? 'border-indigo-500 bg-white'
+                  ? 'border-zinc-950 bg-white'
                   : 'border-transparent bg-white/50'
               }`}
             >
@@ -141,7 +141,7 @@ export default function LandlordSignupFields({
                 htmlFor={`rent-${method.id}`}
                 className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-2 ${
                   value.rentPayoutMethod === method.id
-                    ? 'border-indigo-500 bg-indigo-50/50'
+                    ? 'border-zinc-950 bg-zinc-100'
                     : 'border-zinc-200'
                 }`}
               >

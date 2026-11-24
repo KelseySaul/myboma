@@ -15,7 +15,6 @@ export default function Footer() {
         <nav className="flex items-center gap-4 text-xs" aria-label="Legal">
           <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/terms">Terms</a>
           <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/privacy">Privacy</a>
-          <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/#unsubscribe">Unsubscribe</a>
         </nav>
       </div>
     </footer>

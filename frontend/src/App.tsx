@@ -133,6 +133,8 @@ const normalizeProfile = (data: any): UserProfile => {
   } as UserProfile;
 };
 
+const SESSION_HINT_KEY = 'myboma_signed_in';
+
 export default function App() {
   const sessionState = authClient.useSession() as {
     data: {user: {id: string; email: string; name?: string}} | null;
@@ -142,6 +144,11 @@ export default function App() {
   const sessionPending = sessionState.isPending;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Logged-out visitors see the landing page immediately; only a browser that was signed in
+  // last time waits for the session check before rendering.
+  const [hadSession] = useState(() => {
+    try { return localStorage.getItem(SESSION_HINT_KEY) === '1'; } catch { return false; }
+  });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [activeView, setActiveView] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -344,6 +351,11 @@ export default function App() {
 
     if (sessionPending) return () => { isMounted = false; };
 
+    try {
+      if (user) localStorage.setItem(SESSION_HINT_KEY, '1');
+      else localStorage.removeItem(SESSION_HINT_KEY);
+    } catch { /* storage unavailable */ }
+
     if (user) {
       const pref = localStorage.getItem(`myboma_default_page_${user.id}`);
       if (pref) setActiveTab(pref);
@@ -455,42 +467,10 @@ export default function App() {
     }
   }, [user?.id, refreshProfile]);
 
-  if (loading) {
+  if (loading && (user || (sessionPending && hadSession))) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-white">
-        <div className="flex flex-col items-center gap-6">
-          {/* Logo blur-to-clear skeleton */}
-          <div className="relative flex items-center justify-center">
-            {/* Glow halo behind logo */}
-            <div className="absolute inset-0 rounded-3xl bg-zinc-200/60 blur-xl animate-pulse scale-150" />
-            {/* The logo image — starts blurred, reveals to sharp */}
-            <img
-              src={tenantConfig.logoUrl}
-              alt={tenantConfig.appName}
-              className="relative h-20 w-20 object-contain rounded-2xl animate-logo-reveal shadow-xl bg-white p-2"
-            />
-          </div>
-          {/* Brand text fades in after logo */}
-          <div className="flex flex-col items-center gap-1" style={{ animation: 'fadeInUp 0.8s 0.6s ease-out both' }}>
-            <span className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white uppercase"
-              style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-              {tenantConfig.appName}
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-[0.35em] text-zinc-400">
-              {tenantConfig.companyName}
-            </span>
-          </div>
-          {/* Subtle progress indicator */}
-          <div className="w-24 h-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-            <div className="h-full bg-zinc-300 dark:bg-zinc-600 rounded-full animate-pulse w-1/2 mx-auto" />
-          </div>
-        </div>
-        <style>{`
-          @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
-          }
-        `}</style>
+      <div className="flex h-screen w-full items-center justify-center bg-white dark:bg-zinc-950" role="status" aria-label="Loading">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900 dark:border-zinc-800 dark:border-t-white" />
       </div>
     );
   }

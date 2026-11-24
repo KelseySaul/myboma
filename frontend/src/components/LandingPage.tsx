@@ -22,18 +22,7 @@ import { toast } from 'sonner';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LEGAL_DOCUMENTS, PRIVACY_VERSION, TERMS_VERSION } from '../../../shared/legalDocuments';
-import LandlordPricingSection from './LandlordPricingSection';
-import {
-  AudienceTabs,
-  Faq,
-  FeatureGrid,
-  FinalCta,
-  HowItWorks,
-  LandingHero,
-  ListingsSection,
-  ProblemSolution,
-  TrustStrip,
-} from './landing/LandingSections';
+import { GetStarted, LandingHero, LandlordFeatures, ListingsSection } from './landing/LandingSections';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import {
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -41,7 +30,7 @@ import {
   type SubscriptionTier,
   type BillingPeriod,
 } from '../../../shared/landlordSubscription';
-import {joinWaitlist, unsubscribeFromWaitlist} from '../lib/waitlist';
+import {unsubscribeFromWaitlist} from '../lib/waitlist';
 import { Capacitor } from '@capacitor/core';
 import { tenantConfig } from '../config/tenant';
 
@@ -135,11 +124,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [selectedRole, setSelectedRole] = useState<'landlord' | 'hunter'>('hunter');
   const [landlordSignup, setLandlordSignup] = useState<PendingLandlordSubscription>(defaultLandlordSignupState);
-  const [waitlistEmail, setWaitlistEmail] = useState('');
-  const [unsubscribeEmail, setUnsubscribeEmail] = useState('');
-  const [waitlistLoading, setWaitlistLoading] = useState(false);
-  const [unsubscribeLoading, setUnsubscribeLoading] = useState(false);
-  const [waitlistJoined, setWaitlistJoined] = useState(false);
 
   useEffect(() => {
     if (agreed) {
@@ -182,35 +166,6 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     } else {
       localStorage.removeItem('myboma_agreed_terms');
       localStorage.removeItem('myboma_terms_acceptance');
-    }
-  };
-
-  const handleWaitlistSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setWaitlistLoading(true);
-    try {
-      await joinWaitlist(waitlistEmail.trim().toLowerCase());
-      setWaitlistJoined(true);
-      setWaitlistEmail('');
-      toast.success(`You are on the ${tenantConfig.appName} waitlist.`);
-    } catch (error: any) {
-      toast.error(error.message || 'Could not join the waitlist.');
-    } finally {
-      setWaitlistLoading(false);
-    }
-  };
-
-  const handleUnsubscribe = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setUnsubscribeLoading(true);
-    try {
-      await unsubscribeFromWaitlist({email: unsubscribeEmail.trim().toLowerCase()});
-      setUnsubscribeEmail('');
-      toast.success(`If that address is subscribed, we have emailed it a one-click unsubscribe link.`);
-    } catch (error: any) {
-      toast.error(error.message || 'Could not process your unsubscribe request.');
-    } finally {
-      setUnsubscribeLoading(false);
     }
   };
 
@@ -368,7 +323,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   const scrollToHomes = () => document.getElementById('homes')?.scrollIntoView({ behavior: 'smooth' });
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-emerald-100">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-zinc-200">
       {isNative ? (
         <section className="container mx-auto px-2 py-4 pt-safe sm:px-4">
           <HunterDashboard
@@ -381,12 +336,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </section>
       ) : (
         <>
-          <LandingHero onStartLandlord={() => openLandlordSignup()} onFindHome={scrollToHomes} onInstall={handlePwaInstallClick} />
-          <TrustStrip />
-          <ProblemSolution />
-          <AudienceTabs onStartLandlord={() => openLandlordSignup()} onSignIn={openSignIn} onFindHome={scrollToHomes} />
-          <FeatureGrid />
-          <HowItWorks />
+          <LandingHero onStartLandlord={() => openLandlordSignup()} onFindHome={scrollToHomes} />
           <ListingsSection>
             <HunterDashboard
               profile={null}
@@ -396,64 +346,10 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
               variant="embedded"
             />
           </ListingsSection>
-          <LandlordPricingSection onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => openLandlordSignup(tier, billing)} />
-          <Faq />
-          <FinalCta
-            onStartLandlord={() => openLandlordSignup()}
-            onFindHome={scrollToHomes}
-            updates={
-              waitlistJoined ? (
-                <p className="text-sm font-semibold text-white">You're subscribed. Watch your inbox for {tenantConfig.appName} updates.</p>
-              ) : (
-                <form className="space-y-3" onSubmit={handleWaitlistSubmit}>
-                  <Label htmlFor="waitlist-email" className="text-sm font-semibold text-white">Get product updates</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="waitlist-email"
-                      type="email"
-                      value={waitlistEmail}
-                      onChange={(event) => setWaitlistEmail(event.target.value)}
-                      placeholder="you@example.com"
-                      className="h-11 rounded-xl border-0 bg-white text-slate-900"
-                      required
-                    />
-                    <Button type="submit" className="h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white hover:bg-slate-800" disabled={waitlistLoading}>
-                      {waitlistLoading ? 'Subscribing...' : 'Subscribe'}
-                    </Button>
-                  </div>
-                  <p className="text-xs leading-5 text-emerald-50/80">
-                    Occasional product news only. Read our <a className="font-semibold underline underline-offset-2" href="/privacy">Privacy Policy</a>. Every email has an unsubscribe link.
-                  </p>
-                </form>
-              )
-            }
-          />
-
-          <section id="unsubscribe" className="scroll-mt-16 border-t border-slate-200 bg-white px-4 py-8 sm:px-6">
-            <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-sm font-semibold text-slate-900">No longer want our emails?</h2>
-                <p className="mt-1 text-xs text-slate-500">Enter your email and we will unsubscribe it.</p>
-              </div>
-              <form className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row" onSubmit={handleUnsubscribe}>
-                <Input
-                  type="email"
-                  aria-label="Email address to unsubscribe"
-                  value={unsubscribeEmail}
-                  onChange={(event) => setUnsubscribeEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className="h-10 rounded-xl bg-white"
-                  required
-                />
-                <Button type="submit" variant="outline" className="h-10 rounded-xl border-slate-300 bg-white px-5 text-xs font-semibold" disabled={unsubscribeLoading}>
-                  {unsubscribeLoading ? 'Removing...' : 'Unsubscribe'}
-                </Button>
-              </form>
-            </div>
-          </section>
+          <LandlordFeatures />
+          <GetStarted onStartLandlord={() => openLandlordSignup()} onSignIn={openSignIn} />
         </>
       )}
-
 
       {/* Auth Modal */}
       {isAuthOpen && (
@@ -490,9 +386,9 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                         <RadioGroupItem value="landlord" id="landlord-modal" className="sr-only" />
                         <Label 
                           htmlFor="landlord-modal" 
-                          className={`flex flex-col items-center justify-center text-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedRole === 'landlord' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'}`}
+                          className={`flex flex-col items-center justify-center text-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedRole === 'landlord' ? 'border-zinc-950 bg-zinc-100 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'}`}
                         >
-                          <FontAwesomeIcon icon={faShieldAlt} className={`h-4 w-4 ${selectedRole === 'landlord' ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                          <FontAwesomeIcon icon={faShieldAlt} className={`h-4 w-4 ${selectedRole === 'landlord' ? 'text-zinc-900' : 'text-zinc-400'}`} />
                           <span className="font-bold text-[9px] uppercase">Landlord / Owner</span>
                         </Label>
                       </div>
@@ -500,9 +396,9 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                         <RadioGroupItem value="hunter" id="hunter-modal" className="sr-only" />
                         <Label 
                           htmlFor="hunter-modal" 
-                          className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedRole === 'hunter' ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/10' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'}`}
+                          className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedRole === 'hunter' ? 'border-zinc-950 bg-zinc-100 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-700 hover:border-zinc-300'}`}
                         >
-                          <FontAwesomeIcon icon={faSearch} className={`h-4 w-4 ${selectedRole === 'hunter' ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                          <FontAwesomeIcon icon={faSearch} className={`h-4 w-4 ${selectedRole === 'hunter' ? 'text-zinc-900' : 'text-zinc-400'}`} />
                           <span className="font-bold text-[10px] uppercase">Property Hunter</span>
                         </Label>
                       </div>
@@ -520,15 +416,15 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                       <div className="space-y-1.5">
                         <Label htmlFor="fullName" className="text-xs font-bold ml-1">Full Name</Label>
                         <div className="relative group">
-                          <FontAwesomeIcon icon={faUser} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                          <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="John Doe" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-indigo-500 text-sm" required />
+                          <FontAwesomeIcon icon={faUser} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                          <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="John Doe" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 text-sm" required />
                         </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="phone" className="text-xs font-bold ml-1">Phone Number</Label>
                         <div className="relative group">
-                          <FontAwesomeIcon icon={faMobileAlt} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 700 000" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-indigo-500 text-sm" required />
+                          <FontAwesomeIcon icon={faMobileAlt} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                          <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+254 700 000" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 text-sm" required />
                         </div>
                       </div>
                     </div>
@@ -536,19 +432,19 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                   <div className="space-y-1.5">
                     <Label htmlFor="email" className="text-xs font-bold ml-1">Email Address</Label>
                     <div className="relative group">
-                      <FontAwesomeIcon icon={faEnvelope} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                      <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-indigo-500 text-sm" required />
+                      <FontAwesomeIcon icon={faEnvelope} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                      <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-11 pl-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 text-sm" required />
                     </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="password" className="text-xs font-bold ml-1">Password</Label>
                     <div className="relative group">
-                      <FontAwesomeIcon icon={faLock} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                      <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="h-11 pl-11 pr-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-indigo-500 text-sm" required />
+                      <FontAwesomeIcon icon={faLock} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                      <Input id="password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="h-11 pl-11 pr-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 text-sm" required />
                       <button
                         type="button"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/30"
                         onClick={() => setShowPassword((current) => !current)}
                       >
                         <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} className="h-3.5 w-3.5" />
@@ -560,12 +456,12 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                     <div className="space-y-1.5 animate-in fade-in duration-300">
                       <Label htmlFor="confirmPassword" className="text-xs font-bold ml-1">Confirm Password</Label>
                       <div className="relative group">
-                        <FontAwesomeIcon icon={faLock} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-indigo-500 transition-colors" />
-                        <Input id="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="h-11 pl-11 pr-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-indigo-500 text-sm" required />
+                        <FontAwesomeIcon icon={faLock} className="absolute left-4 top-3.5 h-3.5 w-3.5 text-zinc-400 group-focus-within:text-zinc-900 transition-colors" />
+                        <Input id="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••" className="h-11 pl-11 pr-11 rounded-xl border-zinc-200 dark:border-zinc-700 focus:ring-zinc-900 text-sm" required />
                         <button
                           type="button"
                           aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/30"
                           onClick={() => setShowConfirmPassword((current) => !current)}
                         >
                           <FontAwesomeIcon icon={showConfirmPassword ? faEyeSlash : faEye} className="h-3.5 w-3.5" />
@@ -579,7 +475,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                       <input
                         type="checkbox"
                         id="rememberMe"
-                        className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                        className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
                       />
@@ -592,21 +488,21 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                   <div className="pt-2">
                     {authMode === 'signup' && (
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-700 mb-4">
-                        <input type="checkbox" id="terms" className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500" checked={agreed} onChange={(e) => handleAgreementChange(e.target.checked)} />
+                        <input type="checkbox" id="terms" className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900" checked={agreed} onChange={(e) => handleAgreementChange(e.target.checked)} />
                         <Label htmlFor="terms" className="text-[10px] text-zinc-500 dark:text-zinc-400 cursor-pointer font-medium leading-tight">
                           I accept the{' '}
-                          <button type="button" className="text-indigo-600 font-bold underline-offset-2 hover:underline" onClick={(event) => { event.preventDefault(); setLegalDoc('terms'); }}>
+                          <button type="button" className="text-zinc-900 font-bold underline-offset-2 hover:underline" onClick={(event) => { event.preventDefault(); setLegalDoc('terms'); }}>
                             Terms
                           </button>{' '}
                           and{' '}
-                          <button type="button" className="text-indigo-600 font-bold underline-offset-2 hover:underline" onClick={(event) => { event.preventDefault(); setLegalDoc('privacy'); }}>
+                          <button type="button" className="text-zinc-900 font-bold underline-offset-2 hover:underline" onClick={(event) => { event.preventDefault(); setLegalDoc('privacy'); }}>
                             Privacy Policy
                           </button>.
                         </Label>
                       </div>
                     )}
 
-                    <Button type="submit" onClick={handleEmailAuth} className="w-full h-12 bg-gradient-to-r from-indigo-600 to-purple-600 hover:scale-[1.02] text-white rounded-2xl font-black text-sm shadow-lg shadow-indigo-200 dark:shadow-none transition-all active:scale-95" disabled={loading}>
+                    <Button type="submit" onClick={handleEmailAuth} className="w-full h-12 bg-zinc-950 hover:bg-zinc-800 text-white rounded-2xl font-bold text-sm shadow-lg shadow-zinc-300 dark:shadow-none transition-all active:scale-95" disabled={loading}>
                       {loading 
                         ? <FontAwesomeIcon icon={faCheckCircle} className="animate-spin" />
                         : (authMode === 'login'
@@ -623,7 +519,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                   </div>
                   
                   <div className="text-center pt-2">
-                    <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-[10px] text-zinc-400 font-black uppercase tracking-widest hover:text-indigo-600 transition-colors">
+                    <button type="button" onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')} className="text-[10px] text-zinc-400 font-black uppercase tracking-widest hover:text-zinc-900 transition-colors">
                       {authMode === 'login' ? "New here? Sign Up" : "Have an account? Log In"}
                     </button>
 
