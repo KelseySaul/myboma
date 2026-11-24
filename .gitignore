@@ -7,6 +7,12 @@ coverage/
 .env*
 !.env.example
 
+# Firebase app files and service-account credentials are supplied outside source control.
+frontend/android/app/google-services.json
+frontend/ios/App/App/GoogleService-Info.plist
+*serviceAccountKey*.json
+firebase-adminsdk-*.json
+
 .vercel
 
 # Contains raw R2 credentials — values already copied into .env
@@ -17,3 +23,8 @@ r2keys.docx
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Native build artifacts are published as GitHub Release assets, not committed
+*.apk
+*.ipa
+*.aab

@@ -1,0 +1,1104 @@
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { authClient } from './lib/auth-client';
+import { getSession, completePasswordReset, bffRequest, setImpersonatedUser, activateFreeLandlordPlan } from './lib/api';
+import LandingPage from './components/LandingPage';
+import Navbar from './components/Navbar';
+import PublicNavbar from './components/PublicNavbar';
+import Sidebar from './components/Sidebar';
+import Footer from './components/Footer';
+import ImpersonationBanner from './components/ImpersonationBanner';
+import PublicLegalPage from './components/PublicLegalPage';
+import AboutPage from './components/AboutPage';
+import InvitePage from './components/InvitePage';
+import ResetPasswordPage from './components/ResetPasswordPage';
+import AuthDialog, { type AuthIntent } from './components/auth/AuthDialog';
+import { tenantConfig } from './config/tenant';
+
+// Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
+// bundles, and the landing page loads without any dashboard code at all.
+const LandlordDashboard = lazy(() => import('./components/LandlordDashboard'));
+const TenantDashboard = lazy(() => import('./components/TenantDashboard'));
+const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const SettingsPage = lazy(() => import('./components/SettingsPage'));
+
+const DashboardFallback = () => (
+  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Loading…</p>
+  </div>
+);
+
+import { logAudit } from './lib/audit';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { 
+  faExclamationTriangle, 
+  faSync,
+  faChartPie,
+  faUsers,
+  faLink,
+  faBuilding,
+  faBars,
+  faTimes,
+  faTools,
+  faWallet,
+  faBolt,
+  faGlobe,
+  faClipboardList,
+  faCog,
+  faHome,
+  faSignOutAlt,
+  faBell
+} from '@fortawesome/free-solid-svg-icons';
+import { Toaster, toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
+import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
+import { initializeOneSignal, onPushSubscriptionReady, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
+import {
+  isLandlordSubscriptionActive,
+  PENDING_LANDLORD_SUBSCRIPTION_KEY,
+  type PendingLandlordSubscription,
+} from '../../shared/landlordSubscription';
+import { queryClient, clearQueryCache } from './lib/queryClient';
+import { queryKeys, useSessionProfile } from './lib/queries';
+export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
+
+export { promptForPush } from './lib/oneSignal';
+
+export interface UserProfile {
+  uid: string;
+  platformId?: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
+  phone?: string;
+  address?: string;
+  avatarUrl?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  rentPayoutMethod?: 'cash' | 'mpesa' | 'bank';
+  cashPayoutNotes?: string;
+  subscriptionPlan?: 'monthly' | 'quarterly' | 'yearly';
+  subscriptionStatus?: string;
+  subscriptionExpiresAt?: string;
+  createdAt: string;
+  mustChangePassword?: boolean;
+  status?: string;
+  termsAcceptedAt?: string;
+  termsVersion?: string;
+  privacyVersion?: string;
+}
+
+const VALID_ROLES: UserRole[] = ['landlord', 'tenant', 'hunter', 'admin'];
+
+const normalizeRole = (role?: string | null): UserRole => (
+  VALID_ROLES.includes(role as UserRole) ? role as UserRole : 'hunter'
+);
+
+const normalizeProfile = (data: any): UserProfile => {
+  const email = (data.email || '').toLowerCase();
+  const isSuperAdmin = Boolean(data.isSuperAdmin);
+
+  return {
+    ...data,
+    email,
+    displayName: data.displayName || (isSuperAdmin ? 'Super Admin' : 'User'),
+    role: isSuperAdmin ? 'admin' : normalizeRole(data.role),
+    isAdmin: Boolean(data.isAdmin) || isSuperAdmin,
+    isSuperAdmin,
+    createdAt: data.createdAt || new Date().toISOString(),
+    mustChangePassword: Boolean(data.mustChangePassword),
+  } as UserProfile;
+};
+
+const SESSION_HINT_KEY = 'myboma_signed_in';
+
+export default function App() {
+  const sessionState = authClient.useSession() as {
+    data: {user: {id: string; email: string; name?: string}} | null;
+    isPending: boolean;
+  };
+  const user = sessionState.data?.user ?? null;
+  const sessionPending = sessionState.isPending;
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Logged-out visitors see the landing page immediately; only a browser that was signed in
+  // last time waits for the session check before rendering.
+  const [hadSession] = useState(() => {
+    try { return localStorage.getItem(SESSION_HINT_KEY) === '1'; } catch { return false; }
+  });
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [publicAuthIntent, setPublicAuthIntent] = useState<AuthIntent>({ mode: 'signin' });
+  const [activeView, setActiveView] = useState<UserRole | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  // Lifted tab state — shared between Sidebar and the active dashboard
+  const [activeTab, setActiveTab] = useState<string>('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [contentScroller, setContentScroller] = useState<HTMLElement | null>(null);
+  const [mobileNavbarVisible, setMobileNavbarVisible] = useState(true);
+  const [showPushConfirmation, setShowPushConfirmation] = useState(false);
+  const [requestingPushPermission, setRequestingPushPermission] = useState(false);
+
+  useEffect(() => {
+    initializeOneSignal().catch((error) => console.error('OneSignal initialization error:', error));
+
+    // Patch history.replaceState to dispatch a custom event
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(this, args as any);
+      window.dispatchEvent(new Event('urlchange'));
+    };
+  }, []);
+
+  // The dashboard scrolls inside <main>, rather than on window. Hide the phone header on
+  // intentional downward movement and bring it straight back when the user reverses direction.
+  useEffect(() => {
+    if (!contentScroller) return;
+    let previousTop = contentScroller.scrollTop;
+    let frame = 0;
+    setMobileNavbarVisible(true);
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        const currentTop = contentScroller.scrollTop;
+        const difference = currentTop - previousTop;
+        if (currentTop < 24) {
+          setMobileNavbarVisible(true);
+          previousTop = currentTop;
+        } else if (Math.abs(difference) >= 8) {
+          setMobileNavbarVisible(difference < 0);
+          previousTop = currentTop;
+        }
+        frame = 0;
+      });
+    };
+
+    contentScroller.addEventListener('scroll', onScroll, {passive: true});
+    return () => {
+      contentScroller.removeEventListener('scroll', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [contentScroller]);
+
+  useEffect(() => {
+    const unsubscribe = onPushSubscriptionReady((subscriptionId) => {
+      const noticeKey = `myboma_onesignal_confirmed_${subscriptionId}`;
+      try {
+        if (localStorage.getItem(noticeKey)) return;
+        localStorage.setItem(noticeKey, '1');
+      } catch {
+        // If storage is unavailable, showing the confirmation is harmless.
+      }
+      setShowPushConfirmation(true);
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
+  const confirmPushPermission = async () => {
+    setRequestingPushPermission(true);
+    try {
+      await promptForPush();
+    } catch (error) {
+      console.error('Push permission request failed:', error);
+      toast.error('We could not open the notification permission prompt.');
+    } finally {
+      setRequestingPushPermission(false);
+      setShowPushConfirmation(false);
+    }
+  };
+
+  // Forced password reset state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+
+    if (newPassword.length < 8) {
+      setResetError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError("Passwords do not match.");
+      return;
+    }
+
+    if (!profile) return;
+
+    setResetLoading(true);
+    try {
+      // Sets the new password and clears mustChangePassword server-side, atomically.
+      await completePasswordReset(newPassword);
+
+      logAudit('PROFILE_UPDATE', 'user', profile.uid, { action: 'forced_password_reset' });
+
+      setProfile(prev => prev ? { ...prev, mustChangePassword: false } : null);
+      
+      // Clean up inputs
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      console.error("Forced password reset failed:", err);
+      setResetError(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleImpersonate = (target: UserProfile) => {
+    if (!profile?.isSuperAdmin) {
+      console.warn("Unauthorized impersonation attempt");
+      return;
+    }
+    // Dashboards now really load the target's data (server honours X-Impersonate-User for
+    // super admins, read-only); the start is audited server-side.
+    setImpersonatedUser(target.uid);
+    setImpersonatedProfile(target);
+    void bffRequest(`/admin/impersonation/${target.uid}`, { method: 'POST' }).catch(() => undefined);
+  };
+
+  const handleExitImpersonation = () => {
+    if (impersonatedProfile) {
+      logAudit('ADMIN_IMPERSONATE_END', 'user', impersonatedProfile.uid, { targetEmail: impersonatedProfile.email });
+    }
+    setImpersonatedUser(null);
+    setImpersonatedProfile(null);
+  };
+
+  const userRef = useRef(user);
+  const profileRef = useRef(profile);
+
+  useEffect(() => {
+    userRef.current = user;
+    profileRef.current = profile;
+  }, [user, profile]);
+
+  // Loads (or reloads) the app profile for the current session via the BFF's
+  // /session endpoint, which returns req.profile (see app.ts requireAuth).
+  useEffect(() => {
+    let isMounted = true;
+
+    // Safety timeout: if auth doesn't resolve in 8 seconds, stop loading
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('App: Auth check timed out (8s)');
+        setLoading(false);
+      }
+    }, 8000);
+
+    const loadProfile = async (retryCount = 0): Promise<void> => {
+      try {
+        // Seeds the shared session query, so the polling query below doesn't refetch it.
+        const { profile: profileData } = await queryClient.fetchQuery({
+          queryKey: queryKeys.session(user!.id),
+          queryFn: getSession,
+        });
+        if (!isMounted) return;
+        const p = normalizeProfile(profileData);
+        setProfile(p);
+        if (!activeView) setActiveView(p.role);
+        if (shouldShowOnboarding(p.role)) setShowOnboarding(true);
+        setError(null);
+      } catch (err: any) {
+        console.error('App: Profile handling error:', err);
+        if (!isMounted) return;
+        if (retryCount < 1) {
+          await loadProfile(retryCount + 1);
+          return;
+        }
+        setError(err.message || 'Failed to load profile');
+      }
+    };
+
+    if (sessionPending) return () => { isMounted = false; };
+
+    try {
+      if (user) localStorage.setItem(SESSION_HINT_KEY, '1');
+      else localStorage.removeItem(SESSION_HINT_KEY);
+    } catch { /* storage unavailable */ }
+
+    if (user) {
+      const pref = localStorage.getItem(`myboma_default_page_${user.id}`);
+      if (pref) setActiveTab(pref);
+      syncOneSignalIdentity(user.id).catch((error) => console.error('OneSignal identity sync failed:', error));
+      loadProfile().finally(() => {
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(safetyTimeout);
+        }
+      });
+    } else {
+      setProfile(null);
+      setActiveView(null);
+      setError(null);
+      // Signed out (by any path): drop every cached query so nothing leaks to the next user.
+      clearQueryCache();
+      syncOneSignalIdentity(null).catch((error) => console.error('OneSignal identity sync failed:', error));
+      setLoading(false);
+      clearTimeout(safetyTimeout);
+    }
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimeout);
+    };
+  }, [user?.id, sessionPending]);
+
+  // Polls for profile changes (role/subscription updates made elsewhere, e.g. by an
+  // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
+  const { data: sessionData } = useSessionProfile(user?.id);
+  useEffect(() => {
+    if (!sessionData) return;
+    const p = normalizeProfile(sessionData.profile);
+    setProfile(p);
+    setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
+  }, [sessionData]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) return;
+    const { profile: profileData } = await getSession();
+    setProfile(normalizeProfile(profileData));
+  }, [user?.id]);
+
+  // A landlord who picked the free plan at signup (email or Google) has nothing to pay, so
+  // the plan is activated as soon as their profile exists. Paid choices go through the gate.
+  const freePlanActivationStarted = useRef(false);
+  useEffect(() => {
+    if (!user?.id || !profile || impersonatedProfile || freePlanActivationStarted.current) return;
+    let pending: PendingLandlordSubscription | null = null;
+    try {
+      pending = JSON.parse(localStorage.getItem(PENDING_LANDLORD_SUBSCRIPTION_KEY) || 'null');
+    } catch {
+      pending = null;
+    }
+    if (pending?.tier !== 'free') return;
+    if (profile.role !== 'hunter' && isLandlordSubscriptionActive(profile)) {
+      localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
+      return;
+    }
+
+    freePlanActivationStarted.current = true;
+    const payout = pending;
+    void (async () => {
+      try {
+        const result = await activateFreeLandlordPlan({
+          rentPayoutMethod: payout.rentPayoutMethod,
+          mpesaSettlementPhone: payout.mpesaSettlementPhone,
+          bankName: payout.bankName,
+          bankAccountNumber: payout.bankAccountNumber,
+          bankAccountName: payout.bankAccountName,
+          cashPayoutNotes: payout.cashPayoutNotes,
+        });
+        localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
+        await refreshProfile();
+        if (result.activated && !profile.isAdmin) setActiveView('landlord');
+        if (result.activated) toast.success('Your free landlord plan is active. Add your house to get started.');
+      } catch (err: any) {
+        console.error('App: free plan activation failed', err);
+        // Not retried automatically (the profile poll would repeat the toast); the gate offers a button.
+        toast.error(err.message || 'Could not activate your free plan.');
+      }
+    })();
+  }, [user?.id, profile, impersonatedProfile, refreshProfile]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let handledPaymentReturn = false;
+    const subscriptionPayment = params.get('subscription_payment');
+    const rentPayment = params.get('rent_payment');
+
+    const isSubscriptionPending = subscriptionPayment === 'success' || subscriptionPayment === 'processing';
+
+    if (isSubscriptionPending) {
+      const currentUserId = user?.id;
+      if (currentUserId) {
+        if (subscriptionPayment === 'success') {
+          toast.success('Payment received. Activating your subscription…');
+        } else {
+          toast('Subscription payment is processing. Your plan will activate after confirmation.');
+        }
+        handledPaymentReturn = true;
+        
+        // Poll for profile update because IPN might be slightly delayed
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          const { profile: data } = await getSession().catch(() => ({ profile: null as any }));
+
+          const isActive = data?.subscriptionStatus === 'active' && data?.subscriptionExpiresAt;
+          
+          if (isActive || attempts > 50) {
+            clearInterval(poll);
+            await refreshProfile();
+            
+            if (isActive) {
+              toast.success('Subscription active! Welcome back.');
+            } else if (attempts > 50) {
+              toast.error('Activation is taking longer than expected. Please refresh in a moment.');
+            }
+            
+            // Clear URL only after we have confirmed activation or timed out
+            window.history.replaceState({}, '', window.location.pathname);
+            window.dispatchEvent(new Event('urlchange'));
+          }
+        }, 2000);
+
+        // Cleanup interval if component unmounts or effect re-runs
+        return () => clearInterval(poll);
+      }
+    } else if (subscriptionPayment === 'cancelled') {
+      toast.error('Subscription payment was cancelled or not completed.');
+      handledPaymentReturn = true;
+    }
+
+    if (rentPayment === 'success') {
+      toast.success('Rent payment received. Your receipt will appear shortly.');
+      handledPaymentReturn = true;
+    } else if (rentPayment === 'processing') {
+      toast('Rent payment is processing. Your receipt will appear after confirmation.');
+      handledPaymentReturn = true;
+    } else if (rentPayment === 'cancelled') {
+      toast.error('Rent payment was cancelled or not completed.');
+      handledPaymentReturn = true;
+    }
+
+    // For non-polling cases, clear immediately. For polling, it's handled inside the interval.
+    if (handledPaymentReturn && !isSubscriptionPending) {
+      window.history.replaceState({}, '', window.location.pathname);
+      window.dispatchEvent(new Event('urlchange'));
+    }
+  }, [user?.id, refreshProfile]);
+
+  if (loading && (user || (sessionPending && hadSession))) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white dark:bg-zinc-950" role="status" aria-label="Loading">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900 dark:border-zinc-800 dark:border-t-white" />
+      </div>
+    );
+  }
+
+  // An invitation must be usable even in a browser that still has somebody else's
+  // session (for example, a landlord inviting a tenant from the same device).
+  // Keep this route ahead of the authenticated dashboard gate so the invitee can
+  // complete setup and replace that session with their own account.
+  if (window.location.pathname === '/invite') {
+    return (
+      <div className="db app-shell app-shell-public min-h-screen bg-white">
+        <PublicNavbar
+          onLoginClick={() => {
+            setPublicAuthIntent({ mode: 'signin' });
+            setIsAuthOpen(true);
+          }}
+          overHero={false}
+        />
+        <main><InvitePage /></main>
+        <Footer variant="public" />
+        <AuthDialog
+          open={isAuthOpen}
+          intent={publicAuthIntent}
+          onOpenChange={(open) => {
+            setIsAuthOpen(open);
+            if (!open) setPublicAuthIntent({ mode: 'signin' });
+          }}
+        />
+        <Toaster />
+      </div>
+    );
+  }
+
+  if (!user) {
+    const legalPageType =
+      window.location.pathname === '/terms'
+        ? 'terms'
+        : window.location.pathname === '/privacy'
+          ? 'privacy'
+          : null;
+    const isAboutPage = window.location.pathname === '/about';
+    const isResetPage = window.location.pathname === '/reset-password';
+    // The landing page renders its own sign-in dialog; every other public page uses this one.
+    const isLanding = !legalPageType && !isAboutPage && !isResetPage;
+    const openAuth = (intent: AuthIntent) => {
+      setPublicAuthIntent(intent);
+      setIsAuthOpen(true);
+    };
+
+    return (
+      <div className="db app-shell app-shell-public min-h-screen bg-white">
+        <PublicNavbar onLoginClick={() => openAuth({ mode: 'signin' })} overHero={!legalPageType && !isResetPage} />
+        <main>
+          {legalPageType ? (
+            <PublicLegalPage type={legalPageType} />
+          ) : isAboutPage ? (
+            <AboutPage onSignUp={() => openAuth({ mode: 'signup', role: 'landlord' })} />
+          ) : isResetPage ? (
+            <ResetPasswordPage onSignIn={() => openAuth({ mode: 'signin' })} />
+          ) : (
+            <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
+          )}
+        </main>
+        <Footer variant="public" />
+        {!isLanding && (
+          <AuthDialog
+            open={isAuthOpen}
+            intent={publicAuthIntent}
+            onOpenChange={(open) => {
+              setIsAuthOpen(open);
+              if (!open) setPublicAuthIntent({ mode: 'signin' });
+            }}
+          />
+        )}
+        <Toaster />
+      </div>
+    );
+  }
+
+  const isResetRequired = Boolean(profile?.mustChangePassword) && !impersonatedProfile;
+
+  if (isResetRequired) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-slate-50/70 dark:bg-slate-950 p-4 relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-slate-200/40 dark:bg-slate-800/20 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-indigo-100/40 dark:bg-indigo-950/20 blur-[120px] pointer-events-none" />
+        
+        <div className="relative w-full max-w-[440px] bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xl rounded-2xl p-8 transition-all animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="h-14 w-14 rounded-2xl bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center shadow-md">
+              <FontAwesomeIcon icon={faCog} className="text-xl" />
+            </div>
+            
+            <div className="space-y-1.5">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Secure Your Account</h2>
+              <p className="text-xs font-normal text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm">
+                To complete your onboarding, please update your temporary credentials with a permanent secure password.
+              </p>
+            </div>
+          </div>
+          
+          <form onSubmit={handlePasswordReset} className="flex flex-col gap-5">
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">New Password</label>
+                <Input 
+                  type="password" 
+                  required 
+                  placeholder="Minimum 8 characters" 
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirm Password</label>
+                <Input 
+                  type="password" 
+                  required 
+                  placeholder="Re-enter your new password" 
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+            </div>
+            
+            {resetError && (
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-semibold animate-in fade-in duration-200">
+                <FontAwesomeIcon icon={faExclamationTriangle} className="text-sm shrink-0" />
+                <span>{resetError}</span>
+              </div>
+            )}
+            
+            <Button 
+              type="submit" 
+              disabled={resetLoading}
+              className="w-full h-10 font-bold text-xs"
+            >
+              {resetLoading ? 'Updating Credentials...' : 'Activate Account & Continue'}
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const activeProfile = impersonatedProfile ?? profile;
+  const currentRole: UserRole = normalizeRole(
+    impersonatedProfile
+      ? impersonatedProfile.role
+      : (activeView || profile?.role || 'hunter')
+  );
+
+  const landlordNeedsSubscription = Boolean(
+    activeProfile &&
+      currentRole === 'landlord' &&
+      !isLandlordSubscriptionActive(activeProfile),
+  );
+
+  return (
+    <div 
+      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#f8fafc] dark:bg-[#090d16] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
+    >
+      {/* Desktop Fixed Sidebar — only when logged in */}
+      {activeProfile && (
+        <Sidebar
+          profile={activeProfile}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentRole={currentRole as UserRole}
+          activeView={activeView}
+          setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+          onHelpClick={() => setShowOnboarding(true)}
+          onEnableNotifications={() => void promptForPush()}
+          isImpersonating={Boolean(impersonatedProfile)}
+        />
+      )}
+
+      {/* Right Column Container (Next to the Sidebar) */}
+      <div className="flex-1 flex flex-col min-w-0 w-full overflow-x-hidden h-full relative">
+        {impersonatedProfile && (
+          <div className="shrink-0 z-50 w-full">
+            <ImpersonationBanner target={impersonatedProfile} onExit={handleExitImpersonation} />
+          </div>
+        )}
+        
+        <div className={`shrink-0 z-40 w-full overflow-hidden transition-[max-height,opacity] duration-200 sm:max-h-none sm:opacity-100 ${mobileNavbarVisible ? 'max-h-[var(--topbar-height)] opacity-100' : 'max-h-0 opacity-0'}`}>
+          <Navbar 
+            user={user} 
+            profile={profile} 
+            activeView={activeView} 
+            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+            setActiveTab={setActiveTab}
+            onLoginClick={() => setIsAuthOpen(true)} 
+            isImpersonating={Boolean(impersonatedProfile)}
+            onHelpClick={() => setShowOnboarding(true)}
+          />
+        </div>
+
+        {/* Independent Scrollable Content Area */}
+        <main ref={setContentScroller} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
+          <div className="flex-1 min-w-0 w-full">
+            {error ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <div className="h-14 w-14 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200/80 flex items-center justify-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Profile Loading Error</h3>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1">{error}</p>
+                </div>
+                <Button onClick={() => window.location.reload()} size="sm" className="gap-2">
+                  <FontAwesomeIcon icon={faSync} className="h-3.5 w-3.5" />
+                  Reload Page
+                </Button>
+              </div>
+            ) : !profile ? (
+               <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+                 <div className="relative flex items-center justify-center">
+                   <div className="absolute inset-0 rounded-2xl bg-slate-200/60 blur-lg animate-pulse scale-125" />
+                   <img
+                     src={tenantConfig.logoUrl}
+                     alt={tenantConfig.appName}
+                     className="relative h-12 w-12 object-contain rounded-xl bg-white p-1 shadow-xs border border-slate-200/80"
+                   />
+                 </div>
+                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticating Session...</p>
+               </div>
+            ) : (
+              <Suspense fallback={<DashboardFallback />}>
+                {/* Settings page — rendered for all roles when activeTab === 'settings' */}
+                {activeTab === 'settings' && <SettingsPage profile={activeProfile!} />}
+
+                {activeTab !== 'settings' && (
+                  <>
+                    {landlordNeedsSubscription && activeTab !== 'settings' && (
+                      <LandlordSubscriptionGate
+                        email={activeProfile!.email}
+                        phone={activeProfile!.phone}
+                        onActivated={refreshProfile}
+                      />
+                    )}
+                    {!landlordNeedsSubscription &&
+                      (currentRole === 'landlord' ||
+                        (currentRole === 'admin' &&
+                          ['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab))) && (
+                        <LandlordDashboard
+                          profile={activeProfile!}
+                          activeTab={activeTab || 'dashboard'}
+                          setActiveTab={setActiveTab}
+                        />
+                      )}
+                    {currentRole === 'tenant' && (
+                      <TenantDashboard
+                        profile={activeProfile!}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                    {currentRole === 'hunter' && (
+                      <HunterDashboard
+                        profile={activeProfile!}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                    {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && !impersonatedProfile && (
+                      <AdminDashboard
+                        profile={profile!}
+                        onImpersonate={handleImpersonate}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                    {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && impersonatedProfile && (
+                      <AdminDashboard
+                        profile={impersonatedProfile}
+                        onImpersonate={handleImpersonate}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
+                  </>
+                )}
+              </Suspense>
+            )}
+          </div>
+          <Footer />
+        </main>
+      </div>
+
+      {currentRole === 'admin' && (
+        <>
+          {/* Mobile Bottom Navigation Bar */}
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+            <div className="flex items-center justify-around h-15 px-1">
+              {[
+                { id: 'dashboard',   label: 'Home',      icon: faChartPie },
+                { id: 'registered',  label: 'Users',     icon: faUsers },
+                { id: 'pending',     label: 'Pending',   icon: faLink },
+                { id: 'properties',  label: 'Properties', icon: faBuilding },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                    activeTab === t.id
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
+                  }`}
+                >
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  }`}>
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                  }`}>{t.label}</span>
+                </button>
+              ))}
+              {(() => {
+                const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'platforms', 'audit', 'settings'].includes(activeTab);
+                return (
+                  <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                      isAdminMenuTabActive
+                        ? 'text-slate-900 dark:text-white font-bold'
+                        : 'text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                      isAdminMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                    }`}>
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isAdminMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                    </div>
+                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                      isAdminMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                    }`}>Menu</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </nav>
+
+          {/* Mobile Drawer Slide-out Menu (Right to Left) */}
+          {isMobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
+          
+          <div 
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
+              isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Operations Menu</span>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
+              </button>
+            </div>
+            
+            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
+              {[
+                { id: 'maintenance', label: 'Repairs',       icon: faTools },
+                { id: 'finances',    label: 'Payments',      icon: faWallet },
+                { id: 'tenants',     label: 'Tenants',       icon: faUsers },
+                { id: 'automations', label: 'Notifications', icon: faBell },
+                ...(profile?.isSuperAdmin ? [
+                  { id: 'platforms', label: 'Platforms', icon: faGlobe },
+                  { id: 'audit',     label: 'Activity log',      icon: faClipboardList },
+                ] : []),
+                { id: 'settings',    label: 'Settings',          icon: faCog }
+              ].map(item => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsMobileMenuOpen(false);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
+                    }`}
+                  >
+                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}>
+                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs tracking-tight">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </>
+      )}
+
+      {currentRole === 'landlord' && (
+        <>
+          {/* Landlord Mobile Bottom Navigation Bar */}
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+            <div className="flex items-center justify-around h-15 px-1">
+              {[
+                { id: 'dashboard',   label: 'Home',     icon: faChartPie },
+                { id: 'properties',  label: 'Properties', icon: faHome },
+                { id: 'finances',    label: 'Payments', icon: faWallet },
+                { id: 'tenants',     label: 'Tenants',  icon: faUsers },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                    activeTab === t.id
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
+                  }`}
+                >
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  }`}>
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                  }`}>{t.label}</span>
+                </button>
+              ))}
+              {(() => {
+                const isMenuTabActive = ['maintenance', 'automations', 'settings'].includes(activeTab);
+                return (
+                  <button
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                      isMenuTabActive
+                        ? 'text-slate-900 dark:text-white font-bold'
+                        : 'text-slate-400 hover:text-slate-700'
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                      isMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                    }`}>
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                    </div>
+                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                      isMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                    }`}>Menu</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </nav>
+
+          {/* Mobile Drawer Slide-out Menu (Right to Left) */}
+          {isMobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
+          
+          <div 
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
+              isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">More Options</span>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
+              </button>
+            </div>
+            
+            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
+              {[
+                { id: 'maintenance', label: 'Repairs', icon: faTools },
+                { id: 'automations', label: 'Notifications', icon: faBell },
+                { id: 'settings',    label: 'Settings',          icon: faCog }
+              ].map(item => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsMobileMenuOpen(false);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
+                    }`}
+                  >
+                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}>
+                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                    </div>
+                    <span className="text-xs tracking-tight">
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <div className="my-2 border-t border-slate-100 dark:border-slate-800" />
+              
+              <button
+                onClick={async () => {
+                  setIsMobileMenuOpen(false);
+                  await authClient.signOut({});
+                  clearQueryCache();
+                  toast.success('Signed out');
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+              >
+                <div className="h-7 w-7 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
+                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 text-rose-600" />
+                </div>
+                <span className="text-xs font-semibold">Sign Out</span>
+              </button>
+            </nav>
+          </div>
+        </>
+      )}
+
+      {currentRole === 'tenant' && (
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+          <div className="flex items-center justify-around h-15 px-1">
+            {[
+              { id: 'dashboard',   label: 'Home', icon: faChartPie },
+              { id: 'finances',    label: 'Payments', icon: faWallet },
+              { id: 'maintenance', label: 'Repairs', icon: faTools },
+              { id: 'notices',     label: 'Notices', icon: faBell },
+              { id: 'settings',    label: 'Settings', icon: faCog },
+            ].map(t => {
+              const isActive = (activeTab || 'dashboard') === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                    isActive
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'text-slate-400 hover:text-slate-700'
+                  }`}
+                >
+                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
+                    isActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  }`}>
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    isActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                  }`}>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
+      <Toaster />
+      <Dialog open={showPushConfirmation} onOpenChange={setShowPushConfirmation}>
+        <DialogContent size="sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Your OneSignal SDK integration is complete!</DialogTitle>
+            <DialogDescription>
+              You can now send Push Notifications &amp; In-App Messages through OneSignal. Tap below to enable push notifications.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => void confirmPushPermission()} disabled={requestingPushPermission}>
+              {requestingPushPermission ? 'Opening settings…' : 'Got it'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {showOnboarding && !impersonatedProfile && profile && (
+        <OnboardingTour
+          role={profile.role}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
+
+    </div>
+  );
+}

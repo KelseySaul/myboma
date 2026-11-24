@@ -1,0 +1,44 @@
+# Render Blueprint: one free-tier web service that serves the API and the built frontend.
+# Secrets are marked sync: false and are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: myboma
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: platform-foundations
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run server
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Free instances sleep when idle, so daily jobs are triggered by
+      # .github/workflows/daily-jobs.yml hitting /api/cron/daily instead of node-cron.
+      - key: EXTERNAL_CRON
+        value: "true"
+      - key: APP_BASE_URL
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: my-boma

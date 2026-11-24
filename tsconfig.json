@@ -17,30 +17,28 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": [
-        "./*"
+        "./frontend/*"
       ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
   "include": [
-    "app.ts",
     "api",
-    "server",
-    "db",
-    "config",
-    "src",
-    "components",
-    "lib",
-    "tests",
-    "*.config.ts"
+    "backend",
+    "frontend/src",
+    "frontend/components",
+    "frontend/lib",
+    "frontend/*.config.ts",
+    "shared"
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "android",
-    "ios",
+    "frontend/dist",
+    "frontend/android",
+    "frontend/ios",
     ".git_old",
-    "scripts"
+    "frontend/scripts",
+    "backend/scripts"
   ]
 }

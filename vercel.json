@@ -1,9 +1,9 @@
 {
   "buildCommand": "npm run build",
-  "outputDirectory": "dist",
+  "outputDirectory": "frontend/dist",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "{app.ts,db/**,server/**,config/**,src/lib/**,src/legalDocuments.ts}"
+      "includeFiles": "{backend/**,shared/**}"
     }
   },
   "crons": [

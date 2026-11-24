@@ -15,6 +15,6 @@ const misconfigured = (_req: IncomingMessage, res: ServerResponse) => {
   res.end(JSON.stringify({error: 'Server is not configured', missingEnv: missing}));
 };
 
-const handler = missing.length ? misconfigured : (await import('../app.js')).default;
+const handler = missing.length ? misconfigured : (await import('../backend/app.js')).default;
 
 export default handler;
