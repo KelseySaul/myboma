@@ -1144,7 +1144,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       )}
 
       {/* Tab Panels */}
-      <div className="px-6 mt-4">
+      <div className="mt-3 px-3 sm:mt-4 sm:px-6">
         {/* ── USERS TAB ── */}
         {activeTab === 'registered' && (
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
@@ -1322,11 +1322,10 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   </div>
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <Table>
+                <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
                   <TableHeader>
                     <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
-                      <TableHead className="w-10 px-4"><Checkbox checked={currentUsers.length > 0 && selectedUserIds.length === currentUsers.length} onCheckedChange={toggleAllUsers} /></TableHead>
+                      <TableHead className="hidden w-10 px-4 sm:table-cell"><Checkbox checked={currentUsers.length > 0 && selectedUserIds.length === currentUsers.length} onCheckedChange={toggleAllUsers} /></TableHead>
                       <TableHead className="px-4 py-3">Name</TableHead>
                       <TableHead className="px-4 py-3 hidden sm:table-cell">Email Address</TableHead>
                       <TableHead className="px-4 py-3">Access Level</TableHead>
@@ -1337,13 +1336,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   <TableBody>
                     {currentUsers.map((u, i) => (
                       <TableRow key={i} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${selectedUserIds.includes(u.uid) ? 'bg-slate-50 dark:bg-slate-800/40' : ''}`}>
-                        <TableCell className="px-4"><Checkbox checked={selectedUserIds.includes(u.uid)} onCheckedChange={() => toggleUserSelection(u.uid)} /></TableCell>
+                        <TableCell className="hidden px-4 sm:table-cell"><Checkbox checked={selectedUserIds.includes(u.uid)} onCheckedChange={() => toggleUserSelection(u.uid)} /></TableCell>
                         <TableCell className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-bold shrink-0 border border-slate-200/60 dark:border-slate-700">
                               {u.displayName?.charAt(0) ?? '?'}
                             </div>
-                            <span className="font-semibold text-xs text-slate-900 dark:text-white">{u.displayName}</span>
+                            <span className="max-w-24 truncate font-semibold text-xs text-slate-900 dark:text-white sm:max-w-none">{u.displayName}</span>
                           </div>
                         </TableCell>
                         <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal hidden sm:table-cell">{u.email}</TableCell>
@@ -1395,7 +1394,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     )}
                   </TableBody>
                 </Table>
-              </div>
               
               {/* Pagination Controls */}
               {totalUserPages > 1 && (
@@ -1451,13 +1449,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
                 <TableHeader>
                   <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
                     <TableHead className="px-4 py-3">Name</TableHead>
-                    <TableHead className="px-4 py-3">Email</TableHead>
+                    <TableHead className="hidden px-4 py-3 sm:table-cell">Email</TableHead>
                     <TableHead className="px-4 py-3">Role</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="px-4 py-3">Platform</TableHead>}
+                    {profile.isSuperAdmin && <TableHead className="hidden px-4 py-3 lg:table-cell">Platform</TableHead>}
                     <TableHead className="px-4 py-3 text-right"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1465,10 +1463,10 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   {paginatedInvs.map((inv, i) => (
                     <TableRow key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                       <TableCell className="px-4 py-3 text-xs font-semibold text-slate-900 dark:text-white">{inv.displayName}</TableCell>
-                      <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal">{inv.email}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-xs font-normal text-slate-500 sm:table-cell">{inv.email}</TableCell>
                       <TableCell className="px-4 py-3"><Badge variant="secondary">{inv.role}</Badge></TableCell>
                       {profile.isSuperAdmin && (
-                        <TableCell className="px-4 py-3 text-xs text-slate-500 font-medium">
+                        <TableCell className="hidden px-4 py-3 text-xs font-medium text-slate-500 lg:table-cell">
                           {platforms.find(p => p.id === inv.platformId)?.name || 'No platform'}
                         </TableCell>
                       )}
@@ -1480,7 +1478,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                           disabled={resendingEmail === inv.email}
                           onClick={() => handleResendInvite(inv.email)}
                         >
-                          {resendingEmail === inv.email ? <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" /> : 'Resend invite'}
+                          {resendingEmail === inv.email ? <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" /> : <><span className="sm:hidden">Resend</span><span className="hidden sm:inline">Resend invite</span></>}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1759,35 +1757,35 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
                 <TableHeader>
                   <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Property</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Coordinates</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Valuation</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Status</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Platform</TableHead>}
-                    <TableHead className="text-right px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Actions</TableHead>
+                    <TableHead className="px-3 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8">Property</TableHead>
+                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 md:table-cell">Coordinates</TableHead>
+                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 md:table-cell">Valuation</TableHead>
+                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Status</TableHead>
+                    {profile.isSuperAdmin && <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 lg:table-cell">Platform</TableHead>}
+                    <TableHead className="px-2 py-4 text-right font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedProps.map((p, i) => (
                     <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                      <TableCell className="px-8 py-5 font-bold">{p.title}</TableCell>
-                      <TableCell className="text-xs font-medium">{p.location}</TableCell>
-                      <TableCell className="text-xs font-black text-zinc-700">KES {p.price?.toLocaleString()}</TableCell>
-                      <TableCell>
+                      <TableCell className="max-w-[11rem] whitespace-normal px-3 py-4 text-sm font-bold sm:max-w-none sm:whitespace-nowrap sm:px-8 sm:py-5">{p.title}</TableCell>
+                      <TableCell className="hidden text-xs font-medium md:table-cell">{p.location}</TableCell>
+                      <TableCell className="hidden text-xs font-black text-zinc-700 md:table-cell">KES {p.price?.toLocaleString()}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <Badge variant="outline" className={`rounded-lg px-2 py-0.5 font-black uppercase text-[9px] border-none ${p.status === 'available' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
                           {p.status}
                         </Badge>
                       </TableCell>
                       {profile.isSuperAdmin && (
-                        <TableCell className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter">
+                        <TableCell className="hidden text-[10px] font-black uppercase tracking-tighter text-zinc-400 lg:table-cell">
                           {platforms.find(plat => plat.id === p.platformId)?.name || 'No platform'}
                         </TableCell>
                       )}
-                      <TableCell className="px-8 py-5 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="px-2 py-4 text-right sm:px-8 sm:py-5">
+                        <div className="flex items-center justify-end gap-0 sm:gap-2">
                           <Button
                             variant="ghost"
                             size="icon-sm"
@@ -1866,13 +1864,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               <CardDescription className="font-medium text-zinc-500">Buildings and the units inside them.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
                 <TableHeader>
                   <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Building</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Location</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Units</TableHead>
-                    <TableHead className="text-right px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Actions</TableHead>
+                    <TableHead className="px-3 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8">Building</TableHead>
+                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Location</TableHead>
+                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Units</TableHead>
+                    <TableHead className="px-2 py-4 text-right font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1880,11 +1878,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     const unitCount = properties.filter(p => p.buildingId === b.id).length;
                     return (
                       <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                        <TableCell className="px-8 py-5 font-bold">{b.name}</TableCell>
-                        <TableCell className="text-xs font-medium">{b.address}</TableCell>
-                        <TableCell className="text-xs font-black text-zinc-700">{unitCount}</TableCell>
-                        <TableCell className="px-8 py-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                        <TableCell className="max-w-[13rem] whitespace-normal px-3 py-4 text-sm font-bold sm:max-w-none sm:whitespace-nowrap sm:px-8 sm:py-5">{b.name}</TableCell>
+                        <TableCell className="hidden text-xs font-medium sm:table-cell">{b.address}</TableCell>
+                        <TableCell className="hidden text-xs font-black text-zinc-700 sm:table-cell">{unitCount}</TableCell>
+                        <TableCell className="px-2 py-4 text-right sm:px-8 sm:py-5">
+                          <div className="flex items-center justify-end gap-0 sm:gap-2">
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -1946,12 +1944,12 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
+              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
                 <TableHeader>
                   <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
                     <TableHead className="px-4 py-3">Platform</TableHead>
-                    <TableHead className="px-4 py-3">Link name</TableHead>
-                    <TableHead className="px-4 py-3">Owner</TableHead>
+                    <TableHead className="hidden px-4 py-3 sm:table-cell">Link name</TableHead>
+                    <TableHead className="hidden px-4 py-3 md:table-cell">Owner</TableHead>
                     <TableHead className="px-4 py-3">Status</TableHead>
                     <TableHead className="text-right px-4 py-3">Actions</TableHead>
                   </TableRow>
@@ -1960,12 +1958,12 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   {paginatedPlats.map((plat) => (
                     <TableRow key={plat.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
                       <TableCell className="px-4 py-3 font-semibold text-xs text-slate-900 dark:text-white">{plat.name}</TableCell>
-                      <TableCell className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300">
+                      <TableCell className="hidden px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300 sm:table-cell">
                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[11px]">
                           {plat.slug}
                         </span>
                       </TableCell>
-                      <TableCell className="px-4 py-3 text-xs text-slate-500 font-normal">{plat.ownerEmail}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-xs font-normal text-slate-500 md:table-cell">{plat.ownerEmail}</TableCell>
                       <TableCell className="px-4 py-3">
                         <Badge variant={plat.status === 'active' ? 'success' : 'destructive'}>
                           {plat.status}
@@ -2079,7 +2077,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   <span className="text-xs font-semibold text-slate-400">Loading audit trail...</span>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
@@ -2146,7 +2143,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       )}
                     </TableBody>
                   </Table>
-                </div>
               )}
 
               {totalAuditLogPages > 1 && (

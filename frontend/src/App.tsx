@@ -668,6 +668,10 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           currentRole={currentRole as UserRole}
+          activeView={activeView}
+          setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+          onHelpClick={() => setShowOnboarding(true)}
+          onEnableNotifications={() => void promptForPush()}
           isImpersonating={Boolean(impersonatedProfile)}
         />
       )}

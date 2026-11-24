@@ -6,7 +6,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs"
+      className="relative w-full overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900 max-sm:rounded-none max-sm:border-x-0 max-sm:border-b-0 max-sm:shadow-none"
     >
       <table
         data-slot="table"
@@ -68,7 +68,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-10 px-4 text-left align-middle font-semibold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "h-10 px-3 text-left align-middle font-semibold text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 whitespace-nowrap sm:px-4 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -81,7 +81,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn(
-        "px-4 py-3.5 align-middle text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "px-3 py-3 align-middle text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap sm:px-4 sm:py-3.5 [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

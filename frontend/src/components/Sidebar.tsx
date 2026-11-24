@@ -1,34 +1,35 @@
-import { UserProfile, UserRole } from '../App';
+import { useEffect, useState } from 'react';
+import type { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
-import { authClient } from '../lib/auth-client';
-import { toast } from 'sonner';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-  faHome,
-  faTools,
-  faWallet,
-  faUsers,
-  faBuilding,
-  faHotel,
-  faShieldAlt,
-  faLink,
-  faGlobe,
-  faClipboardList,
   faBell,
-  faSignOutAlt,
-  faChevronRight,
-  faCog,
+  faBuilding,
   faChartPie,
+  faChevronLeft,
+  faChevronRight,
+  faClipboardList,
+  faGlobe,
+  faHome,
+  faHotel,
+  faLink,
+  faTools,
+  faUsers,
+  faWallet,
 } from '@fortawesome/free-solid-svg-icons';
 import { tenantConfig } from '../config/tenant';
 import { useUnreadCount } from '../lib/queries';
-import { clearQueryCache } from '../lib/queryClient';
+import AccountMenu, { roleLabel } from './AccountMenu';
 
 interface SidebarProps {
   profile: UserProfile;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   currentRole: UserRole;
+  activeView?: UserRole | null;
+  setActiveView?: (role: UserRole) => void;
+  onHelpClick?: () => void;
+  onEnableNotifications?: () => void;
   isImpersonating?: boolean;
 }
 
@@ -36,7 +37,6 @@ interface NavItem {
   id: string;
   label: string;
   icon: any;
-  category?: 'workspace' | 'operations' | 'network' | 'system' | string;
 }
 
 interface NavSection {
@@ -45,24 +45,22 @@ interface NavSection {
 }
 
 function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: UserProfile): NavSection[] {
-  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: faChartPie, category: 'workspace' };
+  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: faChartPie };
 
   switch (role) {
     case 'landlord': {
       const features = profile ? getSubscriptionFeatures(profile) : { maintenanceHub: true };
-      const workspaceItems: NavItem[] = [
-        dashboardItem,
-        { id: 'properties', label: 'Properties', icon: faHome, category: 'workspace' },
-      ];
-      const operationsItems: NavItem[] = [
-        { id: 'finances', label: 'Rent & payments', icon: faWallet, category: 'operations' },
-        ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: faTools, category: 'operations' as const }] : []),
-        { id: 'tenants', label: 'Tenants', icon: faUsers, category: 'operations' },
-        { id: 'automations', label: 'Notifications', icon: faBell, category: 'operations' },
-      ];
       return [
-        { title: 'Manage', items: workspaceItems },
-        { title: 'Day to day', items: operationsItems },
+        { title: 'Manage', items: [dashboardItem, { id: 'properties', label: 'Properties', icon: faHome }] },
+        {
+          title: 'Day to day',
+          items: [
+            { id: 'finances', label: 'Rent & payments', icon: faWallet },
+            ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: faTools }] : []),
+            { id: 'tenants', label: 'Tenants', icon: faUsers },
+            { id: 'automations', label: 'Notifications', icon: faBell },
+          ],
+        },
       ];
     }
     case 'hunter':
@@ -71,10 +69,10 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
           title: 'Browse',
           items: [
             dashboardItem,
-            { id: 'all', label: 'All homes', icon: faHome, category: 'workspace' },
-            { id: 'residential', label: 'Homes', icon: faBuilding, category: 'workspace' },
-            { id: 'commercial', label: 'Commercial', icon: faBuilding, category: 'workspace' },
-            { id: 'bnb', label: 'Short stays', icon: faHotel, category: 'workspace' },
+            { id: 'all', label: 'All homes', icon: faHome },
+            { id: 'residential', label: 'Homes', icon: faBuilding },
+            { id: 'commercial', label: 'Commercial', icon: faBuilding },
+            { id: 'bnb', label: 'Short stays', icon: faHotel },
           ],
         },
       ];
@@ -84,18 +82,18 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
           title: 'People and properties',
           items: [
             dashboardItem,
-            { id: 'registered', label: 'Users', icon: faUsers, category: 'workspace' },
-            { id: 'pending', label: 'Pending invites', icon: faLink, category: 'workspace' },
-            { id: 'properties', label: 'Properties', icon: faBuilding, category: 'workspace' },
+            { id: 'registered', label: 'Users', icon: faUsers },
+            { id: 'pending', label: 'Pending invites', icon: faLink },
+            { id: 'properties', label: 'Properties', icon: faBuilding },
           ],
         },
         {
           title: 'Day to day',
           items: [
-            { id: 'maintenance', label: 'Maintenance', icon: faTools, category: 'operations' },
-            { id: 'finances', label: 'Rent & payments', icon: faWallet, category: 'operations' },
-            { id: 'tenants', label: 'Tenants', icon: faUsers, category: 'operations' },
-            { id: 'automations', label: 'Notifications', icon: faBell, category: 'operations' },
+            { id: 'maintenance', label: 'Maintenance', icon: faTools },
+            { id: 'finances', label: 'Rent & payments', icon: faWallet },
+            { id: 'tenants', label: 'Tenants', icon: faUsers },
+            { id: 'automations', label: 'Notifications', icon: faBell },
           ],
         },
         ...(isSuperAdmin
@@ -103,8 +101,8 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
               {
                 title: 'Administration',
                 items: [
-                  { id: 'platforms', label: 'Platforms', icon: faGlobe, category: 'network' as const },
-                  { id: 'audit', label: 'Activity log', icon: faClipboardList, category: 'network' as const },
+                  { id: 'platforms', label: 'Platforms', icon: faGlobe },
+                  { id: 'audit', label: 'Activity log', icon: faClipboardList },
                 ],
               },
             ]
@@ -116,9 +114,9 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
           title: 'My home',
           items: [
             dashboardItem,
-            { id: 'finances', label: 'Rent & Payments', icon: faWallet, category: 'workspace' },
-            { id: 'maintenance', label: 'Repairs', icon: faTools, category: 'workspace' },
-            { id: 'notices', label: 'Notices', icon: faBell, category: 'workspace' },
+            { id: 'finances', label: 'Rent & payments', icon: faWallet },
+            { id: 'maintenance', label: 'Repairs', icon: faTools },
+            { id: 'notices', label: 'Notices', icon: faBell },
           ],
         },
       ];
@@ -127,26 +125,24 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
   }
 }
 
-const NEUTRAL_BADGE = { text: 'text-zinc-700 dark:text-zinc-300', bg: 'bg-zinc-100 dark:bg-zinc-800', border: 'border-zinc-200 dark:border-zinc-700' };
-const ROLE_BADGE_STYLES: Record<UserRole, { label: string; text: string; bg: string; border: string }> = {
-  landlord: { label: 'Landlord', ...NEUTRAL_BADGE },
-  hunter: { label: 'House hunter', ...NEUTRAL_BADGE },
-  admin: { label: 'Admin', ...NEUTRAL_BADGE },
-  tenant: { label: 'Tenant', ...NEUTRAL_BADGE },
-};
-
-export default function Sidebar({ profile, activeTab, setActiveTab, currentRole, isImpersonating }: SidebarProps) {
+/** Desktop navigation: collapse it to an icon rail without losing any routes or account actions. */
+export default function Sidebar({
+  profile,
+  activeTab,
+  setActiveTab,
+  currentRole,
+  activeView,
+  setActiveView,
+  onHelpClick,
+  onEnableNotifications,
+}: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myboma-sidebar-collapsed') === 'true');
   const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
-  const roleStyle = ROLE_BADGE_STYLES[currentRole] ?? ROLE_BADGE_STYLES.hunter;
-  const topOffset = isImpersonating ? '100px' : '56px';
-  // Shared query: Navbar and Sidebar read the same cached count (one request per poll).
-  const { data: unreadCount = 0 } = useUnreadCount(profile?.email);
+  const { data: unreadCount = 0 } = useUnreadCount(profile.email);
 
-  const handleLogout = async () => {
-    await authClient.signOut({});
-    clearQueryCache();
-    toast.success('Signed out');
-  };
+  useEffect(() => {
+    localStorage.setItem('myboma-sidebar-collapsed', String(collapsed));
+  }, [collapsed]);
 
   const handleNavClick = (id: string) => {
     setActiveTab(id);
@@ -159,112 +155,108 @@ export default function Sidebar({ profile, activeTab, setActiveTab, currentRole,
 
     return (
       <button
-        key={id}
+        type="button"
         onClick={() => handleNavClick(id)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 group cursor-pointer ${
+        title={collapsed ? label : undefined}
+        className={`group flex w-full items-center rounded-xl py-2 text-left transition-all duration-200 ${
+          collapsed ? 'justify-center px-2' : 'gap-3 px-3'
+        } ${
           isActive
-            ? 'bg-zinc-950 text-white font-semibold dark:bg-white dark:text-zinc-950'
-            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-zinc-100 font-medium'
+            ? 'bg-zinc-950 font-semibold text-white dark:bg-white dark:text-zinc-950'
+            : 'font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
         }`}
       >
-        <div
-          className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-            isActive
-              ? 'text-white dark:text-zinc-950'
-              : 'text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
+        <span
+          className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+            isActive ? 'text-white dark:text-zinc-950' : 'text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
           }`}
         >
           <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-        </div>
-
-        <span className="text-sm flex-1 truncate">
-          {label}
+          {hasUnread && collapsed && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-current" />}
         </span>
-
-        {hasUnread && (
-          <span className="flex h-2 w-2 relative shrink-0 mr-0.5">
-            
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-current" aria-label="Unread"></span>
-          </span>
-        )}
-
-
+        <span className={collapsed ? 'sr-only' : 'flex-1 truncate text-sm'}>{label}</span>
+        {hasUnread && !collapsed && <span className="h-2 w-2 shrink-0 rounded-full bg-current" aria-label="Unread" />}
       </button>
     );
   };
 
   return (
     <aside
-      className="hidden sm:flex flex-col w-64 h-full shrink-0 border-r border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-950 justify-between select-none overflow-hidden z-30"
+      className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-zinc-200/80 bg-white transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950 sm:flex ${
+        collapsed ? 'w-[4.75rem]' : 'w-64'
+      }`}
     >
-      {/* ── Brand ── */}
-      <div className="flex h-14 items-center gap-2.5 border-b border-zinc-100 px-4 shrink-0 dark:border-zinc-800">
-        <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
-        <span className="text-sm font-bold tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>
+      <div className="min-h-0 flex-1">
+        <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-between px-2' : 'gap-2.5 px-4'}`}>
+          <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
+          {!collapsed && <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>}
+          <button
+            type="button"
+            onClick={() => setCollapsed((value) => !value)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <FontAwesomeIcon icon={collapsed ? faChevronRight : faChevronLeft} className="h-3 w-3" />
+          </button>
+        </div>
+
+        <nav className={`space-y-4 overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">
+          {onEnableNotifications && (
+            <button
+              type="button"
+              onClick={onEnableNotifications}
+              title={collapsed ? 'Enable notifications' : undefined}
+              className={`relative flex w-full items-center rounded-xl py-2 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`}
+            >
+              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400">
+                <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
+                {unreadCount > 0 && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-zinc-950 dark:bg-white" />}
+              </span>
+              <span className={collapsed ? 'sr-only' : 'text-sm font-medium'}>Enable notifications</span>
+            </button>
+          )}
+
+          {navSections.map((section) => (
+            <div key={section.title} className="space-y-1">
+              <p className={collapsed ? 'sr-only' : 'px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500'}>
+                {section.title}
+              </p>
+              <div className="space-y-0.5">{section.items.map((item) => <NavButton key={item.id} {...item} />)}</div>
+            </div>
+          ))}
+        </nav>
       </div>
 
-      {/* ── Main Navigation Sections ─────────────────────────── */}
-      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
-        {navSections.map((section, idx) => (
-          <div key={idx} className="space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-3 py-1">
-              {section.title}
-            </p>
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavButton key={item.id} {...item} />
-              ))}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* ── Bottom Section: Profile + Settings + Sign Out ───── */}
-      <div className="mt-auto shrink-0 p-3 border-t border-slate-100 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50">
-        <div className="flex items-center gap-2.5 px-1 py-1">
-          <div className="relative shrink-0">
-            <div className="h-8 w-8 rounded-lg overflow-hidden bg-slate-900 text-white flex items-center justify-center text-xs font-bold shadow-xs">
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
-              ) : (
-                profile.displayName?.charAt(0).toUpperCase() || 'U'
+      <div className={`shrink-0 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50 ${collapsed ? 'p-2' : ''}`}>
+        <AccountMenu
+          profile={profile}
+          activeView={activeView}
+          setActiveView={setActiveView}
+          setActiveTab={setActiveTab}
+          onHelpClick={onHelpClick}
+          unreadCount={unreadCount}
+          side="right"
+          align="end"
+          trigger={
+            <button
+              type="button"
+              title={collapsed ? 'Open account menu' : undefined}
+              className={`flex w-full items-center rounded-xl text-left transition hover:bg-white dark:hover:bg-zinc-800 ${collapsed ? 'justify-center p-1' : 'gap-2.5 px-1 py-1.5'}`}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-900 text-xs font-bold text-white shadow-xs">
+                {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}
+              </span>
+              {!collapsed && (
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-slate-900 dark:text-white">{profile.displayName || 'User'}</span>
+                  <span className="block truncate text-[10px] font-medium text-slate-500">{roleLabel(profile, activeView)}</span>
+                </span>
               )}
-            </div>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-              {profile.displayName || 'User'}
-            </p>
-            <div className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded border text-[9px] font-semibold uppercase tracking-wider mt-0.5 ${roleStyle.bg} ${roleStyle.text} ${roleStyle.border}`}>
-              <FontAwesomeIcon icon={faShieldAlt} className="h-2 w-2" />
-              {profile.isSuperAdmin ? 'Super Admin' : roleStyle.label}
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-1.5 pt-1">
-          <button
-            onClick={() => handleNavClick('settings')}
-            className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
-            }`}
-            title="Settings"
-          >
-            <FontAwesomeIcon icon={faCog} className="h-3 w-3" />
-            <span>Settings</span>
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200 transition-all cursor-pointer"
-            title="Sign out"
-          >
-            <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3" />
-            <span>Sign out</span>
-          </button>
-        </div>
+              {!collapsed && <FontAwesomeIcon icon={faChevronRight} className="mr-1 h-3 w-3 text-slate-400" />}
+            </button>
+          }
+        />
       </div>
     </aside>
   );
