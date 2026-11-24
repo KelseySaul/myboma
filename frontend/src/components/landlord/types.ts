@@ -3,6 +3,8 @@ export interface Building {
   platformId?: string;
   name: string;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
   landlordId: string;
 }
 

@@ -31,6 +31,15 @@ export const sendOneSignalPushNotification = async (
     return;
   }
 
+  const recipient = await db.query.users.findFirst({
+    where: sql`lower(${schema.users.email}) = ${email.trim().toLowerCase()}`,
+    columns: {uid: true},
+  });
+  if (!recipient) {
+    console.warn('[OneSignal] No user account found for push recipient. Push notification skipped.');
+    return;
+  }
+
   try {
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
@@ -42,7 +51,7 @@ export const sendOneSignalPushNotification = async (
         app_id: appId,
         target_channel: 'push',
         include_aliases: {
-          external_id: [email.toLowerCase()],
+          external_id: [recipient.uid],
         },
         headings: {en: title},
         contents: {en: message},

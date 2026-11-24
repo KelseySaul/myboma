@@ -320,7 +320,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       },
     });
 
-  const saveBuilding = async (values: { name: string; address: string }) => {
+  const saveBuilding = async (values: { name: string; address: string; latitude: number | null; longitude: number | null }) => {
     if (buildingDialog.building) await updateBuilding(buildingDialog.building.id, values);
     else await createBuilding(values);
     await refresh();

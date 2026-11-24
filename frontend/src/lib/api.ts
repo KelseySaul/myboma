@@ -155,10 +155,22 @@ export const getLandlordDashboard = () =>
 
 export const syncRentInvoices = () => bffRequest<{created: number; overdueUpdated: number}>('/landlord/rent-invoices/sync', {method: 'POST'});
 
-export const createBuilding = (body: {name: string; address?: string; landlordId?: string; platformId?: string | null}) =>
+export const createBuilding = (body: {
+  name: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  landlordId?: string;
+  platformId?: string | null;
+}) =>
   bffRequest<Record<string, any>>('/landlord/buildings', {method: 'POST', body});
 
-export const updateBuilding = (id: string, body: {name?: string; address?: string}) =>
+export const updateBuilding = (id: string, body: {
+  name?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}) =>
   bffRequest<Record<string, any>>(`/landlord/buildings/${id}`, {method: 'PATCH', body});
 
 export const deleteBuilding = (id: string) => bffRequest<{deleted: boolean}>(`/landlord/buildings/${id}`, {method: 'DELETE'});

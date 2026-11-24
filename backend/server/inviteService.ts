@@ -154,6 +154,13 @@ export const acceptInvite = async (input: {token: string; name: string; phone?: 
     body: {email: payload.email, password: input.password},
     returnHeaders: true,
   });
-  const setCookies = typeof signIn.headers?.getSetCookie === 'function' ? signIn.headers.getSetCookie() : [];
+  const setCookies = typeof signIn.headers?.getSetCookie === 'function'
+    ? signIn.headers.getSetCookie()
+    : signIn.headers?.get('set-cookie')
+      ? [signIn.headers.get('set-cookie')!]
+      : [];
+  if (!setCookies.length) {
+    throw new InviteError(500, 'Your account was created, but we could not sign you in. Please sign in with the password you chose.');
+  }
   return {uid, email: payload.email, role: payload.role, setCookies};
 };

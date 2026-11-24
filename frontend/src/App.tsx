@@ -52,11 +52,10 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
 import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
-import OneSignalWeb from 'react-onesignal';
-import OneSignalNative from '@onesignal/capacitor-plugin';
-import { Capacitor } from '@capacitor/core';
+import { initializeOneSignal, onPushSubscriptionReady, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
 import {
   isLandlordSubscriptionActive,
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -66,32 +65,7 @@ import { queryClient, clearQueryCache } from './lib/queryClient';
 import { queryKeys, useSessionProfile } from './lib/queries';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
 
-let oneSignalWebInitialized = false;
-let oneSignalNativeInitialized = false;
-
-export const promptForPush = async () => {
-  if (Capacitor.isNativePlatform()) {
-    if (oneSignalNativeInitialized) {
-      try {
-        await OneSignalNative.Notifications.requestPermission(true);
-      } catch (err) {
-        console.error("OneSignalNative promptForPush error:", err);
-      }
-    } else {
-      console.warn("OneSignal Native not initialized yet.");
-    }
-  } else {
-    if (oneSignalWebInitialized) {
-      try {
-        await OneSignalWeb.Slidedown.promptPush();
-      } catch (err) {
-        console.error("OneSignalWeb promptForPush error:", err);
-      }
-    } else {
-      console.warn("OneSignal Web not initialized yet.");
-    }
-  }
-};
+export { promptForPush } from './lib/oneSignal';
 
 export interface UserProfile {
   uid: string;
@@ -167,63 +141,13 @@ export default function App() {
   // Lifted tab state — shared between Sidebar and the active dashboard
   const [activeTab, setActiveTab] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [contentScroller, setContentScroller] = useState<HTMLElement | null>(null);
+  const [mobileNavbarVisible, setMobileNavbarVisible] = useState(true);
+  const [showPushConfirmation, setShowPushConfirmation] = useState(false);
+  const [requestingPushPermission, setRequestingPushPermission] = useState(false);
 
   useEffect(() => {
-    // Initialize OneSignal
-    const initOneSignal = async () => {
-      try {
-        const handleSubChange = (event: any) => {
-          if (event.current.optedIn) {
-            if (Capacitor.isNativePlatform()) {
-              if (oneSignalNativeInitialized) {
-                OneSignalNative.InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
-              }
-            } else {
-              if (oneSignalWebInitialized) {
-                (OneSignalWeb as any).InAppMessages.addTrigger("ai_implementation_campaign_email_journey", "true");
-              }
-            }
-          }
-        };
-
-        if (Capacitor.isNativePlatform()) {
-          if (!oneSignalNativeInitialized) {
-            oneSignalNativeInitialized = true;
-            OneSignalNative.initialize("16fe44a9-e285-4d7d-85f0-8b82014b9a71");
-            (OneSignalNative.User as any).PushSubscription.addEventListener('change', handleSubChange);
-          }
-        } else {
-          if (!oneSignalWebInitialized) {
-            const isWindowInitted = typeof window !== 'undefined' && (window as any).OneSignal?.isInitted?.();
-            if (isWindowInitted) {
-              oneSignalWebInitialized = true;
-            } else {
-              try {
-                await OneSignalWeb.init({
-                  appId: "16fe44a9-e285-4d7d-85f0-8b82014b9a71",
-                  allowLocalhostAsSecureOrigin: true,
-                });
-                oneSignalWebInitialized = true;
-              } catch (initErr: any) {
-                if (!initErr.message?.includes('already initialized')) {
-                  console.warn("OneSignal init issue:", initErr);
-                }
-              }
-            }
-            if (oneSignalWebInitialized) {
-              if ((OneSignalWeb.User as any)?.PushSubscription) {
-                (OneSignalWeb.User as any).PushSubscription.addEventListener('change', handleSubChange);
-              } else if ((OneSignalWeb.User as any)?.pushSubscription) {
-                (OneSignalWeb.User as any).pushSubscription.addEventListener('change', handleSubChange);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("OneSignal initialization error:", err);
-      }
-    };
-    initOneSignal();
+    initializeOneSignal().catch((error) => console.error('OneSignal initialization error:', error));
 
     // Patch history.replaceState to dispatch a custom event
     const originalReplaceState = history.replaceState;
@@ -232,6 +156,64 @@ export default function App() {
       window.dispatchEvent(new Event('urlchange'));
     };
   }, []);
+
+  // The dashboard scrolls inside <main>, rather than on window. Hide the phone header on
+  // intentional downward movement and bring it straight back when the user reverses direction.
+  useEffect(() => {
+    if (!contentScroller) return;
+    let previousTop = contentScroller.scrollTop;
+    let frame = 0;
+    setMobileNavbarVisible(true);
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        const currentTop = contentScroller.scrollTop;
+        const difference = currentTop - previousTop;
+        if (currentTop < 24) {
+          setMobileNavbarVisible(true);
+          previousTop = currentTop;
+        } else if (Math.abs(difference) >= 8) {
+          setMobileNavbarVisible(difference < 0);
+          previousTop = currentTop;
+        }
+        frame = 0;
+      });
+    };
+
+    contentScroller.addEventListener('scroll', onScroll, {passive: true});
+    return () => {
+      contentScroller.removeEventListener('scroll', onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [contentScroller]);
+
+  useEffect(() => {
+    const unsubscribe = onPushSubscriptionReady((subscriptionId) => {
+      const noticeKey = `myboma_onesignal_confirmed_${subscriptionId}`;
+      try {
+        if (localStorage.getItem(noticeKey)) return;
+        localStorage.setItem(noticeKey, '1');
+      } catch {
+        // If storage is unavailable, showing the confirmation is harmless.
+      }
+      setShowPushConfirmation(true);
+    });
+    return () => { unsubscribe(); };
+  }, []);
+
+  const confirmPushPermission = async () => {
+    setRequestingPushPermission(true);
+    try {
+      await promptForPush();
+    } catch (error) {
+      console.error('Push permission request failed:', error);
+      toast.error('We could not open the notification permission prompt.');
+    } finally {
+      setRequestingPushPermission(false);
+      setShowPushConfirmation(false);
+    }
+  };
 
   // Forced password reset state
   const [newPassword, setNewPassword] = useState('');
@@ -303,25 +285,6 @@ export default function App() {
     profileRef.current = profile;
   }, [user, profile]);
 
-  // Sync OneSignal's device identity with the current auth user (unchanged from before).
-  const syncOneSignalIdentity = useCallback((uid: string | null) => {
-    if (Capacitor.isNativePlatform()) {
-      if (!oneSignalNativeInitialized) return;
-      try {
-        if (uid) OneSignalNative.login(uid); else OneSignalNative.logout();
-      } catch (e) {
-        console.error('OneSignalNative identity sync failed:', e);
-      }
-    } else {
-      if (!oneSignalWebInitialized) return;
-      try {
-        if (uid) OneSignalWeb.login(uid); else OneSignalWeb.logout();
-      } catch (e) {
-        console.error('OneSignalWeb identity sync failed:', e);
-      }
-    }
-  }, []);
-
   // Loads (or reloads) the app profile for the current session via the BFF's
   // /session endpoint, which returns req.profile (see app.ts requireAuth).
   useEffect(() => {
@@ -369,7 +332,7 @@ export default function App() {
     if (user) {
       const pref = localStorage.getItem(`myboma_default_page_${user.id}`);
       if (pref) setActiveTab(pref);
-      syncOneSignalIdentity(user.id);
+      syncOneSignalIdentity(user.id).catch((error) => console.error('OneSignal identity sync failed:', error));
       loadProfile().finally(() => {
         if (isMounted) {
           setLoading(false);
@@ -382,7 +345,7 @@ export default function App() {
       setError(null);
       // Signed out (by any path): drop every cached query so nothing leaks to the next user.
       clearQueryCache();
-      syncOneSignalIdentity(null);
+      syncOneSignalIdentity(null).catch((error) => console.error('OneSignal identity sync failed:', error));
       setLoading(false);
       clearTimeout(safetyTimeout);
     }
@@ -391,7 +354,7 @@ export default function App() {
       isMounted = false;
       clearTimeout(safetyTimeout);
     };
-  }, [user?.id, sessionPending, syncOneSignalIdentity]);
+  }, [user?.id, sessionPending]);
 
   // Polls for profile changes (role/subscription updates made elsewhere, e.g. by an
   // admin) — replaces the old Supabase Realtime `profile-changes-*` channel.
@@ -526,6 +489,35 @@ export default function App() {
     );
   }
 
+  // An invitation must be usable even in a browser that still has somebody else's
+  // session (for example, a landlord inviting a tenant from the same device).
+  // Keep this route ahead of the authenticated dashboard gate so the invitee can
+  // complete setup and replace that session with their own account.
+  if (window.location.pathname === '/invite') {
+    return (
+      <div className="db app-shell app-shell-public min-h-screen bg-white">
+        <PublicNavbar
+          onLoginClick={() => {
+            setPublicAuthIntent({ mode: 'signin' });
+            setIsAuthOpen(true);
+          }}
+          overHero={false}
+        />
+        <main><InvitePage /></main>
+        <Footer variant="public" />
+        <AuthDialog
+          open={isAuthOpen}
+          intent={publicAuthIntent}
+          onOpenChange={(open) => {
+            setIsAuthOpen(open);
+            if (!open) setPublicAuthIntent({ mode: 'signin' });
+          }}
+        />
+        <Toaster />
+      </div>
+    );
+  }
+
   if (!user) {
     const legalPageType =
       window.location.pathname === '/terms'
@@ -534,10 +526,9 @@ export default function App() {
           ? 'privacy'
           : null;
     const isAboutPage = window.location.pathname === '/about';
-    const isInvitePage = window.location.pathname === '/invite';
     const isResetPage = window.location.pathname === '/reset-password';
     // The landing page renders its own sign-in dialog; every other public page uses this one.
-    const isLanding = !legalPageType && !isAboutPage && !isInvitePage && !isResetPage;
+    const isLanding = !legalPageType && !isAboutPage && !isResetPage;
     const openAuth = (intent: AuthIntent) => {
       setPublicAuthIntent(intent);
       setIsAuthOpen(true);
@@ -545,14 +536,12 @@ export default function App() {
 
     return (
       <div className="db app-shell app-shell-public min-h-screen bg-white">
-        <PublicNavbar onLoginClick={() => openAuth({ mode: 'signin' })} overHero={!legalPageType && !isInvitePage && !isResetPage} />
+        <PublicNavbar onLoginClick={() => openAuth({ mode: 'signin' })} overHero={!legalPageType && !isResetPage} />
         <main>
           {legalPageType ? (
             <PublicLegalPage type={legalPageType} />
           ) : isAboutPage ? (
             <AboutPage onSignUp={() => openAuth({ mode: 'signup', role: 'landlord' })} />
-          ) : isInvitePage ? (
-            <InvitePage />
           ) : isResetPage ? (
             <ResetPasswordPage onSignIn={() => openAuth({ mode: 'signin' })} />
           ) : (
@@ -684,7 +673,7 @@ export default function App() {
           </div>
         )}
         
-        <div className="shrink-0 z-40 w-full">
+        <div className={`shrink-0 z-40 w-full overflow-hidden transition-[max-height,opacity] duration-200 sm:max-h-none sm:opacity-100 ${mobileNavbarVisible ? 'max-h-[var(--topbar-height)] opacity-100' : 'max-h-0 opacity-0'}`}>
           <Navbar 
             user={user} 
             profile={profile} 
@@ -698,7 +687,7 @@ export default function App() {
         </div>
 
         {/* Independent Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
+        <main ref={setContentScroller} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
           <div className="flex-1 min-w-0 w-full">
             {error ? (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -1088,6 +1077,21 @@ export default function App() {
       )}
 
       <Toaster />
+      <Dialog open={showPushConfirmation} onOpenChange={setShowPushConfirmation}>
+        <DialogContent size="sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Your OneSignal SDK integration is complete!</DialogTitle>
+            <DialogDescription>
+              You can now send Push Notifications &amp; In-App Messages through OneSignal. Tap below to enable push notifications.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => void confirmPushPermission()} disabled={requestingPushPermission}>
+              {requestingPushPermission ? 'Opening settings…' : 'Got it'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {showOnboarding && !impersonatedProfile && profile && (
         <OnboardingTour
           role={profile.role}

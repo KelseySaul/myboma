@@ -99,6 +99,8 @@ export const buildings = pgTable('buildings', {
   landlordId: uuid('landlordId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   address: text('address'),
+  latitude: numeric('latitude', { precision: 9, scale: 6 }),
+  longitude: numeric('longitude', { precision: 9, scale: 6 }),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('buildings_landlord_idx').on(t.landlordId),

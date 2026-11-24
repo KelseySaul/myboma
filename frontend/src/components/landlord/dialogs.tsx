@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import MapPicker from '../MapPicker';
 import type { Building, Property, PropertyType } from './types';
 import { ActionButton, Field, inputClass } from './ui';
 
@@ -219,13 +220,18 @@ export function BuildingDialog({ open, onClose, building, onSave }: {
   open: boolean;
   onClose: () => void;
   building: Building | null;
-  onSave: (values: { name: string; address: string }) => Promise<void>;
+  onSave: (values: { name: string; address: string; latitude: number | null; longitude: number | null }) => Promise<void>;
 }) {
-  const [values, setValues] = useState({ name: '', address: '' });
+  const [values, setValues] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null });
   const { busy, error, setError, submit } = useSubmit(onClose);
   useEffect(() => {
     if (open) {
-      setValues({ name: building?.name ?? '', address: building?.address ?? '' });
+      setValues({
+        name: building?.name ?? '',
+        address: building?.address ?? '',
+        latitude: building?.latitude == null ? null : Number(building.latitude),
+        longitude: building?.longitude == null ? null : Number(building.longitude),
+      });
       setError(null);
     }
   }, [open, building]);
@@ -241,11 +247,21 @@ export function BuildingDialog({ open, onClose, building, onSave }: {
       error={error}
       onSubmit={() => {
         if (values.name.trim().length < 2) return setError('Enter the building name.');
-        submit(() => onSave({ name: values.name.trim(), address: values.address.trim() }));
+        submit(() => onSave({
+          name: values.name.trim(),
+          address: values.address.trim(),
+          latitude: values.latitude,
+          longitude: values.longitude,
+        }));
       }}
     >
       <Field label="Name"><input className={inputClass} value={values.name} onChange={(e) => setValues({ ...values, name: e.target.value })} placeholder="e.g. Sunrise Apartments" /></Field>
       <Field label="Address"><input className={inputClass} value={values.address} onChange={(e) => setValues({ ...values, address: e.target.value })} placeholder="e.g. Argwings Kodhek Rd, Kilimani" /></Field>
+      <MapPicker
+        value={values.latitude === null || values.longitude === null ? null : { latitude: values.latitude, longitude: values.longitude }}
+        onChange={({ latitude, longitude }) => setValues({ ...values, latitude, longitude })}
+        onClear={() => setValues({ ...values, latitude: null, longitude: null })}
+      />
     </FormDialog>
   );
 }

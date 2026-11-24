@@ -59,6 +59,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from '@/components/ui/input';
+import MapPicker from './MapPicker';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -189,8 +190,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const [isAddBuildingOpen, setIsAddBuildingOpen] = useState(false);
   const [isEditBuildingOpen, setIsEditBuildingOpen] = useState(false);
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
-  const [buildingForm, setBuildingForm] = useState({ name: '', address: '', landlordId: '' });
-  const [editBuildingForm, setEditBuildingForm] = useState({ id: '', name: '', address: '' });
+  const [buildingForm, setBuildingForm] = useState({ name: '', address: '', landlordId: '', latitude: null as number | null, longitude: null as number | null });
+  const [editBuildingForm, setEditBuildingForm] = useState({ id: '', name: '', address: '', latitude: null as number | null, longitude: null as number | null });
   const [bulkAddForm, setBulkAddForm] = useState({
     landlordId: '',
     buildingId: 'none',
@@ -425,13 +426,15 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       const created = await createBuilding({
         name: buildingForm.name,
         address: buildingForm.address,
+        latitude: buildingForm.latitude,
+        longitude: buildingForm.longitude,
         landlordId: buildingForm.landlordId,
         platformId: targetPlatformId,
       });
       setBuildings(prev => [...prev, created]);
       toast.success("Building added successfully!");
       setIsAddBuildingOpen(false);
-      setBuildingForm({ name: '', address: '', landlordId: '' });
+      setBuildingForm({ name: '', address: '', landlordId: '', latitude: null, longitude: null });
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -443,6 +446,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       const updated = await updateBuilding(editBuildingForm.id, {
         name: editBuildingForm.name,
         address: editBuildingForm.address,
+        latitude: editBuildingForm.latitude,
+        longitude: editBuildingForm.longitude,
       });
       setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? updated : b));
       toast.success('Building updated');
@@ -1651,6 +1656,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                             <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address</label>
                             <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={buildingForm.address} onChange={e => setBuildingForm({...buildingForm, address: e.target.value})} placeholder="123 Main St" />
                           </div>
+                          <MapPicker
+                            value={buildingForm.latitude === null || buildingForm.longitude === null ? null : { latitude: buildingForm.latitude, longitude: buildingForm.longitude }}
+                            onChange={({ latitude, longitude }) => setBuildingForm({ ...buildingForm, latitude, longitude })}
+                            onClear={() => setBuildingForm({ ...buildingForm, latitude: null, longitude: null })}
+                          />
 <div className="grid gap-2">
                             <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Assign Landlord</label>
                             <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={buildingForm.landlordId} onChange={e => setBuildingForm({...buildingForm, landlordId: e.target.value})}>
@@ -1684,6 +1694,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                               <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address / Location</label>
                               <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={editBuildingForm.address} onChange={e => setEditBuildingForm({...editBuildingForm, address: e.target.value})} placeholder="123 Sunset Blvd" />
                             </div>
+                            <MapPicker
+                              value={editBuildingForm.latitude === null || editBuildingForm.longitude === null ? null : { latitude: editBuildingForm.latitude, longitude: editBuildingForm.longitude }}
+                              onChange={({ latitude, longitude }) => setEditBuildingForm({ ...editBuildingForm, latitude, longitude })}
+                              onClear={() => setEditBuildingForm({ ...editBuildingForm, latitude: null, longitude: null })}
+                            />
                           </div>
                           <DialogFooter>
                             <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsEditBuildingOpen(false)}>Cancel</Button>
@@ -1887,7 +1902,16 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                               variant="ghost"
                               size="icon-sm"
                               title="Edit Building"
-                              onClick={() => { setEditBuildingForm({ id: b.id, name: b.name, address: b.address || '' }); setIsEditBuildingOpen(true); }}
+                              onClick={() => {
+                                setEditBuildingForm({
+                                  id: b.id,
+                                  name: b.name,
+                                  address: b.address || '',
+                                  latitude: b.latitude == null ? null : Number(b.latitude),
+                                  longitude: b.longitude == null ? null : Number(b.longitude),
+                                });
+                                setIsEditBuildingOpen(true);
+                              }}
                               className="h-8 w-8 rounded-xl text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
                             >
                               <FontAwesomeIcon icon={faEdit} className="h-3.5 w-3.5" />

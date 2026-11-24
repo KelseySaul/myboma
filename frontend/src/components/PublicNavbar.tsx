@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Menu, Search, X } from 'lucide-react';
 import { tenantConfig } from '../config/tenant';
@@ -18,16 +18,33 @@ const LINKS = [
 /** Floating glass navigation for logged-out pages. */
 export default function PublicNavbar({ onLoginClick, overHero = false }: PublicNavbarProps) {
   const [scrolled, setScrolled] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const previousScrollTop = useRef(0);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => {
+      const currentTop = Math.max(window.scrollY, 0);
+      const difference = currentTop - previousScrollTop.current;
+      setScrolled(currentTop > 24);
+      if (currentTop < 24) {
+        setVisible(true);
+        previousScrollTop.current = currentTop;
+      } else if (Math.abs(difference) >= 8) {
+        setVisible(difference < 0);
+        previousScrollTop.current = currentTop;
+      }
+    };
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (mobileMenuOpen || searchOpen) setVisible(true);
+  }, [mobileMenuOpen, searchOpen]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -46,7 +63,7 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
 
   return (
     <header
-      className="fixed inset-x-0 top-0 z-50 px-3 sm:px-6"
+      className={`fixed inset-x-0 top-0 z-50 px-3 transition-transform duration-200 ease-out sm:px-6 ${visible ? 'translate-y-0' : '-translate-y-[calc(100%+1rem)]'}`}
       style={{ paddingTop: isNative ? 'calc(var(--sat) + 0.75rem)' : '0.75rem' }}
     >
       <div className="relative mx-auto max-w-7xl">

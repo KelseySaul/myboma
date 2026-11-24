@@ -54,11 +54,39 @@ async function landlordReach(actorId: string) {
   return {managedPropertyIds, managedBuildingIds};
 }
 
-const buildingSchema = z.object({name: z.string().min(1).max(160), address: z.string().max(280).optional()}).strict();
-const buildingCreateSchema = buildingSchema.extend({
+const buildingFields = {
+  name: z.string().min(1).max(160),
+  address: z.string().max(280).optional(),
+  latitude: z.number().finite().min(-90).max(90).nullable().optional(),
+  longitude: z.number().finite().min(-180).max(180).nullable().optional(),
+};
+
+const requireCoordinatePair = (
+  value: {latitude?: number | null; longitude?: number | null},
+  ctx: z.RefinementCtx,
+) => {
+  const hasLatitude = value.latitude !== undefined && value.latitude !== null;
+  const hasLongitude = value.longitude !== undefined && value.longitude !== null;
+  if (hasLatitude !== hasLongitude) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Latitude and longitude must be provided together.',
+      path: hasLatitude ? ['longitude'] : ['latitude'],
+    });
+  }
+};
+
+const buildingCreateSchema = z.object({
+  ...buildingFields,
   landlordId: z.string().uuid().optional(),
   platformId: z.string().uuid().nullable().optional(),
-}).strict();
+}).strict().superRefine(requireCoordinatePair);
+const buildingUpdateSchema = z.object({
+  name: buildingFields.name.optional(),
+  address: buildingFields.address,
+  latitude: buildingFields.latitude,
+  longitude: buildingFields.longitude,
+}).strict().superRefine(requireCoordinatePair);
 
 /**
  * Resolves who owns a new building/property. Creating for someone else requires being a
@@ -273,7 +301,14 @@ export function registerLandlordRoutes(bffRouter: Router) {
 
       const [building] = await db
         .insert(schema.buildings)
-        .values({name: body.name, address: body.address ?? null, landlordId, platformId})
+        .values({
+          name: body.name,
+          address: body.address ?? null,
+          latitude: body.latitude == null ? null : String(body.latitude),
+          longitude: body.longitude == null ? null : String(body.longitude),
+          landlordId,
+          platformId,
+        })
         .returning();
       res.status(201).json(building);
     }),
@@ -282,7 +317,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
   bffRouter.patch(
     '/landlord/buildings/:id',
     requireAuth,
-    validateBody(buildingSchema.partial()),
+    validateBody(buildingUpdateSchema),
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
       const building = await db.query.buildings.findFirst({where: eq(schema.buildings.id, req.params.id)});
@@ -294,8 +329,14 @@ export function registerLandlordRoutes(bffRouter: Router) {
         res.status(403).json({error: 'Forbidden'});
         return;
       }
-      const body = getValidatedBody<z.infer<typeof buildingSchema>>(req);
-      const [updated] = await db.update(schema.buildings).set(body).where(eq(schema.buildings.id, req.params.id)).returning();
+      const body = getValidatedBody<z.infer<typeof buildingUpdateSchema>>(req);
+      const {latitude, longitude, ...buildingFields} = body;
+      const update = {
+        ...buildingFields,
+        ...(latitude === undefined ? {} : {latitude: latitude == null ? null : String(latitude)}),
+        ...(longitude === undefined ? {} : {longitude: longitude == null ? null : String(longitude)}),
+      };
+      const [updated] = await db.update(schema.buildings).set(update).where(eq(schema.buildings.id, req.params.id)).returning();
       res.json(updated);
     }),
   );

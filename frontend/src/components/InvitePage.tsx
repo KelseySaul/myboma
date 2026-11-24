@@ -100,6 +100,9 @@ export default function InvitePage() {
               {state.invite.invitedByName} invited you to MyBoma as {ROLE_LABELS[state.invite.role] ?? 'a member'}. Your account will use{' '}
               <span className="font-semibold text-zinc-950">{state.invite.email}</span>.
             </p>
+            <p className="mt-3 rounded-xl bg-zinc-100 px-3 py-2 text-xs leading-5 text-zinc-600">
+              If another account is signed in on this device, finishing setup will sign it out and open your new account instead.
+            </p>
 
             <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
               <label className="block">

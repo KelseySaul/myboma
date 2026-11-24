@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS public.buildings (
   "landlordId" uuid NOT NULL REFERENCES public.users(uid) ON DELETE CASCADE,
   name text NOT NULL,
   address text,
+  latitude numeric(9, 6),
+  longitude numeric(9, 6),
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
 
