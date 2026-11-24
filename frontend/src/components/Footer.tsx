@@ -62,7 +62,7 @@ export default function Footer({ variant = 'app' }: FooterProps) {
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
           <div>
             <div className="flex items-center gap-3">
-              <img src={tenantConfig.logoUrl} alt="" className="h-9 w-9 rounded-xl bg-white object-contain p-1" width="36" height="36" />
+              <img src={tenantConfig.logoUrl} alt="" className="h-9 w-9 object-contain brightness-0 invert" width="36" height="36" />
               <span className="font-brand text-3xl font-semibold leading-none tracking-tight">{tenantConfig.appName}</span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-6 text-zinc-400">

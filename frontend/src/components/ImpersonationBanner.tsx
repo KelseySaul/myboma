@@ -8,10 +8,10 @@ interface ImpersonationBannerProps {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  landlord: 'text-blue-300',
-  tenant:   'text-emerald-300',
-  hunter:   'text-purple-300',
-  admin:    'text-rose-300',
+  landlord: 'text-zinc-300',
+  tenant:   'text-zinc-300',
+  hunter:   'text-zinc-300',
+  admin:    'text-zinc-300',
 };
 
 export default function ImpersonationBanner({ target, onExit }: ImpersonationBannerProps) {
@@ -38,7 +38,7 @@ export default function ImpersonationBanner({ target, onExit }: ImpersonationBan
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
           <span className="text-[11px] font-black uppercase tracking-[0.18em] text-amber-200">
-            Impersonating
+            Viewing as
           </span>
           <span className="text-sm font-black text-white truncate">
             {target.displayName}
@@ -56,7 +56,7 @@ export default function ImpersonationBanner({ target, onExit }: ImpersonationBan
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="hidden md:flex items-center gap-1.5 text-amber-400/70 text-[10px] font-bold uppercase tracking-widest">
           <FontAwesomeIcon icon={faExclamationTriangle} className="h-3 w-3" />
-          Admin view — RLS reflects your session
+          Read only. Changes are not allowed.
         </div>
 
         <button
@@ -67,7 +67,7 @@ export default function ImpersonationBanner({ target, onExit }: ImpersonationBan
             transition-all duration-200 hover:scale-105 active:scale-95"
         >
           <FontAwesomeIcon icon={faSignOutAlt} className="h-3.5 w-3.5" />
-          Exit
+          Stop viewing
         </button>
       </div>
     </div>

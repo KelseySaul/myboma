@@ -82,7 +82,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
   const handleLogout = async () => {
     await authClient.signOut({});
     clearQueryCache();
-    toast.success('Signed out successfully');
+    toast.success('Signed out');
   };
 
   const switchRole = (role: UserRole) => {
@@ -170,14 +170,13 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
             variant="ghost"
             onClick={handlePushNotificationRequest}
             className="h-8.5 w-8.5 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors p-0 relative cursor-pointer"
-            title="Enable Push Notifications"
+            title="Turn on notifications"
             aria-label="Enable Push Notifications"
           >
             <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
             {unreadCount > 0 && (
               <span className="absolute top-1 right-1 flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-zinc-950 dark:bg-white"></span>
               </span>
             )}
           </Button>
@@ -194,7 +193,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                   profile?.displayName?.charAt(0).toUpperCase() || 'U'
                 )}
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-rose-500 border border-white" />
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-zinc-950 border-2 border-white dark:bg-white dark:border-zinc-950" />
                 )}
               </button>
             } />
@@ -205,16 +204,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                     <p className="text-xs font-bold text-slate-900 dark:text-white leading-none">{profile?.displayName}</p>
                     <p className="text-[11px] font-medium text-slate-400">{profile?.email}</p>
                     {profile?.role === 'tenant' && (
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-0.5 rounded">Tenant Node</span>
-                        <div className="flex items-center gap-1.5 text-[9px] font-semibold text-emerald-600">
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-                          </span>
-                          Active Lease
-                        </div>
-                      </div>
+                      <span className="mt-2 inline-flex w-fit rounded bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">Tenant</span>
                     )}
                   </div>
                 </DropdownMenuLabel>
@@ -224,12 +214,12 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                 <>
                   <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-slate-800" />
                   <DropdownMenuGroup className="py-1">
-                    <DropdownMenuLabel className="text-[9px] uppercase text-slate-400 font-bold px-3 py-1 tracking-wider">Context Switcher</DropdownMenuLabel>
+                    <DropdownMenuLabel className="text-[9px] uppercase text-slate-400 font-bold px-3 py-1 tracking-wider">View as</DropdownMenuLabel>
                     {[
-                      { role: 'landlord', label: 'Landlord View', icon: faShieldAlt, color: 'text-blue-500' },
-                      { role: 'tenant', label: 'Tenant View', icon: faUsers, color: 'text-emerald-500' },
-                      { role: 'hunter', label: 'Hunter View', icon: faSearch, color: 'text-purple-500' },
-                      { role: 'admin', label: 'Admin View', icon: faCogs, color: 'text-rose-500' }
+                      { role: 'landlord', label: 'Landlord', icon: faShieldAlt, color: 'text-zinc-500' },
+                      { role: 'tenant', label: 'Tenant', icon: faUsers, color: 'text-zinc-500' },
+                      { role: 'hunter', label: 'House hunter', icon: faSearch, color: 'text-zinc-500' },
+                      { role: 'admin', label: 'Admin', icon: faCogs, color: 'text-zinc-500' }
                     ].map((item) => (
                       <DropdownMenuItem 
                         key={item.role} 
@@ -260,7 +250,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                       <span>Notifications</span>
                     </div>
                     {unreadCount > 0 && (
-                      <span className="h-4 min-w-4 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center">
+                      <span className="h-4 min-w-4 px-1 rounded-full bg-zinc-950 text-[10px] font-bold text-white dark:bg-white dark:text-zinc-950 flex items-center justify-center">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
@@ -275,7 +265,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                     <div className="h-6 w-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
                       <FontAwesomeIcon icon={faCog} className="h-3 w-3 text-slate-500" />
                     </div>
-                    <span>Settings & Preferences</span>
+                    <span>Settings</span>
                   </DropdownMenuItem>
                 )}
                 
@@ -287,7 +277,7 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
                     <div className="h-6 w-6 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
                       <FontAwesomeIcon icon={faInfoCircle} className="h-3 w-3 text-slate-500" />
                     </div>
-                    <span>Quick Start Tour</span>
+                    <span>Show me around</span>
                   </DropdownMenuItem>
                 )}
               </DropdownMenuGroup>
@@ -296,12 +286,12 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
               <div className="p-0.5">
                 <DropdownMenuItem 
                   onClick={handleLogout} 
-                  className="text-rose-600 dark:text-rose-400 cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5"
+                  className="text-zinc-700 dark:text-zinc-200 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5"
                 >
-                  <div className="h-6 w-6 rounded-md bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 text-rose-600" />
+                  <div className="h-6 w-6 rounded-md bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                    <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 text-zinc-500" />
                   </div>
-                  <span>Terminate Session</span>
+                  <span>Sign out</span>
                 </DropdownMenuItem>
               </div>
             </DropdownMenuContent>

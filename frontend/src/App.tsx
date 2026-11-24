@@ -10,6 +10,8 @@ import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
 import AboutPage from './components/AboutPage';
 import InvitePage from './components/InvitePage';
+import ResetPasswordPage from './components/ResetPasswordPage';
+import AuthDialog, { type AuthIntent } from './components/auth/AuthDialog';
 import { tenantConfig } from './config/tenant';
 
 // Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
@@ -157,6 +159,7 @@ export default function App() {
     try { return localStorage.getItem(SESSION_HINT_KEY) === '1'; } catch { return false; }
   });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [publicAuthIntent, setPublicAuthIntent] = useState<AuthIntent>({ mode: 'signin' });
   const [activeView, setActiveView] = useState<UserRole | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [impersonatedProfile, setImpersonatedProfile] = useState<UserProfile | null>(null);
@@ -532,22 +535,41 @@ export default function App() {
           : null;
     const isAboutPage = window.location.pathname === '/about';
     const isInvitePage = window.location.pathname === '/invite';
+    const isResetPage = window.location.pathname === '/reset-password';
+    // The landing page renders its own sign-in dialog; every other public page uses this one.
+    const isLanding = !legalPageType && !isAboutPage && !isInvitePage && !isResetPage;
+    const openAuth = (intent: AuthIntent) => {
+      setPublicAuthIntent(intent);
+      setIsAuthOpen(true);
+    };
 
     return (
-      <div className="db app-shell min-h-screen bg-[#f8f9fa]">
-        <PublicNavbar onLoginClick={() => setIsAuthOpen(true)} overHero={!legalPageType && !isAboutPage && !isInvitePage} />
+      <div className="db app-shell app-shell-public min-h-screen bg-white">
+        <PublicNavbar onLoginClick={() => openAuth({ mode: 'signin' })} overHero={!legalPageType && !isInvitePage && !isResetPage} />
         <main>
           {legalPageType ? (
             <PublicLegalPage type={legalPageType} />
           ) : isAboutPage ? (
-            <AboutPage onSignUp={() => setIsAuthOpen(true)} />
+            <AboutPage onSignUp={() => openAuth({ mode: 'signup', role: 'landlord' })} />
           ) : isInvitePage ? (
             <InvitePage />
+          ) : isResetPage ? (
+            <ResetPasswordPage onSignIn={() => openAuth({ mode: 'signin' })} />
           ) : (
             <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
           )}
         </main>
         <Footer variant="public" />
+        {!isLanding && (
+          <AuthDialog
+            open={isAuthOpen}
+            intent={publicAuthIntent}
+            onOpenChange={(open) => {
+              setIsAuthOpen(open);
+              if (!open) setPublicAuthIntent({ mode: 'signin' });
+            }}
+          />
+        )}
         <Toaster />
       </div>
     );
@@ -772,7 +794,7 @@ export default function App() {
                 { id: 'dashboard',   label: 'Home',      icon: faChartPie },
                 { id: 'registered',  label: 'Users',     icon: faUsers },
                 { id: 'pending',     label: 'Pending',   icon: faLink },
-                { id: 'properties',  label: 'Assets',    icon: faBuilding },
+                { id: 'properties',  label: 'Properties', icon: faBuilding },
               ].map(t => (
                 <button
                   key={t.id}
@@ -846,13 +868,13 @@ export default function App() {
             
             <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
-                { id: 'maintenance', label: 'Maintenance',   icon: faTools },
-                { id: 'finances',    label: 'Finances',      icon: faWallet },
+                { id: 'maintenance', label: 'Repairs',       icon: faTools },
+                { id: 'finances',    label: 'Payments',      icon: faWallet },
                 { id: 'tenants',     label: 'Tenants',       icon: faUsers },
                 { id: 'automations', label: 'Notifications', icon: faBell },
                 ...(profile?.isSuperAdmin ? [
-                  { id: 'platforms', label: 'Network Platforms', icon: faGlobe },
-                  { id: 'audit',     label: 'Audit Trail',       icon: faClipboardList },
+                  { id: 'platforms', label: 'Platforms', icon: faGlobe },
+                  { id: 'audit',     label: 'Activity log',      icon: faClipboardList },
                 ] : []),
                 { id: 'settings',    label: 'Settings',          icon: faCog }
               ].map(item => {
@@ -894,8 +916,8 @@ export default function App() {
             <div className="flex items-center justify-around h-15 px-1">
               {[
                 { id: 'dashboard',   label: 'Home',     icon: faChartPie },
-                { id: 'properties',  label: 'Units',    icon: faHome },
-                { id: 'finances',    label: 'Finance',  icon: faWallet },
+                { id: 'properties',  label: 'Properties', icon: faHome },
+                { id: 'finances',    label: 'Payments', icon: faWallet },
                 { id: 'tenants',     label: 'Tenants',  icon: faUsers },
               ].map(t => (
                 <button
@@ -970,8 +992,8 @@ export default function App() {
             
             <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
-                { id: 'maintenance', label: 'Maintenance Hub', icon: faTools },
-                { id: 'automations', label: 'Broadcast Notices', icon: faBell },
+                { id: 'maintenance', label: 'Repairs', icon: faTools },
+                { id: 'automations', label: 'Notifications', icon: faBell },
                 { id: 'settings',    label: 'Settings',          icon: faCog }
               ].map(item => {
                 const isActive = activeTab === item.id;
@@ -1026,9 +1048,9 @@ export default function App() {
         <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
           <div className="flex items-center justify-around h-15 px-1">
             {[
-              { id: 'dashboard',   label: 'Dashboard', icon: faChartPie },
-              { id: 'finances',    label: 'Finance', icon: faWallet },
-              { id: 'maintenance', label: 'Fixes',   icon: faTools },
+              { id: 'dashboard',   label: 'Home', icon: faChartPie },
+              { id: 'finances',    label: 'Payments', icon: faWallet },
+              { id: 'maintenance', label: 'Repairs', icon: faTools },
               { id: 'notices',     label: 'Notices', icon: faBell },
               { id: 'settings',    label: 'Settings', icon: faCog },
             ].map(t => {

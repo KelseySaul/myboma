@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Pagination, usePagination } from '@/components/ui/pagination';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
 import {
   provisionUser,
+  resendInvitation,
   updateUserStatus,
   deleteUserAccount,
   updateUserRole,
@@ -56,12 +58,12 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { UserGrowthLineChart, PlatformRevenueRadial } from './AnalyticsCharts';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAdminDashboard, useAuditLogs } from '../lib/queries';
+import AdminOverview from './admin/AdminOverview';
 
 interface Platform {
   id: string;
@@ -110,12 +112,35 @@ interface AdminDashboardProps {
   setActiveTab: (tab: string) => void;
 }
 
+const TAB_TITLES: Record<string, { title: string; description: string }> = {
+  dashboard: { title: 'Overview', description: 'How things are going across your properties and users.' },
+  registered: { title: 'Users', description: 'Everyone with an account. Search, change roles or suspend access.' },
+  pending: { title: 'Pending invites', description: "People you've invited who haven't set up their account yet." },
+  properties: { title: 'Properties', description: 'Every unit and building, with its landlord and status.' },
+  platforms: { title: 'Platforms', description: 'Separate workspaces for agencies and their landlords.' },
+  audit: { title: 'Activity log', description: 'A record of important actions, newest first.' },
+};
+
 export default function AdminDashboard({ profile, onImpersonate, activeTab, setActiveTab }: AdminDashboardProps) {
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [buildings, setBuildings] = useState<any[]>([]);
+  const buildingPager = usePagination(buildings, 10);
+  const busyRef = useRef(false);
+  const guard = <A extends unknown[]>(key: string, fn: (...args: A) => Promise<unknown>) => async (...args: A) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusyAction(key);
+    try {
+      await fn(...args);
+    } finally {
+      busyRef.current = false;
+      setBusyAction(null);
+    }
+  };
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
   const [rentPayments, setRentPayments] = useState<any[]>([]);
-  const [buildings, setBuildings] = useState<any[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -246,7 +271,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     setLoading(false);
   }, [dashboardError, dashboardErrorAt]);
 
-  const handleUpdateRole = async () => {
+  const handleUpdateRoleImpl = async () => {
     if (!selectedUserForRole) return;
     try {
       const updated = await updateUserRole(selectedUserForRole.uid, updateRoleForm.role as any);
@@ -259,7 +284,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handlePauseAccount = async (u: any) => {
+  const handlePauseAccountImpl = async (u: any) => {
     const newStatus = u.status === 'suspended' ? 'active' : 'suspended';
     try {
       await updateUserStatus(u.uid, newStatus);
@@ -269,7 +294,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleDeleteAccount = async (u: any) => {
+  const handleDeleteAccountImpl = async (u: any) => {
     if (!window.confirm(`Are you sure you want to permanently delete ${u.displayName}?`)) return;
     try {
       await deleteUserAccount(u.uid);
@@ -279,7 +304,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleBulkDeleteUsers = async () => {
+  const handleBulkDeleteUsersImpl = async () => {
     if (!window.confirm(`Are you sure you want to permanently delete ${selectedUserIds.length} users?`)) return;
     try {
       await Promise.all(selectedUserIds.map(uid => deleteUserAccount(uid)));
@@ -290,7 +315,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleBulkPauseUsers = async () => {
+  const handleBulkPauseUsersImpl = async () => {
     try {
       await Promise.all(
         selectedUserIds.map(uid => {
@@ -339,7 +364,20 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   };
 
 
-  const handleInviteUser = async () => {
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const handleResendInvite = async (email: string) => {
+    setResendingEmail(email);
+    try {
+      await resendInvitation(email);
+      toast.success(`New invite sent to ${email}. The link expires in 7 days.`);
+    } catch (error: any) {
+      toast.error(error.message || 'Could not resend the invite.');
+    } finally {
+      setResendingEmail(null);
+    }
+  };
+
+  const handleInviteUserImpl = async () => {
     if (!inviteForm.email || !inviteForm.displayName) {
       toast.error("Please fill in all required fields.");
       return;
@@ -377,7 +415,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleAddBuilding = async () => {
+  const handleAddBuildingImpl = async () => {
     if (!buildingForm.name || !buildingForm.landlordId) {
       toast.error("Please fill in all required fields.");
       return;
@@ -399,7 +437,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleUpdateBuilding = async () => {
+  const handleUpdateBuildingImpl = async () => {
     if (!editBuildingForm.name) return;
     try {
       const updated = await updateBuilding(editBuildingForm.id, {
@@ -407,7 +445,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         address: editBuildingForm.address,
       });
       setBuildings(prev => prev.map(b => b.id === editBuildingForm.id ? updated : b));
-      toast.success("Asset group updated!");
+      toast.success('Building updated');
       setIsEditBuildingOpen(false);
     } catch (err: any) {
       toast.error(err.message || "Failed to update asset group");
@@ -416,19 +454,19 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
   // Server-side cascade: also deletes every property in the building and the accounts
   // of any tenants assigned to them — see /admin/buildings/:id in app.ts.
-  const handleDeleteBuilding = async (id: string) => {
+  const handleDeleteBuildingImpl = async (id: string) => {
     if (!confirm("Are you sure you want to delete this asset group? ALL units inside and their associated tenant accounts will be PERMANENTLY deleted.")) return;
     try {
       await adminDeleteBuildingCascade(id);
       setBuildings(prev => prev.filter(b => b.id !== id));
       setProperties(prev => prev.filter(p => p.buildingId !== id));
-      toast.success("Asset group, units, and tenant accounts deleted successfully!");
+      toast.success('Building, its units and tenant accounts deleted');
     } catch (err: any) {
       toast.error(err.message || "Failed to delete asset group");
     }
   };
 
-  const handleAddProperty = async () => {
+  const handleAddPropertyImpl = async () => {
     if (!propertyForm.title || !propertyForm.price || !propertyForm.location || !propertyForm.landlordId) {
       toast.error("Please fill in all required fields.");
       return;
@@ -473,7 +511,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleBulkAddProperties = async () => {
+  const handleBulkAddPropertiesImpl = async () => {
     if (!bulkAddForm.landlordId) {
       toast.error('Please select a landlord');
       return;
@@ -585,7 +623,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleDeleteProperty = async (id: string) => {
+  const handleDeletePropertyImpl = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this property?")) return;
     try {
       await deleteProperty(id);
@@ -596,7 +634,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleAssignPropertyLandlord = async () => {
+  const handleAssignPropertyLandlordImpl = async () => {
     if (!selectedPropertyToAssign || !assignLandlordId) return;
     try {
       await updateProperty(selectedPropertyToAssign, { landlordId: assignLandlordId });
@@ -610,7 +648,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleUpdateProperty = async () => {
+  const handleUpdatePropertyImpl = async () => {
     if (!editingProperty) return;
     try {
       const { id, ...data } = editingProperty;
@@ -671,7 +709,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     }
   };
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfileImpl = async () => {
     try {
       await updateMyProfile(adminProfile);
       toast.success("Profile updated");
@@ -727,6 +765,23 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     URL.revokeObjectURL(url);
   };
 
+  // One request at a time from this screen's buttons: repeat clicks are ignored while busy.
+  const handleUpdateRole = guard('handleUpdateRole', handleUpdateRoleImpl);
+  const handlePauseAccount = guard('handlePauseAccount', handlePauseAccountImpl);
+  const handleDeleteAccount = guard('handleDeleteAccount', handleDeleteAccountImpl);
+  const handleBulkDeleteUsers = guard('handleBulkDeleteUsers', handleBulkDeleteUsersImpl);
+  const handleBulkPauseUsers = guard('handleBulkPauseUsers', handleBulkPauseUsersImpl);
+  const handleInviteUser = guard('handleInviteUser', handleInviteUserImpl);
+  const handleAddBuilding = guard('handleAddBuilding', handleAddBuildingImpl);
+  const handleUpdateBuilding = guard('handleUpdateBuilding', handleUpdateBuildingImpl);
+  const handleDeleteBuilding = guard('handleDeleteBuilding', handleDeleteBuildingImpl);
+  const handleAddProperty = guard('handleAddProperty', handleAddPropertyImpl);
+  const handleBulkAddProperties = guard('handleBulkAddProperties', handleBulkAddPropertiesImpl);
+  const handleDeleteProperty = guard('handleDeleteProperty', handleDeletePropertyImpl);
+  const handleAssignPropertyLandlord = guard('handleAssignPropertyLandlord', handleAssignPropertyLandlordImpl);
+  const handleUpdateProperty = guard('handleUpdateProperty', handleUpdatePropertyImpl);
+  const handleUpdateProfile = guard('handleUpdateProfile', handleUpdateProfileImpl);
+
   if (loading && platforms.length === 0 && users.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -734,73 +789,16 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <div className="absolute inset-0 rounded-2xl bg-zinc-100/80 blur-lg animate-pulse scale-150" />
           <img src="/bomalog.webp" alt="myboma" className="relative h-12 w-12 object-contain rounded-xl animate-logo-reveal" width="48" height="48" />
         </div>
-        <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-[0.3em]">Accessing Secure Core...</p>
+        <p className="text-sm text-zinc-500">Loading…</p>
       </div>
     );
   }
 
-  // Dynamically map users to growth coordinates if they have createdAt
-  const userTimelinePoints = (() => {
-    try {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const counts: Record<string, number> = {};
-      
-      const now = new Date();
-      const last6Months = [];
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const label = months[d.getMonth()];
-        last6Months.push(label);
-        counts[label] = 0;
-      }
-
-      let validCount = 0;
-      users.forEach(u => {
-        const dateStr = (u as any).createdAt || (u as any).created_at;
-        if (dateStr) {
-          const d = new Date(dateStr);
-          const label = months[d.getMonth()];
-          if (counts[label] !== undefined) {
-            counts[label]++;
-            validCount++;
-          }
-        }
-      });
-
-      if (validCount > 0) {
-        let sum = users.length - validCount;
-        if (sum < 0) sum = 0;
-        return last6Months.map(label => {
-          sum += counts[label];
-          return { label, value: sum };
-        });
-      }
-    } catch (e) {
-      console.warn("Failed parsing user signup timeline", e);
-    }
-    return [];
-  })();
-
-  const defaultPoints = [
-    { label: 'Dec', value: 5 },
-    { label: 'Jan', value: 12 },
-    { label: 'Feb', value: 20 },
-    { label: 'Mar', value: 32 },
-    { label: 'Apr', value: 48 },
-    { label: 'May', value: users.length || 55 }
-  ];
-  const displayPoints = userTimelinePoints && userTimelinePoints.length >= 6 ? userTimelinePoints.slice(-6) : defaultPoints;
-  const maxValPoints = Math.max(...displayPoints.map(p => p.value), 1);
-  const pointsWithHeights = displayPoints.map(p => ({
-    ...p,
-    height: `${Math.round((p.value / maxValPoints) * 100)}%`,
-    isMax: p.value === maxValPoints
-  }));
 
   // Pagination calculations - User Registry
   const filteredUsers = users.filter(u => {
     const search = userSearch.toLowerCase();
-    const platName = platforms.find(p => p.id === u.platformId)?.name || 'ROOT';
+    const platName = platforms.find(p => p.id === u.platformId)?.name || 'No platform';
     const matchesSearch = (
       (u.displayName || '').toLowerCase().includes(search) ||
       (u.email || '').toLowerCase().includes(search) ||
@@ -818,7 +816,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   // Pagination calculations - Invitations (Awaiting Auth)
   const filteredInvs = invitations.filter(inv => {
     const search = inviteSearch.toLowerCase();
-    const platName = platforms.find(p => p.id === inv.platformId)?.name || 'EXTERNAL';
+    const platName = platforms.find(p => p.id === inv.platformId)?.name || 'No platform';
     return (
       (inv.displayName || '').toLowerCase().includes(search) ||
       (inv.email || '').toLowerCase().includes(search) ||
@@ -835,7 +833,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   // Pagination calculations - Properties Assets
   const filteredProps = properties.filter(p => {
     const search = adminPropertySearch.toLowerCase();
-    const platName = platforms.find(plat => plat.id === p.platformId)?.name || 'ROOT';
+    const platName = platforms.find(plat => plat.id === p.platformId)?.name || 'No platform';
     return (
       (p.title || '').toLowerCase().includes(search) ||
       (p.location || '').toLowerCase().includes(search) ||
@@ -884,30 +882,15 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
   return (
     <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
-      {/* ── Enterprise Page Header ─────────────────────────── */}
-      <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800">
+      {/* ── Page header ─────────────────────────── */}
+      <div className="px-4 py-5 sm:px-6 md:px-8 bg-white dark:bg-zinc-950 border-b border-zinc-200/80 dark:border-zinc-800">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/60 dark:border-rose-800/40">
-                <FontAwesomeIcon icon={faShieldAlt} className="h-2.5 w-2.5" />
-                {profile.isSuperAdmin ? 'Level 4 Master Node' : 'Platform Node'}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                System Live
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              {profile.isSuperAdmin ? 'Enterprise Command Center' : 'Platform Management'}
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">
+              {TAB_TITLES[activeTab || 'dashboard']?.title ?? 'Overview'}
             </h1>
-            <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {profile.isSuperAdmin 
-                ? 'Global tenant registry, node telemetry, user access & audit controls.' 
-                : 'Administrative controls and portfolio management for your platform instance.'}
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {TAB_TITLES[activeTab || 'dashboard']?.description ?? ''}
             </p>
           </div>
 
@@ -919,7 +902,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               onClick={() => setIsProfileOpen(true)}
             >
               <FontAwesomeIcon icon={faUser} className="mr-1.5 h-3 w-3 text-slate-400" />
-              Admin Profile
+              My profile
             </Button>
 
             {profile.isSuperAdmin && (
@@ -930,7 +913,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     value={selectedPlatformId}
                     onChange={(e) => setSelectedPlatformId(e.target.value)}
                   >
-                    <option value="all">🌐 All Platforms (Global View)</option>
+                    <option value="all">All platforms</option>
                     {platforms.map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
@@ -943,7 +926,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   <DialogTrigger render={
                     <Button size="sm" className="rounded-xl font-bold text-xs shadow-xs gap-1.5">
                       <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                      Provision Platform
+                      Add platform
                     </Button>
                   } />
                   <DialogContent className="sm:max-w-xl p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
@@ -952,13 +935,13 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         <div className="h-7 w-7 rounded-lg bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 flex items-center justify-center text-xs">
                           <FontAwesomeIcon icon={faGlobe} />
                         </div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Multi-Tenant Management</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platforms</span>
                       </div>
                       <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white">
-                        Provision New Platform
+                        Add a platform
                       </DialogTitle>
                       <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Deploy an isolated tenant workspace instance with dedicated credentials and URL slug.
+                        Create a separate workspace for an agency. Its owner gets an email to set up their account.
                       </DialogDescription>
                     </div>
 
@@ -966,7 +949,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       {/* Section 1: Platform Identity */}
                       <div className="space-y-3.5">
                         <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">1. Platform Identity</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">1. Platform details</span>
                         </div>
                         <div className="grid gap-3.5">
                           <div className="space-y-1.5">
@@ -1005,12 +988,12 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       {/* Section 2: Master Admin Credentials */}
                       <div className="space-y-3.5 pt-2">
                         <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">2. Administrator Credentials</span>
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-200">2. Owner</span>
                         </div>
                         <div className="grid gap-3.5">
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                              Master Admin Email <span className="text-rose-500">*</span>
+                              Owner's email <span className="text-rose-500">*</span>
                             </label>
                             <Input
                               className="h-10"
@@ -1032,7 +1015,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-start gap-2.5">
                         <FontAwesomeIcon icon={faShieldAlt} className="h-3.5 w-3.5 text-slate-500 mt-0.5 shrink-0" />
                         <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                          Provisioning configures database schema partitions, multi-tenant row security policies, and dispatches the activation link immediately.
+                          The platform's data is kept separate from every other platform. The owner's invitation email is sent straight away.
                         </div>
                       </div>
                     </div>
@@ -1063,10 +1046,10 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         {isProvisioning ? (
                           <>
                             <FontAwesomeIcon icon={faSpinner} className="animate-spin mr-1.5 h-3 w-3" />
-                            Provisioning...
+                            Creating…
                           </>
                         ) : (
-                          'Initiate Provisioning'
+                          'Add platform'
                         )}
                       </Button>
                     </div>
@@ -1082,19 +1065,19 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                           <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5" />
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Node Active</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Platform created</span>
                           <h3 className="text-lg font-bold tracking-tight text-white">{provisionedPlatform?.name}</h3>
                         </div>
                       </div>
                       <p className="text-xs text-slate-400 mt-2">
-                        The platform lease instance is successfully provisioned and ready for operations.
+                        The platform is ready. We've emailed the owner a link to set up their account.
                       </p>
                     </div>
 
                     <div className="p-6 space-y-4">
                       <div className="space-y-3">
                         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Custom Tenant URL</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Platform link</span>
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-mono font-semibold text-slate-900 dark:text-white truncate">
                               {window.location.origin}/p/{provisionedPlatform?.slug}
@@ -1105,7 +1088,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                               className="h-7 text-[11px] font-semibold shrink-0 cursor-pointer"
                               onClick={() => {
                                 navigator.clipboard.writeText(`${window.location.origin}/p/${provisionedPlatform?.slug}`);
-                                toast.success('Tenant URL copied to clipboard');
+                                toast.success('Link copied');
                               }}
                             >
                               Copy Link
@@ -1114,7 +1097,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
 
                         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Master Administrator</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Owner</span>
                           <p className="text-xs font-semibold text-slate-900 dark:text-white">
                             {provisionedPlatform?.ownerEmail}
                           </p>
@@ -1122,7 +1105,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       </div>
 
                       <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
-                        Provide the custom URL and temporary password to the assigned administrator to complete setup.
+                        The owner's setup link works once and expires in 7 days. You can resend it from Pending invites.
                       </div>
 
                       <Button
@@ -1140,166 +1123,24 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         </div>
       </div>
 
-      {/* ── Dashboard Overview ── */}
+      {/* ── Overview (real numbers from /admin/overview) ── */}
       {(activeTab === 'dashboard' || !activeTab) && (
-        <>
-          {/* Stat Cards Grid */}
-          <div className="stats-grid animate-in fade-in duration-500">
-            {/* Active Nodes */}
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-label">Active Nodes</span>
-                <div className="stat-icon si-blue">
-                  <i className="ti ti-users"></i>
-                </div>
-              </div>
-              <div className="stat-num">{users.length}</div>
-              <div className="stat-desc">Registered users</div>
-              <div className="stat-bar bar-blue"></div>
-            </div>
-
-            {/* Awaiting Auth */}
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-label">Awaiting Auth</span>
-                <div className="stat-icon si-amber">
-                  <i className="ti ti-link"></i>
-                </div>
-              </div>
-              <div className="stat-num">{invitations.length}</div>
-              <div className="stat-desc">Pending invites</div>
-              <div className="stat-bar bar-amber"></div>
-            </div>
-
-            {/* Assets Indexed */}
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-label">Assets Indexed</span>
-                <div className="stat-icon si-teal">
-                  <i className="ti ti-building"></i>
-                </div>
-              </div>
-              <div className="stat-num">{properties.length}</div>
-              <div className="stat-desc">Total properties</div>
-              <div className="stat-bar bar-teal"></div>
-            </div>
-
-            {/* Total Revenue */}
-            <div className="stat-card">
-              <div className="stat-top">
-                <span className="stat-label">Total Revenue</span>
-                <div className="stat-icon si-emerald">
-                  <i className="ti ti-cash"></i>
-                </div>
-              </div>
-              <div className="stat-num">KES {rentPayments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}</div>
-              <div className="stat-desc">Across all properties</div>
-              <div className="stat-bar bar-emerald"></div>
-            </div>
-
-            {/* Network Load */}
-            {profile.isSuperAdmin && (
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span className="stat-label">Network Load</span>
-                  <div className="stat-icon si-red">
-                    <i className="ti ti-server"></i>
-                  </div>
-                </div>
-                <div className="stat-num">{platforms.length}</div>
-                <div className="stat-desc">Platform leases</div>
-                <div className="stat-bar bar-red"></div>
-              </div>
-            )}
-          </div>
-
-          {/* Panels / Charts */}
-          <div className="panels animate-in fade-in duration-500">
-            {/* Left Panel: Platform Growth */}
-            <div className="panel">
-              <div className="panel-header">
-                <div>
-                  <div className="panel-meta">
-                    <i className="ti ti-chart-line"></i> Platform Growth
-                  </div>
-                  <div className="panel-title">System registrations</div>
-                </div>
-                <div className="growth-chip">
-                  <i className="ti ti-arrow-up-right mr-0.5"></i> +48.2% MoM
-                </div>
-              </div>
-              
-              {/* Bar Chart */}
-              <div className="bar-chart">
-                {pointsWithHeights.map((p, idx) => (
-                  <div className="bc-col" key={idx}>
-                    <div className={`bc-bar ${p.isMax ? 'hi' : ''}`} style={{ height: p.height }}></div>
-                    <span className="bc-lbl">{p.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Right Panel: Platform Allocation */}
-            <div className="panel">
-              <div className="panel-header">
-                <div>
-                  <div className="panel-meta">
-                    <i className="ti ti-chart-pie"></i> Financial Telemetry
-                  </div>
-                  <div className="panel-title">Platform allocation</div>
-                </div>
-              </div>
-
-              {/* Donut Chart + Legend */}
-              <div className="donut-wrap">
-                <svg width="80" height="80" viewBox="0 0 80 80" className="flex-shrink-0">
-                  {/* Circumference for radius 28 is 2 * pi * 28 = ~175.93 */}
-                  <circle cx="40" cy="40" r="28" fill="transparent" stroke="#e2e8f0" strokeWidth="8" />
-                  
-                  {/* Blue segment (Residential - 50%): length 88, offset 0 */}
-                  <circle cx="40" cy="40" r="28" fill="transparent" stroke="#378add" strokeWidth="8"
-                          strokeDasharray="88 176" strokeDashoffset="0" transform="rotate(-90 40 40)" />
-                          
-                  {/* Teal segment (Commercial - 25%): length 44, offset -88 */}
-                  <circle cx="40" cy="40" r="28" fill="transparent" stroke="#1d9e75" strokeWidth="8"
-                          strokeDasharray="44 176" strokeDashoffset="-88" transform="rotate(-90 40 40)" />
-                          
-                  {/* Amber segment (Industrial - 14%): length 24.6, offset -132 */}
-                  <circle cx="40" cy="40" r="28" fill="transparent" stroke="#ef9f27" strokeWidth="8"
-                          strokeDasharray="24.6 176" strokeDashoffset="-132" transform="rotate(-90 40 40)" />
-                          
-                  {/* Light blue/gray segment (Vacant - 11%): length 19.4, offset -156.6 */}
-                  <circle cx="40" cy="40" r="28" fill="transparent" stroke="#cbd5e1" strokeWidth="8"
-                          strokeDasharray="19.4 176" strokeDashoffset="-156.6" transform="rotate(-90 40 40)" />
-                </svg>
-                
-                <div className="legend">
-                  <div className="leg-item">
-                    <span className="leg-dot" style={{ backgroundColor: '#378add' }}></span>
-                    Residential
-                    <span className="leg-val">50%</span>
-                  </div>
-                  <div className="leg-item">
-                    <span className="leg-dot" style={{ backgroundColor: '#1d9e75' }}></span>
-                    Commercial
-                    <span className="leg-val">25%</span>
-                  </div>
-                  <div className="leg-item">
-                    <span className="leg-dot" style={{ backgroundColor: '#ef9f27' }}></span>
-                    Industrial
-                    <span className="leg-val">14%</span>
-                  </div>
-                  <div className="leg-item">
-                    <span className="leg-dot" style={{ backgroundColor: '#cbd5e1' }}></span>
-                    Vacant
-                    <span className="leg-val">11%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
+        <div className="px-4 pt-6 sm:px-6 md:px-8">
+          <AdminOverview
+            firstName={(profile.displayName || 'there').split(' ')[0]}
+            platformId={dashboardPlatformId ?? 'all'}
+            isSuperAdmin={Boolean(profile.isSuperAdmin)}
+            onNavigate={(tab) => setActiveTab(tab)}
+            onInviteUser={() => {
+              setActiveTab('registered');
+              setIsInviteUserOpen(true);
+            }}
+            onAddProperty={() => {
+              setActiveTab('properties');
+              setIsAddPropertyOpen(true);
+            }}
+          />
+        </div>
       )}
 
       {/* Tab Panels */}
@@ -1310,9 +1151,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">User Registry</CardTitle>
+                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Users</CardTitle>
                   <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Managing verified identity nodes and system access credentials.
+                    Search by name or email, filter by role, and manage access.
                   </CardDescription>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
@@ -1349,21 +1190,21 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       } />
                       <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
                         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-                          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Invite New User</DialogTitle>
+                          <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Invite a user</DialogTitle>
                           <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Send an onboarding credential invitation to join the platform.
+                            We'll email them a link to set up their account. The link expires in 7 days.
                           </DialogDescription>
                         </div>
                         <div className="p-6 space-y-3.5 max-h-[70vh] overflow-y-auto">
                           {profile.isSuperAdmin && (
                             <div className="space-y-1.5">
-                              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Platform</label>
+                              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Platform</label>
                               <select
                                 className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
                                 value={selectedPlatformId}
                                 onChange={(e) => setSelectedPlatformId(e.target.value)}
                               >
-                                <option value="all">None (Global System User)</option>
+                                <option value="all">No platform</option>
                                 {platforms.map((platform) => (
                                   <option key={platform.id} value={platform.id}>{platform.name}</option>
                                 ))}
@@ -1430,7 +1271,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
                         <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
                           <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsInviteUserOpen(false)}>Cancel</Button>
-                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleInviteUser}>Send Invitation</Button>
+                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleInviteUser} disabled={busyAction !== null}>Send Invitation</Button>
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -1440,7 +1281,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
                           <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Update Access Role</DialogTitle>
                           <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            Modify permissions and access tier for {selectedUserForRole?.displayName}.
+                            Choose what {selectedUserForRole?.displayName} can do.
                           </DialogDescription>
                         </div>
                         <div className="p-6 space-y-3.5">
@@ -1457,7 +1298,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
                         <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
                           <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsUpdateRoleOpen(false)}>Cancel</Button>
-                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleUpdateRole}>Save Role</Button>
+                          <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleUpdateRole} disabled={busyAction !== null}>Save Role</Button>
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -1476,8 +1317,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{selectedUserIds.length} users selected</span>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={handleBulkExportUsers} className="h-7 text-xs font-semibold">Export</Button>
-                    <Button size="sm" variant="outline" onClick={handleBulkPauseUsers} className="h-7 text-xs font-semibold text-amber-700">Pause / Resume</Button>
-                    <Button size="sm" variant="outline" onClick={handleBulkDeleteUsers} className="h-7 text-xs font-semibold text-rose-600 border-rose-200">Delete</Button>
+                    <Button size="sm" variant="outline" onClick={handleBulkPauseUsers} disabled={busyAction !== null} className="h-7 text-xs font-semibold text-amber-700">Pause / Resume</Button>
+                    <Button size="sm" variant="outline" onClick={handleBulkDeleteUsers} disabled={busyAction !== null} className="h-7 text-xs font-semibold text-rose-600 border-rose-200">Delete</Button>
                   </div>
                 </div>
               )}
@@ -1486,10 +1327,10 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   <TableHeader>
                     <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
                       <TableHead className="w-10 px-4"><Checkbox checked={currentUsers.length > 0 && selectedUserIds.length === currentUsers.length} onCheckedChange={toggleAllUsers} /></TableHead>
-                      <TableHead className="px-4 py-3">Identity / Name</TableHead>
+                      <TableHead className="px-4 py-3">Name</TableHead>
                       <TableHead className="px-4 py-3 hidden sm:table-cell">Email Address</TableHead>
                       <TableHead className="px-4 py-3">Access Level</TableHead>
-                      {profile.isSuperAdmin && <TableHead className="px-4 py-3 hidden lg:table-cell">Platform Instance</TableHead>}
+                      {profile.isSuperAdmin && <TableHead className="px-4 py-3 hidden lg:table-cell">Platform</TableHead>}
                       <TableHead className="px-4 py-3 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1524,11 +1365,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                               </Button>
                             } />
                             <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
-                              <DropdownMenuLabel className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Node Operations</DropdownMenuLabel>
+                              <DropdownMenuLabel className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-slate-800" />
                               {onImpersonate && !u.isSuperAdmin && u.uid !== profile.uid && (
                                 <DropdownMenuItem onClick={() => onImpersonate(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
-                                  <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-slate-400" /> Impersonate Node
+                                  <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-slate-400" /> View as this user
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem onClick={() => { setSelectedUserForRole(u); setUpdateRoleForm({ role: u.role }); setIsUpdateRoleOpen(true); }} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -1594,9 +1435,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Awaiting Authorization</CardTitle>
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Pending invites</CardTitle>
                 <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Identity invitations dispatched but pending first-time authentication.
+                  They have an invitation email but haven't set up their account. Links expire after 7 days.
                 </CardDescription>
               </div>
               <div className="relative w-full sm:max-w-xs shrink-0">
@@ -1613,10 +1454,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
-                    <TableHead className="px-4 py-3">Recipient Name</TableHead>
-                    <TableHead className="px-4 py-3">Target Email</TableHead>
-                    <TableHead className="px-4 py-3">Assigned Role</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="px-4 py-3">Platform Instance</TableHead>}
+                    <TableHead className="px-4 py-3">Name</TableHead>
+                    <TableHead className="px-4 py-3">Email</TableHead>
+                    <TableHead className="px-4 py-3">Role</TableHead>
+                    {profile.isSuperAdmin && <TableHead className="px-4 py-3">Platform</TableHead>}
+                    <TableHead className="px-4 py-3 text-right"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1627,15 +1469,26 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <TableCell className="px-4 py-3"><Badge variant="secondary">{inv.role}</Badge></TableCell>
                       {profile.isSuperAdmin && (
                         <TableCell className="px-4 py-3 text-xs text-slate-500 font-medium">
-                          {platforms.find(p => p.id === inv.platformId)?.name || 'Root Instance'}
+                          {platforms.find(p => p.id === inv.platformId)?.name || 'No platform'}
                         </TableCell>
                       )}
+                      <TableCell className="px-4 py-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-lg text-xs font-semibold"
+                          disabled={resendingEmail === inv.email}
+                          onClick={() => handleResendInvite(inv.email)}
+                        >
+                          {resendingEmail === inv.email ? <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" /> : 'Resend invite'}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {paginatedInvs.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={profile.isSuperAdmin ? 4 : 3} className="h-32 text-center text-slate-400 font-medium text-xs">
-                        No pending invitations found.
+                      <TableCell colSpan={profile.isSuperAdmin ? 5 : 4} className="h-32 text-center text-slate-400 font-medium text-xs">
+                        No pending invites. Use "Invite user" on the Users page to add someone.
                       </TableCell>
                     </TableRow>
                   )}
@@ -1681,8 +1534,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
               <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                 <div>
-                  <CardTitle className="text-xl font-black">Global Asset Index</CardTitle>
-                  <CardDescription className="font-medium text-zinc-500">Real-time status of all managed property nodes.</CardDescription>
+                  <CardTitle className="text-xl font-black">Properties</CardTitle>
+                  <CardDescription className="font-medium text-zinc-500">Every unit with its landlord, price and status.</CardDescription>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
                   <div className="relative w-full sm:max-w-xs shrink-0">
@@ -1703,7 +1556,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <DialogContent className="sm:max-w-[700px] p-0 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
                           <DialogTitle className="text-xl font-black">Bulk Add Units</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Rapidly generate multiple units for a building.</DialogDescription>
+                          <DialogDescription className="font-medium text-zinc-500">Add several units to a building at once.</DialogDescription>
                         </div>
                         <div className="p-6 overflow-y-auto space-y-6 flex-1">
                           <div className="grid sm:grid-cols-2 gap-4">
@@ -1776,7 +1629,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
                         <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 flex justify-end gap-3">
                           <Button variant="ghost" onClick={() => setIsBulkAddOpen(false)}>Cancel</Button>
-                          <Button onClick={handleBulkAddProperties} className="bg-zinc-950 text-white hover:bg-zinc-800">Generate {bulkAddForm.count} Units</Button>
+                          <Button onClick={handleBulkAddProperties} disabled={busyAction !== null} className="bg-zinc-950 text-white hover:bg-zinc-800">Generate {bulkAddForm.count} Units</Button>
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -1789,7 +1642,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
                         <DialogHeader>
                           <DialogTitle className="text-xl font-black">Add New Building</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Create a new building entity.</DialogDescription>
+                          <DialogDescription className="font-medium text-zinc-500">Group units under one building.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                           <div className="grid gap-2">
@@ -1813,7 +1666,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
                         <DialogFooter>
                             <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsAddBuildingOpen(false)}>Cancel</Button>
-                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddBuilding}>Add Building</Button>
+                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddBuilding} disabled={busyAction !== null}>Add Building</Button>
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
@@ -1821,12 +1674,12 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <Dialog open={isEditBuildingOpen} onOpenChange={setIsEditBuildingOpen}>
                         <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
                           <DialogHeader>
-                            <DialogTitle className="text-xl font-black">Edit Asset Group</DialogTitle>
-                            <DialogDescription className="font-medium text-zinc-500">Update the name or address of this asset group.</DialogDescription>
+                            <DialogTitle className="text-xl font-black">Edit building</DialogTitle>
+                            <DialogDescription className="font-medium text-zinc-500">Change the building's name or address.</DialogDescription>
                           </DialogHeader>
                           <div className="grid gap-4 py-4">
                             <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Asset Name *</label>
+                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Building name *</label>
                               <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={editBuildingForm.name} onChange={e => setEditBuildingForm({...editBuildingForm, name: e.target.value})} placeholder="e.g. Sunset Apartments" />
                             </div>
                             <div className="grid gap-2">
@@ -1836,7 +1689,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                           </div>
                           <DialogFooter>
                             <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsEditBuildingOpen(false)}>Cancel</Button>
-                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleUpdateBuilding}>Save Changes</Button>
+                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleUpdateBuilding} disabled={busyAction !== null}>Save Changes</Button>
                           </DialogFooter>
                         </DialogContent>
                       </Dialog>
@@ -1849,7 +1702,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900 max-w-[500px]">
                         <DialogHeader>
                           <DialogTitle className="text-xl font-black">Add New Property</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Create a new property unit.</DialogDescription>
+                          <DialogDescription className="font-medium text-zinc-500">Add a single unit.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                           <div className="grid gap-2">
@@ -1897,7 +1750,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                         </div>
                         <DialogFooter className="mt-2">
                           <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsAddPropertyOpen(false)}>Cancel</Button>
-                          <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddProperty}>Add Property</Button>
+                          <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddProperty} disabled={busyAction !== null}>Add Property</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -1909,11 +1762,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               <Table>
                 <TableHeader>
                   <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Asset Title</TableHead>
+                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Property</TableHead>
                     <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Coordinates</TableHead>
                     <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Valuation</TableHead>
                     <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Status</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Instance</TableHead>}
+                    {profile.isSuperAdmin && <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Platform</TableHead>}
                     <TableHead className="text-right px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1930,7 +1783,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       </TableCell>
                       {profile.isSuperAdmin && (
                         <TableCell className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter">
-                          {platforms.find(plat => plat.id === p.platformId)?.name || 'ROOT'}
+                          {platforms.find(plat => plat.id === p.platformId)?.name || 'No platform'}
                         </TableCell>
                       )}
                       <TableCell className="px-8 py-5 text-right">
@@ -2009,21 +1862,21 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
           <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden mt-6">
             <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
-              <CardTitle className="text-xl font-black">Asset Groups (Buildings)</CardTitle>
-              <CardDescription className="font-medium text-zinc-500">Manage empty or populated building groups.</CardDescription>
+              <CardTitle className="text-xl font-black">Buildings</CardTitle>
+              <CardDescription className="font-medium text-zinc-500">Buildings and the units inside them.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Building Name</TableHead>
+                    <TableHead className="px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Building</TableHead>
                     <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Location</TableHead>
-                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Total Units</TableHead>
+                    <TableHead className="py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Units</TableHead>
                     <TableHead className="text-right px-8 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {buildings.map((b, i) => {
+                  {buildingPager.pageItems.map((b, i) => {
                     const unitCount = properties.filter(p => p.buildingId === b.id).length;
                     return (
                       <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
@@ -2064,6 +1917,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                   )}
                 </TableBody>
               </Table>
+              <div className="px-4 pb-4 sm:px-8">
+                <Pagination page={buildingPager.page} pageCount={buildingPager.pageCount} total={buildingPager.total} pageSize={buildingPager.pageSize} onPageChange={buildingPager.setPage} label="buildings" />
+              </div>
             </CardContent>
           </Card>
           </div>
@@ -2074,9 +1930,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
             <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Platform Lease Network</CardTitle>
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Platforms</CardTitle>
                 <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Monitoring and lifecycle control for active tenant instances.
+                  Agencies with their own workspace. Suspend or reactivate them here.
                 </CardDescription>
               </div>
               <div className="relative w-full sm:max-w-xs shrink-0">
@@ -2093,10 +1949,10 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
-                    <TableHead className="px-4 py-3">Platform Identity</TableHead>
-                    <TableHead className="px-4 py-3">Routing Slug</TableHead>
-                    <TableHead className="px-4 py-3">Node Owner</TableHead>
-                    <TableHead className="px-4 py-3">Instance Status</TableHead>
+                    <TableHead className="px-4 py-3">Platform</TableHead>
+                    <TableHead className="px-4 py-3">Link name</TableHead>
+                    <TableHead className="px-4 py-3">Owner</TableHead>
+                    <TableHead className="px-4 py-3">Status</TableHead>
                     <TableHead className="text-right px-4 py-3">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -2180,7 +2036,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     System Audit Trail
                   </CardTitle>
                   <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Immutable activity log of administrative actions across all instances.
+                    Important actions by admins and users, newest first.
                   </CardDescription>
                 </div>
 
@@ -2228,7 +2084,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     <TableHeader>
                       <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
                         <TableHead className="px-4 py-3">Timestamp</TableHead>
-                        <TableHead className="px-4 py-3">User Node</TableHead>
+                        <TableHead className="px-4 py-3">User</TableHead>
                         <TableHead className="px-4 py-3">Action</TableHead>
                         <TableHead className="px-4 py-3">Resource</TableHead>
                         <TableHead className="px-4 py-3 text-right">Metadata</TableHead>
@@ -2358,7 +2214,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           </div>
           <DialogFooter>
             <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProfile}>Save Changes</Button>
+            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProfile} disabled={busyAction !== null}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2389,7 +2245,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           </div>
           <DialogFooter>
             <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsAssignLandlordOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleAssignPropertyLandlord}>Save Assignment</Button>
+            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleAssignPropertyLandlord} disabled={busyAction !== null}>Save Assignment</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2399,7 +2255,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-black">Edit Property</DialogTitle>
-            <DialogDescription className="font-medium text-zinc-500">Update property details and configurations.</DialogDescription>
+            <DialogDescription className="font-medium text-zinc-500">Change the details shown to tenants and house hunters.</DialogDescription>
           </DialogHeader>
           {editingProperty && (
             <div className="grid gap-4 py-4">
@@ -2488,7 +2344,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           )}
           <DialogFooter>
             <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsEditPropertyOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProperty}>Save Changes</Button>
+            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProperty} disabled={busyAction !== null}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

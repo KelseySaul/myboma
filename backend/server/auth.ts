@@ -149,6 +149,26 @@ export const auth = betterAuth({
     // Off by default so existing (unverified) accounts are not locked out. Turn on with
     // REQUIRE_EMAIL_VERIFICATION=true once existing users have been backfilled/verified.
     requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+    // Reset links are single-use and expire after an hour (Better Auth's default).
+    resetPasswordTokenExpiresIn: 60 * 60,
+    revokeSessionsOnPasswordReset: true,
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: 'Reset your MyBoma password',
+        template: {
+          preheader: 'Use this link to choose a new password. It expires in one hour.',
+          heading: 'Reset your password',
+          paragraphs: ['We received a request to reset the password for your MyBoma account.'],
+          button: {label: 'Choose a new password', url},
+          closing: [
+            'This link works once and expires in one hour.',
+            "If you didn't ask for this, ignore this email. Your password stays the same.",
+          ],
+          footerNote: 'You received this because a password reset was requested for this email address.',
+        },
+      });
+    },
   },
   emailVerification: {
     sendOnSignUp: true,

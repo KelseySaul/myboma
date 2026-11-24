@@ -1,111 +1,47 @@
-import { useState, useEffect } from 'react';
-import { UserProfile } from '../App';
-import {
-  createPesapalRentCheckout,
-  createStripeRentCheckout,
-  initiateMpesaRentPayment,
-  markRentPaymentManual,
-  createMaintenanceRequest,
-  markNotificationRead as markNotificationReadRequest,
-  updateMyProfile,
-  uploadFile,
-} from '../lib/api';
-import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
-import { normalizeRentPayment } from '../../../shared/rentUtils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faPhone, 
-  faEnvelope, 
-  faMapMarkerAlt, 
-  faTools, 
-  faWallet, 
-  faFileAlt, 
-  faSpinner, 
-  faExclamationCircle, 
-  faCheckCircle, 
-  faClock, 
-  faUser, 
-  faHome, 
-  faBell,
-  faPlus,
-  faExternalLinkAlt,
-  faHistory,
-  faEdit,
-  faCreditCard,
-  faMobileAlt,
-  faDownload,
-  faReceipt,
-  faInfoCircle,
-  faBuilding
-} from '@fortawesome/free-solid-svg-icons';
-import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  AlertCircle,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  Download,
+  Home,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  Receipt,
+  Wrench,
+} from 'lucide-react';
+import type { UserProfile } from '../App';
+import { markAllNotificationsRead, markNotificationRead } from '../lib/api';
 import { queryKeys, useTenantDashboard } from '../lib/queries';
-
-interface MaintenanceRequest {
-  id: string;
-  tenantId: string;
-  propertyId: string;
-  landlordId: string;
-  title: string;
-  description: string;
-  status: 'pending' | 'in-progress' | 'resolved';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  createdAt: string;
-}
-
-interface RentPayment {
-  id: string;
-  tenantId: string;
-  propertyId: string;
-  landlordId: string;
-  amount: number;
-  status: 'paid' | 'pending' | 'overdue' | 'verifying';
-  dueDate: string;
-  paidAt?: string;
-  receiptUrl?: string;
-  providerReference?: string;
-  paymentProvider?: string;
-}
-
-interface Property {
-  id: string;
-  landlordId: string;
-  title: string;
-  location: string;
-  status: string;
-  tenantId?: string;
-}
-
-interface Landlord {
-  uid: string;
-  displayName: string;
-  email: string;
-  phone?: string;
-  bankName?: string;
-  bankAccountNumber?: string;
-  bankAccountName?: string;
-  rentPayoutMethod?: string;
-  mpesaSettlementPhone?: string;
-}
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  createdAt: string;
-  read: boolean;
-}
+import { normalizeRentPayment } from '../../../shared/rentUtils';
+import { Button } from '@/components/ui/button';
+import { Pagination, usePagination } from '@/components/ui/pagination';
+import PayRent from './tenant/PayRent';
+import RepairDialog from './tenant/RepairDialog';
+import {
+  dueLabel,
+  formatDate,
+  formatMoney,
+  isOverdue,
+  parseDate,
+  receiptDownload,
+  REPAIR_STATUS_LABELS,
+  PRIORITY_LABELS,
+  rentState,
+  STATUS_LABELS,
+  type MaintenanceRequest,
+  type RentPayment,
+  type TenantLandlord,
+  type TenantLease,
+  type TenantNotification,
+  type TenantProperty,
+} from './tenant/helpers';
 
 interface TenantDashboardProps {
   profile: UserProfile;
@@ -113,884 +49,688 @@ interface TenantDashboardProps {
   setActiveTab: (tab: string) => void;
 }
 
+/** Fields the tenant dashboard endpoint returns beyond the shared API type. */
+type DashboardResponse = {
+  property: TenantProperty | null;
+  landlord: TenantLandlord | null;
+  leases?: TenantLease[];
+  requests: MaintenanceRequest[];
+  payments: RentPayment[];
+  notifications: TenantNotification[];
+  repairsEnabled?: boolean;
+};
+
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  dashboard: { title: 'Home', subtitle: 'Your rent and your home at a glance.' },
+  finances: { title: 'Payments', subtitle: 'Every rent invoice and receipt.' },
+  maintenance: { title: 'Repairs', subtitle: 'Problems you have reported and their progress.' },
+  notices: { title: 'Notices', subtitle: 'Reminders and messages from your landlord.' },
+};
+
 export default function TenantDashboard({ profile, activeTab, setActiveTab }: TenantDashboardProps) {
-  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
-  const [payments, setPayments] = useState<RentPayment[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [property, setProperty] = useState<Property | null>(null);
-  const [landlord, setLandlord] = useState<Landlord | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isBankOpen, setIsBankOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [payingAction, setPayingAction] = useState<string | null>(null);
-  const [selectedPaymentForBank, setSelectedPaymentForBank] = useState<RentPayment | null>(null);
-  const [isManualPaymentOpen, setIsManualPaymentOpen] = useState(false);
-  const [manualPaymentForm, setManualPaymentForm] = useState({ receiptCode: '' });
-  const [selectedManualPaymentId, setSelectedManualPaymentId] = useState<string | null>(null);
-  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
-
-  const [tenantProfile, setTenantProfile] = useState({
-    displayName: profile.displayName || '',
-    phone: profile.phone || '',
-    address: profile.address || '',
-    avatarUrl: profile.avatarUrl || '',
-  });
-
-  // Form state
-  const [newRequest, setNewRequest] = useState({
-    title: '',
-    description: '',
-    priority: 'medium' as const,
-  });
-
-  // Polls the consolidated tenant dashboard endpoint (TanStack Query, keyed by uid) —
-  // replaces the old four Supabase Realtime channels. Query data is copied into local
-  // state because handlers below update it optimistically.
   const queryClient = useQueryClient();
-  const { data: dashboardData, error: dashboardError } = useTenantDashboard(profile.uid);
+  const { data, error, isPending } = useTenantDashboard(profile.uid);
+  const dashboard = data as unknown as DashboardResponse | undefined;
+
+  // Local copies so new repairs / read notices show instantly; the poll then confirms them.
+  const [requests, setRequests] = useState<MaintenanceRequest[]>([]);
+  const [notifications, setNotifications] = useState<TenantNotification[]>([]);
+  const [repairOpen, setRepairOpen] = useState(false);
 
   useEffect(() => {
-    if (!dashboardData) return;
-    setProperty(dashboardData.property as Property | null);
-    setLandlord(dashboardData.landlord as Landlord | null);
-    setRequests(dashboardData.requests as MaintenanceRequest[]);
-    setPayments(dashboardData.payments.map((row) => normalizeRentPayment(row as RentPayment)));
-    setNotifications(dashboardData.notifications as Notification[]);
-    setLoading(false);
-  }, [dashboardData]);
+    if (!dashboard) return;
+    setRequests(dashboard.requests ?? []);
+    setNotifications(dashboard.notifications ?? []);
+  }, [dashboard]);
 
   useEffect(() => {
-    if (!dashboardError) return;
-    console.error('Tenant dashboard fetch failed:', dashboardError);
-    setLoading(false);
-  }, [dashboardError]);
+    if (error) console.error('Tenant dashboard fetch failed:', error);
+  }, [error]);
 
-  const handleReportIssue = async () => {
-    if (!newRequest.title || !newRequest.description) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
-    try {
-      if (!property) {
-        toast.error("You are not assigned to any property.");
-        return;
-      }
-      const created = await createMaintenanceRequest({
-        propertyId: property.id,
-        landlordId: property.landlordId,
-        title: newRequest.title,
-        description: newRequest.description,
-        priority: newRequest.priority,
-      });
-
-      setRequests((prev) => [...prev, created as MaintenanceRequest]);
-      toast.success("Maintenance request submitted!");
-      setIsReportOpen(false);
-      setNewRequest({ title: '', description: '', priority: 'medium' });
-    } catch (error) {
-      console.error("Report issue error:", error);
-      toast.error("Failed to submit request");
-    }
-  };
-
-  const markNotificationRead = async (id: string) => {
-    try {
-      setNotifications((prev) => prev.map((n) => (n.id === id ? {...n, read: true} : n)));
-      await markNotificationReadRequest(id);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
-    } catch (error) {
-      console.error("Error marking notification read:", error);
-    }
-  };
-
-  const handlePayRent = async (paymentId: string, method: 'mpesa' | 'stripe' | 'pesapal') => {
-    setPayingAction(`${method}:${paymentId}`);
-    try {
-      if (method === 'pesapal') {
-        const { checkoutUrl } = await createPesapalRentCheckout({
-          rentPaymentId: paymentId,
-          successUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=success&provider=pesapal` : `${window.location.origin}/?rent_payment=success&provider=pesapal`,
-          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=cancelled&provider=pesapal` : `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
-        });
-
-        if (!checkoutUrl) throw new Error('Pesapal did not return a checkout URL.');
-        if (Capacitor.isNativePlatform()) {
-          try {
-            await Browser.open({ url: checkoutUrl, presentationStyle: 'popover' });
-          } catch (err) {
-            console.error('Browser.open failed, falling back', err);
-            // Fallback 1: system browser
-            const newWindow = window.open(checkoutUrl, '_system');
-            if (!newWindow) {
-              // Fallback 2: webview navigation
-              window.location.href = checkoutUrl;
-            }
-          }
-        } else {
-          window.location.href = checkoutUrl;
-        }
-        return;
-      }
-
-      if (method === 'stripe') {
-        const { checkoutUrl } = await createStripeRentCheckout({
-          rentPaymentId: paymentId,
-          successUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=success` : `${window.location.origin}/?rent_payment=success`,
-          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=cancelled` : `${window.location.origin}/?rent_payment=cancelled`,
-        });
-
-        if (!checkoutUrl) throw new Error('Stripe did not return a checkout URL.');
-        if (Capacitor.isNativePlatform()) {
-          await Browser.open({ url: checkoutUrl });
-        } else {
-          window.location.assign(checkoutUrl);
-        }
-        return;
-      }
-
-      const response = await initiateMpesaRentPayment({
-        rentPaymentId: paymentId,
-        phone: tenantProfile.phone || profile.phone,
-      });
-
-      toast.success(response.customerMessage || 'M-Pesa prompt sent. The receipt will appear after confirmation.');
-    } catch (error: any) {
-      toast.error(error.message || "Failed to start payment");
-    } finally {
-      setPayingAction(null);
-    }
-  };
-
-  const handleUpdateProfile = async () => {
-    try {
-      await updateMyProfile(tenantProfile);
-      toast.success("Profile updated");
-      setIsProfileOpen(false);
-    } catch (error) {
-      toast.error("Failed to update profile");
-    }
-  };
-
-  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    try {
-      const { url } = await uploadFile(file, file.name, 'avatar');
-      setTenantProfile({ ...tenantProfile, avatarUrl: url });
-      await updateMyProfile({ avatarUrl: url });
-    } catch (error) {
-      toast.error("Failed to upload profile picture");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const currentTab = activeTab || 'dashboard';
-  const todayStr = new Date().toISOString().split('T')[0];
-  const orderedPayments = [...payments].sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
-  const pendingPayments = payments.filter(p => p.status !== 'paid').sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  const overduePayments = pendingPayments.filter(p => p.status === 'overdue' || p.dueDate < todayStr);
-  const upcomingPayments = pendingPayments.filter(p => !overduePayments.some(overdue => overdue.id === p.id));
-  const nextPayment = pendingPayments[0];
-  const upcomingPayment = upcomingPayments[0];
-  const arrearsTotal = overduePayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-
-  let displayUpcoming = upcomingPayments[0];
-  if (!displayUpcoming && payments.length > 0) {
-    const latestPayment = orderedPayments[0];
-    const lastDate = new Date(latestPayment.dueDate);
-    lastDate.setMonth(lastDate.getMonth() + 1);
-    displayUpcoming = {
-      ...latestPayment,
-      id: 'projected',
-      dueDate: lastDate.toISOString().split('T')[0],
-      status: 'pending',
-    };
-  }
-
-  let upcomingDaysRemaining: number | null = null;
-  if (displayUpcoming) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const [year, month, day] = displayUpcoming.dueDate.split('-').map(Number);
-    const dueDate = new Date(year, month - 1, day);
-    const diffTime = dueDate.getTime() - today.getTime();
-    upcomingDaysRemaining = Math.round(diffTime / (1000 * 60 * 60 * 24));
-  }
-
-  const formatMoney = (amount: number | string) => `KES ${Number(amount || 0).toLocaleString()}`;
-  const formatDate = (value?: string) => value
-    ? new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-    : 'Not set';
-
-  const getReceiptText = (payment: RentPayment) => {
-    const isManual = payment.providerReference?.toLowerCase().startsWith('manual-');
-    const displayRef = isManual 
-      ? `MANUAL-${payment.providerReference?.split('-').pop()}` 
-      : (payment.providerReference || payment.id);
-
-    return [
-      'MyBoma Rent Receipt',
-      `Receipt: ${displayRef}`,
-      `Tenant: ${profile.displayName || profile.email}`,
-      `Email: ${profile.email}`,
-      `Property: ${property?.title || payment.propertyId}`,
-      `Amount: ${formatMoney(payment.amount)}`,
-      `Status: ${payment.status}`,
-      `Due Date: ${formatDate(payment.dueDate)}`,
-      `Paid At: ${formatDate(payment.paidAt)}`,
-      `Payment Method: ${payment.paymentProvider || 'Not recorded'}`,
-    ].join('\n');
-  };
-
-  const getReceiptDownloadUrl = (payment: RentPayment) => (
-    payment.receiptUrl || `data:text/plain;charset=utf-8,${encodeURIComponent(getReceiptText(payment))}`
+  const payments = useMemo(
+    () =>
+      (dashboard?.payments ?? [])
+        .map((row) => normalizeRentPayment(row) as RentPayment)
+        .sort((a, b) => parseDate(b.dueDate).getTime() - parseDate(a.dueDate).getTime()),
+    [dashboard?.payments],
   );
+  const property = dashboard?.property ?? null;
+  const landlord = dashboard?.landlord ?? null;
+  const lease = useMemo(() => {
+    const leases = dashboard?.leases ?? [];
+    return leases.find((l) => l.propertyId === property?.id && l.status === 'active') ?? leases.find((l) => l.propertyId === property?.id) ?? null;
+  }, [dashboard?.leases, property?.id]);
+  const repairsEnabled = Boolean(dashboard?.repairsEnabled);
+  const state = rentState(payments);
 
-  const getReceiptFileName = (payment: RentPayment) => {
-    const isManual = payment.providerReference?.toLowerCase().startsWith('manual-');
-    const displayRef = isManual 
-      ? `MANUAL-${payment.providerReference?.split('-').pop()}` 
-      : (payment.providerReference || payment.id);
-    return `myboma-receipt-${displayRef}.txt`;
-  };
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: queryKeys.tenantDashboard(profile.uid) });
 
-  const rentNotices: Array<Notification & { stored?: boolean }> = [
-    ...overduePayments.map(payment => ({
-      id: `rent-overdue-${payment.id}`,
-      title: 'Rent Clearance Required',
-      message: `${formatMoney(payment.amount)} was due ${formatDate(payment.dueDate)}.`,
-      type: 'rent_overdue',
-      createdAt: payment.dueDate,
-      read: false,
-      stored: false,
-    })),
-    ...(upcomingPayment ? [{
-      id: `rent-upcoming-${upcomingPayment.id}`,
-      title: 'Upcoming Rent Payment',
-      message: `${formatMoney(upcomingPayment.amount)} is due ${formatDate(upcomingPayment.dueDate)}.`,
-      type: 'rent_due',
-      createdAt: upcomingPayment.dueDate,
-      read: false,
-      stored: false,
-    }] : []),
-  ];
+  const tab = PAGE_TITLES[activeTab] ? activeTab : 'dashboard';
+  const heading = PAGE_TITLES[tab];
 
-  const noticeItems: Array<Notification & { stored?: boolean }> = [
-    ...notifications.map(note => ({ ...note, stored: true })),
-    ...rentNotices,
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  
-  let reminderAlert = null;
-  if (nextPayment) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    // Parse YYYY-MM-DD as local date to compare with today's midnight
-    const [year, month, day] = nextPayment.dueDate.split('-').map(Number);
-    const dueDate = new Date(year, month - 1, day);
-    
-    const diffTime = dueDate.getTime() - today.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      reminderAlert = { text: "Your rent is due TODAY.", type: "urgent" };
-    } else if (diffDays > 0 && diffDays <= 3) {
-      reminderAlert = { text: `Your rent will be due in ${diffDays} day${diffDays === 1 ? '' : 's'}.`, type: "warning" };
-    } else if (diffDays < 0) {
-      reminderAlert = { text: `Your rent is ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'} OVERDUE!`, type: "urgent" };
-    }
-  }
+  if (isPending && !dashboard) return <DashboardSkeleton />;
 
-  if (loading) {
+  if (error && !dashboard) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <FontAwesomeIcon icon={faSpinner} className="h-10 w-10 animate-spin text-blue-600" />
-        <p className="text-sm font-black text-zinc-500 uppercase tracking-widest">Accessing Portal...</p>
-      </div>
-    );
-  }
-
-  const pageTitle = currentTab === 'finances'
-    ? 'Finances'
-    : currentTab === 'maintenance'
-      ? 'Maintenance'
-      : currentTab === 'notices'
-        ? 'Notices'
-        : 'Rent Dashboard';
-
-  const handleManualPaymentSubmit = async () => {
-    if (!manualPaymentForm.receiptCode || !selectedManualPaymentId) {
-      toast.error("Please enter the M-Pesa receipt code.");
-      return;
-    }
-    setIsSubmittingManual(true);
-    try {
-      await markRentPaymentManual(selectedManualPaymentId, `M-Pesa Receipt: ${manualPaymentForm.receiptCode}`);
-      toast.success("Payment submitted for verification.");
-      setIsManualPaymentOpen(false);
-      setManualPaymentForm({ receiptCode: '' });
-      setSelectedManualPaymentId(null);
-    } catch (err: any) {
-      toast.error("Failed to submit payment: " + err.message);
-    } finally {
-      setIsSubmittingManual(false);
-    }
-  };
-
-  const payButtons = (payment: RentPayment) => {
-    if (landlord && landlord.rentPayoutMethod === 'mpesa') {
-      return (
-        <div className="grid grid-cols-1 gap-2">
-          <Button
-            className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-            onClick={() => {
-              setSelectedManualPaymentId(payment.id);
-              setIsManualPaymentOpen(true);
-            }}
-          >
-            <FontAwesomeIcon icon={faMobileAlt} />
-            Pay via M-Pesa (Manual)
+      <Shell title={heading.title} subtitle={heading.subtitle}>
+        <EmptyState icon={AlertCircle} title="We couldn't load your home" body="Check your connection and try again.">
+          <Button variant="outline" onClick={refresh}>
+            Try again
           </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          className="col-span-2 h-10 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-          onClick={() => handlePayRent(payment.id, 'pesapal')}
-          disabled={Boolean(payingAction)}
-        >
-          <FontAwesomeIcon icon={payingAction === `pesapal:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `pesapal:${payment.id}` ? 'animate-spin' : ''} />
-          Pesapal
-        </Button>
-        <Button
-          className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-          onClick={() => handlePayRent(payment.id, 'mpesa')}
-          disabled={Boolean(payingAction)}
-        >
-          <FontAwesomeIcon icon={payingAction === `mpesa:${payment.id}` ? faSpinner : faMobileAlt} className={payingAction === `mpesa:${payment.id}` ? 'animate-spin' : ''} />
-          Mobile Money
-        </Button>
-        <Button
-          className="h-10 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-widest gap-2"
-          onClick={() => {
-            setSelectedPaymentForBank(payment);
-            setIsBankOpen(true);
-          }}
-          disabled={Boolean(payingAction)}
-        >
-          <FontAwesomeIcon icon={faBuilding} />
-          Bank
-        </Button>
-        <Button
-          className="h-10 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black text-[9px] uppercase tracking-widest gap-2 col-span-2"
-          onClick={() => handlePayRent(payment.id, 'stripe')}
-          disabled={Boolean(payingAction)}
-        >
-          <FontAwesomeIcon icon={payingAction === `stripe:${payment.id}` ? faSpinner : faCreditCard} className={payingAction === `stripe:${payment.id}` ? 'animate-spin' : ''} />
-          Card / International
-        </Button>
-      </div>
+        </EmptyState>
+      </Shell>
     );
-  };
-
-  const paymentStatusBadge = (payment: RentPayment) => {
-    let color = 'bg-amber-500 text-white';
-    if (payment.status === 'paid') color = 'bg-emerald-500 text-white';
-    else if (payment.status === 'verifying') color = 'bg-indigo-500 text-white';
-    else if (payment.status === 'overdue') color = 'bg-rose-500 text-white';
-    
-    return (
-      <Badge className={`border-none px-3 py-1 font-black text-[9px] uppercase tracking-widest ${color}`}>
-        {payment.status}
-      </Badge>
-    );
-  };
+  }
 
   return (
-    <div className="db w-full min-w-0 pb-24 sm:pb-8 animate-in fade-in duration-300">
-      {/* ── Page Header ─────────────────────────── */}
-      <div className="p-6 md:p-8 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+    <Shell
+      title={heading.title}
+      subtitle={heading.subtitle}
+      action={
+        tab === 'maintenance' && property && repairsEnabled ? (
+          <Button onClick={() => setRepairOpen(true)}>
+            <Plus /> Report a repair
+          </Button>
+        ) : undefined
+      }
+    >
+      {tab === 'dashboard' && (
+        <HomeTab
+          profile={profile}
+          property={property}
+          landlord={landlord}
+          lease={lease}
+          payments={payments}
+          state={state}
+          repairsEnabled={repairsEnabled}
+          openRepairs={requests.filter((r) => r.status !== 'resolved').length}
+          onReportRepair={() => setRepairOpen(true)}
+          onGoTo={setActiveTab}
+          onPaid={refresh}
+        />
+      )}
+      {tab === 'finances' && <PaymentsTab payments={payments} profile={profile} property={property} landlord={landlord} onPaid={refresh} />}
+      {tab === 'maintenance' && (
+        <RepairsTab requests={requests} repairsEnabled={repairsEnabled} hasHome={Boolean(property)} onReport={() => setRepairOpen(true)} />
+      )}
+      {tab === 'notices' && (
+        <NoticesTab
+          notifications={notifications}
+          onRead={async (id) => {
+            setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+            try {
+              await markNotificationRead(id);
+              void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
+            } catch (err) {
+              console.error('Mark notification read failed:', err);
+            }
+          }}
+          onReadAll={async () => {
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            try {
+              await markAllNotificationsRead();
+              void queryClient.invalidateQueries({ queryKey: queryKeys.unreadCountAll() });
+            } catch (err: any) {
+              toast.error(err.message || 'Could not update notices.');
+            }
+          }}
+        />
+      )}
+
+      {property && (
+        <RepairDialog
+          open={repairOpen}
+          onOpenChange={setRepairOpen}
+          property={property}
+          onCreated={(request) => {
+            setRequests((prev) => [request, ...prev]);
+            refresh();
+          }}
+        />
+      )}
+    </Shell>
+  );
+}
+
+/* Layout ---------------------------------------------------------------- */
+
+function Shell({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="db w-full min-w-0 pb-24 animate-in fade-in duration-300 sm:pb-10">
+      <header className="flex flex-col gap-4 border-b border-zinc-200 bg-white px-5 py-6 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-end sm:justify-between md:px-8">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40">
-              <FontAwesomeIcon icon={faHome} className="h-2.5 w-2.5" />
-              Resident Node
-            </span>
-            <span className="text-xs text-slate-400 font-medium">·</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {profile.displayName || profile.email}
-            </span>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white md:text-3xl">{title}</h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{subtitle}</p>
+        </div>
+        {action}
+      </header>
+      <div className="mx-auto w-full max-w-6xl px-5 pt-6 md:px-8">{children}</div>
+    </div>
+  );
+}
+
+function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return <section className={`rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6 ${className}`}>{children}</section>;
+}
+
+function EmptyState({ icon: Icon, title, body, children }: { icon: typeof Home; title: string; body: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-14 text-center dark:border-zinc-700 dark:bg-zinc-900">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800">
+        <Icon className="h-5 w-5" />
+      </span>
+      <h3 className="mt-4 text-base font-semibold text-zinc-950 dark:text-white">{title}</h3>
+      <p className="mt-1 max-w-sm text-sm text-zinc-500">{body}</p>
+      {children && <div className="mt-5">{children}</div>}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  const block = 'animate-pulse rounded-2xl bg-zinc-200/70 dark:bg-zinc-800';
+  return (
+    <div className="w-full px-5 py-6 md:px-8" aria-busy="true" aria-label="Loading">
+      <div className={`${block} h-8 w-40`} />
+      <div className={`${block} mt-2 h-4 w-64`} />
+      <div className="mt-8 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className={`${block} h-64`} />
+        <div className={`${block} h-64`} />
+      </div>
+      <div className={`${block} mt-4 h-40`} />
+    </div>
+  );
+}
+
+/* Home ------------------------------------------------------------------ */
+
+function HomeTab({
+  profile,
+  property,
+  landlord,
+  lease,
+  payments,
+  state,
+  repairsEnabled,
+  openRepairs,
+  onReportRepair,
+  onGoTo,
+  onPaid,
+}: {
+  profile: UserProfile;
+  property: TenantProperty | null;
+  landlord: TenantLandlord | null;
+  lease: TenantLease | null;
+  payments: RentPayment[];
+  state: ReturnType<typeof rentState>;
+  repairsEnabled: boolean;
+  openRepairs: number;
+  onReportRepair: () => void;
+  onGoTo: (tab: string) => void;
+  onPaid: () => void;
+}) {
+  if (!property) {
+    return (
+      <EmptyState
+        icon={Home}
+        title="No home linked yet"
+        body={`When your landlord adds you to a lease using ${profile.email}, your home, rent and receipts appear here.`}
+      />
+    );
+  }
+
+  const recent = payments.slice(0, 3);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <RentCard state={state} landlord={landlord} phone={profile.phone} onPaid={onPaid} />
+
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Your home</p>
+          <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">{property.title}</h2>
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-zinc-500">
+            <MapPin className="h-4 w-4" /> {property.location}
+          </p>
+          <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-zinc-100 pt-5 text-sm dark:border-zinc-800">
+            <Detail label="Monthly rent" value={lease ? formatMoney(lease.rentAmount) : '—'} />
+            <Detail label="Deposit" value={lease && Number(lease.depositAmount) > 0 ? formatMoney(lease.depositAmount ?? 0) : '—'} />
+            <Detail label="Lease started" value={formatDate(lease?.startDate)} />
+            <Detail label="Lease ends" value={lease?.endDate ? formatDate(lease.endDate) : 'No end date'} />
+          </dl>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <Card>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Recent payments</h2>
+            {payments.length > 0 && (
+              <button type="button" onClick={() => onGoTo('finances')} className="text-sm font-medium text-zinc-500 hover:text-zinc-950 dark:hover:text-white">
+                See all
+              </button>
+            )}
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 dark:text-white capitalize">
-            {pageTitle}
-          </h1>
-          <div className="flex items-center gap-4 text-xs text-slate-400 mt-1 font-medium">
-            <span className="flex items-center gap-1.5">
-              <FontAwesomeIcon icon={faPhone} className="h-2.5 w-2.5" />
-              {profile.phone || 'No phone'}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <FontAwesomeIcon icon={faEnvelope} className="h-2.5 w-2.5" />
-              {profile.email}
-            </span>
+          {recent.length ? (
+            <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
+              {recent.map((payment) => (
+                <PaymentRow key={payment.id} payment={payment} profile={profile} property={property} compact />
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">No invoices yet. Your first one appears when your landlord's billing starts.</p>
+          )}
+        </Card>
+
+        <Card>
+          <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Your landlord</h2>
+          {landlord ? (
+            <div className="mt-3 space-y-3 text-sm">
+              <p className="font-medium text-zinc-950 dark:text-white">{landlord.displayName}</p>
+              <div className="flex flex-wrap gap-2">
+                {landlord.phone && (
+                  <a href={`tel:${landlord.phone}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                    <Phone className="h-4 w-4" /> Call
+                  </a>
+                )}
+                {landlord.email && (
+                  <a href={`mailto:${landlord.email}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-200 px-3 font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                    <Mail className="h-4 w-4" /> Email
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-500">Landlord details are not available.</p>
+          )}
+          {repairsEnabled && (
+            <div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-950 dark:text-white">Something broken?</p>
+                  <p className="text-xs text-zinc-500">
+                    {openRepairs ? `${openRepairs} repair${openRepairs === 1 ? '' : 's'} in progress` : 'Report it and track the fix here.'}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={onReportRepair}>
+                  <Wrench /> Report
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-zinc-500">{label}</dt>
+      <dd className="mt-0.5 font-semibold text-zinc-950 dark:text-white">{value}</dd>
+    </div>
+  );
+}
+
+function RentCard({
+  state,
+  landlord,
+  phone,
+  onPaid,
+}: {
+  state: ReturnType<typeof rentState>;
+  landlord: TenantLandlord | null;
+  phone?: string;
+  onPaid: () => void;
+}) {
+  if (state.kind === 'none') {
+    return (
+      <Card className="flex flex-col justify-center">
+        <Receipt className="h-6 w-6 text-zinc-400" />
+        <h2 className="mt-3 text-lg font-semibold text-zinc-950 dark:text-white">No rent invoices yet</h2>
+        <p className="mt-1 text-sm text-zinc-500">Invoices are created each month once your lease billing starts. You will get a reminder before each one is due.</p>
+      </Card>
+    );
+  }
+
+  if (state.kind === 'paid' || state.kind === 'verifying') {
+    return (
+      <Card className="flex flex-col justify-center bg-zinc-950 text-white dark:bg-zinc-900">
+        <CheckCircle2 className="h-7 w-7" />
+        <h2 className="mt-3 text-2xl font-bold">{state.kind === 'paid' ? 'You are all paid up' : 'Payment being checked'}</h2>
+        <p className="mt-1 text-sm text-zinc-300">
+          {state.kind === 'paid'
+            ? 'Nothing is due right now. We will remind you before your next rent is due.'
+            : `Your landlord is confirming your payment of ${formatMoney(state.payment.amount)}.`}
+        </p>
+      </Card>
+    );
+  }
+
+  const overdue = state.kind === 'overdue';
+  const amount = overdue ? state.total : state.payment.amount;
+  return (
+    <Card className={overdue ? 'border-rose-300 dark:border-rose-900' : ''}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{overdue ? 'Overdue rent' : 'Next rent'}</p>
+          <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-zinc-950 dark:text-white">{formatMoney(amount)}</p>
+        </div>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+            overdue
+              ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+              : state.days <= 3
+                ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
+          }`}
+        >
+          {overdue ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+          {overdue ? `${state.days} day${state.days === 1 ? '' : 's'} late` : dueLabel(state.days)}
+        </span>
+      </div>
+      <p className="mt-2 flex items-center gap-1.5 text-sm text-zinc-500">
+        <CalendarDays className="h-4 w-4" />
+        {overdue
+          ? `${state.count} unpaid invoice${state.count === 1 ? '' : 's'}, oldest due ${formatDate(state.payment.dueDate)}`
+          : `Due ${formatDate(state.payment.dueDate)}`}
+      </p>
+      {overdue && state.count > 1 && (
+        <p className="mt-1 text-xs text-zinc-500">Pay the oldest invoice first: {formatMoney(state.payment.amount)}.</p>
+      )}
+      <div className="mt-6">
+        <PayRent payment={state.payment} landlord={landlord} defaultPhone={phone} onSubmitted={onPaid} />
+      </div>
+    </Card>
+  );
+}
+
+/* Payments -------------------------------------------------------------- */
+
+function PaymentRow({
+  payment,
+  profile,
+  property,
+  compact = false,
+  action,
+}: {
+  payment: RentPayment;
+  profile: UserProfile;
+  property: TenantProperty | null;
+  compact?: boolean;
+  action?: React.ReactNode;
+}) {
+  const late = isOverdue(payment);
+  const status = late && payment.status !== 'paid' ? 'Overdue' : STATUS_LABELS[payment.status];
+  const receipt = payment.status === 'paid' ? receiptDownload(payment, profile.displayName || profile.email, profile.email, property?.title) : null;
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <p className="font-semibold tabular-nums text-zinc-950 dark:text-white">{formatMoney(payment.amount)}</p>
+        <p className="text-xs text-zinc-500">
+          Due {formatDate(payment.dueDate)}
+          {payment.paidAt ? ` · Paid ${formatDate(payment.paidAt)}` : ''}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+            payment.status === 'paid'
+              ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+              : late
+                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
+          }`}
+        >
+          {status}
+        </span>
+        {!compact && receipt && (
+          <a
+            href={receipt.href}
+            download={receipt.fileName}
+            target={receipt.fileName ? undefined : '_blank'}
+            rel="noreferrer"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800"
+          >
+            <Download className="h-3.5 w-3.5" /> Receipt
+          </a>
+        )}
+        {action}
+      </div>
+    </li>
+  );
+}
+
+function PaymentsTab({
+  payments,
+  profile,
+  property,
+  landlord,
+  onPaid,
+}: {
+  payments: RentPayment[];
+  profile: UserProfile;
+  property: TenantProperty | null;
+  landlord: TenantLandlord | null;
+  onPaid: () => void;
+}) {
+  const [filter, setFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const [paying, setPaying] = useState<RentPayment | null>(null);
+  const filtered = payments.filter((p) =>
+    filter === 'all' ? true : filter === 'paid' ? p.status === 'paid' : p.status === 'pending' || p.status === 'overdue',
+  );
+  const { pageItems, ...pagination } = usePagination(filtered, 10);
+  const paidTotal = payments.filter((p) => p.status === 'paid').reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const unpaidTotal = payments
+    .filter((p) => p.status === 'pending' || p.status === 'overdue')
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  if (!payments.length) {
+    return <EmptyState icon={Receipt} title="No payments yet" body="Your rent invoices and receipts will be listed here." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <p className="text-xs text-zinc-500">Paid so far</p>
+          <p className="mt-1 text-xl font-bold tabular-nums text-zinc-950 dark:text-white">{formatMoney(paidTotal)}</p>
+        </Card>
+        <Card>
+          <p className="text-xs text-zinc-500">Still to pay</p>
+          <p className={`mt-1 text-xl font-bold tabular-nums ${unpaidTotal > 0 ? 'text-rose-600' : 'text-zinc-950 dark:text-white'}`}>{formatMoney(unpaidTotal)}</p>
+        </Card>
+      </div>
+
+      <Card>
+        <div role="tablist" aria-label="Filter payments" className="inline-flex rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+          {(['all', 'unpaid', 'paid'] as const).map((value) => (
             <button
-              onClick={() => setIsProfileOpen(true)}
-              className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 cursor-pointer underline underline-offset-2"
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              onClick={() => setFilter(value)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium capitalize transition ${
+                filter === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 hover:text-zinc-950 dark:hover:text-white'
+              }`}
             >
-              Edit Profile
+              {value}
+            </button>
+          ))}
+        </div>
+
+        {pageItems.length ? (
+          <ul className="mt-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+            {pageItems.map((payment) => (
+              <PaymentRow
+                key={payment.id}
+                payment={payment}
+                profile={profile}
+                property={property}
+                action={
+                  payment.status === 'pending' || payment.status === 'overdue' ? (
+                    <Button size="sm" onClick={() => setPaying(payment)}>
+                      Pay
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="py-8 text-center text-sm text-zinc-500">Nothing here.</p>
+        )}
+        <Pagination {...pagination} onPageChange={pagination.setPage} label="invoices" />
+      </Card>
+
+      {paying && (
+        <Card>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs text-zinc-500">Paying invoice due {formatDate(paying.dueDate)}</p>
+              <p className="text-xl font-bold tabular-nums text-zinc-950 dark:text-white">{formatMoney(paying.amount)}</p>
+            </div>
+            <button type="button" onClick={() => setPaying(null)} className="text-sm text-zinc-500 hover:text-zinc-950 dark:hover:text-white">
+              Close
             </button>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {nextPayment && currentTab !== 'dashboard' && (
-            <Button size="sm" className="font-bold text-xs gap-1.5 rounded-xl cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-              <FontAwesomeIcon icon={faWallet} className="h-3 w-3" />
-              Pay Rent
-            </Button>
-          )}
-          {property && (
-            <Dialog open={isReportOpen} onOpenChange={setIsReportOpen}>
-              <DialogTrigger render={
-                <Button variant="outline" size="sm" className="font-semibold text-xs gap-1.5 rounded-xl cursor-pointer">
-                  <FontAwesomeIcon icon={faTools} className="h-3 w-3 text-slate-400" />
-                  Report Issue
-                </Button>
-              } />
-              <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-                <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-                  <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Maintenance Request</DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Submit a repair ticket directly to your property management.
-                  </DialogDescription>
-                </div>
-                <div className="p-6 space-y-3.5">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Issue Title</Label>
-                    <Input className="h-10" value={newRequest.title} onChange={e => setNewRequest({...newRequest, title: e.target.value})} placeholder="e.g. Leaking pipe under kitchen sink" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Urgency Level</Label>
-                    <Select value={newRequest.priority} onValueChange={(v: any) => setNewRequest({...newRequest, priority: v})}>
-                      <SelectTrigger className="h-10 rounded-xl">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="low">Low (Cosmetic / General)</SelectItem>
-                        <SelectItem value="medium">Medium (Standard Repair)</SelectItem>
-                        <SelectItem value="high">High (Urgent Attention)</SelectItem>
-                        <SelectItem value="urgent">Urgent (Emergency / Hazard)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Detailed Description</Label>
-                    <Textarea className="rounded-xl min-h-[90px] text-xs" value={newRequest.description} onChange={e => setNewRequest({...newRequest, description: e.target.value})} placeholder="Describe what happened and when you noticed it..." />
-                  </div>
-                </div>
-                <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-                  <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsReportOpen(false)}>Cancel</Button>
-                  <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleReportIssue}>Submit Ticket</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
-
-          <Dialog open={isManualPaymentOpen} onOpenChange={setIsManualPaymentOpen}>
-            <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-              <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-emerald-950/20">
-                <DialogTitle className="text-lg font-bold text-emerald-600 dark:text-emerald-400">Direct M-Pesa Settlement</DialogTitle>
-                <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Transfer rent to the landlord's registered settlement number and enter the confirmation code.
-                </DialogDescription>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 p-4 border border-slate-200/80 dark:border-slate-700 text-xs space-y-2">
-                  <p className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">Payment Instructions</p>
-                  <ol className="text-slate-600 dark:text-slate-300 space-y-1.5 list-decimal list-inside">
-                    <li>Open M-Pesa and select <strong>Send Money</strong> or <strong>Lipa na M-Pesa</strong>.</li>
-                    <li>Recipient: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{landlord?.mpesaSettlementPhone || landlord?.phone || 'Not provided'}</strong></li>
-                    <li>Enter exact rent amount and your PIN.</li>
-                    <li>Paste the confirmation receipt code below.</li>
-                  </ol>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">M-Pesa Receipt Code</Label>
-                  <Input 
-                    className="h-10 rounded-xl font-mono uppercase text-xs" 
-                    placeholder="e.g. RKJ4ABC123" 
-                    value={manualPaymentForm.receiptCode}
-                    onChange={e => setManualPaymentForm({...manualPaymentForm, receiptCode: e.target.value.toUpperCase()})}
-                  />
-                </div>
-              </div>
-              <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-                <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsManualPaymentOpen(false)}>Cancel</Button>
-                <Button 
-                  size="sm"
-                  className="font-bold text-xs rounded-xl" 
-                  onClick={handleManualPaymentSubmit}
-                  disabled={isSubmittingManual}
-                >
-                  {isSubmittingManual ? 'Submitting...' : 'Submit Receipt'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      <div className="px-6 md:px-8 mt-6">
-        {reminderAlert && currentTab === 'dashboard' && (
-          <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 text-xs font-bold ${reminderAlert.type === 'urgent' ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800' : 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800'}`}>
-            <FontAwesomeIcon icon={faExclamationCircle} className="h-4 w-4 shrink-0" />
-            {reminderAlert.text}
+          <div className="mt-4 max-w-md">
+            <PayRent
+              payment={paying}
+              landlord={landlord}
+              defaultPhone={profile.phone}
+              onSubmitted={() => {
+                setPaying(null);
+                onPaid();
+              }}
+            />
           </div>
-        )}
-
-        {currentTab === 'dashboard' && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {property && landlord ? (
-              <>
-                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rent Arrears</span>
-                      <FontAwesomeIcon icon={faExclamationCircle} className={arrearsTotal > 0 ? 'text-rose-500 h-3.5 w-3.5' : 'text-emerald-500 h-3.5 w-3.5'} />
-                    </div>
-                    <div>
-                      <p className={`text-2xl font-bold tracking-tight tabular-nums ${arrearsTotal > 0 ? 'text-rose-600' : 'text-slate-900 dark:text-white'}`}>{formatMoney(arrearsTotal)}</p>
-                      <p className="mt-1 text-xs text-slate-400 font-medium">{overduePayments.length} overdue invoice{overduePayments.length === 1 ? '' : 's'}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upcoming Due</span>
-                      <FontAwesomeIcon icon={faClock} className="text-amber-500 h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      {displayUpcoming ? (
-                        <>
-                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">{formatMoney(displayUpcoming.amount)}</p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
-                            Due {formatDate(displayUpcoming.dueDate)}
-                            <span className="mx-1.5 text-slate-300">·</span>
-                            <span className={upcomingDaysRemaining! <= 3 ? 'text-rose-600' : 'text-emerald-600'}>
-                              {upcomingDaysRemaining! < 0 ? `${Math.abs(upcomingDaysRemaining!)} days ago` : 
-                               upcomingDaysRemaining === 0 ? 'Due Today' : 
-                               `In ${upcomingDaysRemaining} day${upcomingDaysRemaining === 1 ? '' : 's'}`}
-                            </span>
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">KES 0</p>
-                          <p className="mt-1 text-xs text-emerald-600 font-semibold">Rent cleared</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 flex flex-col justify-between border border-slate-200/80 dark:border-slate-800 shadow-xs sm:col-span-2 lg:col-span-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Checkout / Invoicing</span>
-                      <FontAwesomeIcon icon={faWallet} className="text-blue-500 h-3.5 w-3.5" />
-                    </div>
-                    <div>
-                      {nextPayment ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-lg font-bold text-slate-900 dark:text-white">{formatMoney(nextPayment.amount)}</span>
-                            {paymentStatusBadge(nextPayment)}
-                          </div>
-                          {payButtons(nextPayment)}
-                        </div>
-                      ) : (
-                        <div className="py-2 text-center text-xs font-semibold text-emerald-600 flex items-center justify-center gap-1.5">
-                          <FontAwesomeIcon icon={faCheckCircle} className="h-3.5 w-3.5" />
-                          Account current & cleared
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Current Residence Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-                  <div className="grid md:grid-cols-5 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-800">
-                    <div className="md:col-span-3 p-6 space-y-4">
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Active Tenancy</span>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">{property.title}</h2>
-                        <div className="flex items-center gap-1.5 text-slate-500 mt-1 text-xs font-medium">
-                          <FontAwesomeIcon icon={faMapMarkerAlt} className="h-3 w-3 text-slate-400" />
-                          {property.location}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Billing Schedule</span>
-                          <span className="font-bold text-slate-900 dark:text-white">Monthly</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Lease Status</span>
-                          <span className="font-bold text-emerald-600">Active</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="md:col-span-2 p-6 bg-slate-50/50 dark:bg-slate-800/20 space-y-3">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Property Manager</span>
-                      <div className="space-y-2 text-xs">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs shrink-0">
-                            <FontAwesomeIcon icon={faUser} className="h-3 w-3" />
-                          </div>
-                          <span className="font-bold text-slate-900 dark:text-white">{landlord.displayName}</span>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs shrink-0">
-                            <FontAwesomeIcon icon={faPhone} className="h-3 w-3" />
-                          </div>
-                          <span className="text-slate-600 dark:text-slate-300">{landlord.phone || "No phone listed"}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="border border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col items-center justify-center text-center rounded-2xl p-12 shadow-xs">
-                <div className="h-12 w-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
-                  <FontAwesomeIcon icon={faExclamationCircle} className="h-5 w-5" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Awaiting Unit Assignment</h3>
-                <p className="text-slate-500 text-xs max-w-sm">Your resident account is not yet assigned to an active property lease.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {currentTab === 'finances' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Transaction History</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Cleared rent receipts and payment audit trail.</p>
-            </div>
-
-            {orderedPayments.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {orderedPayments.map(payment => (
-                  <div key={payment.id} className="flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 shadow-xs">
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-base font-bold text-slate-900 dark:text-white tabular-nums">{formatMoney(payment.amount)}</span>
-                        {paymentStatusBadge(payment)}
-                      </div>
-                      <div className="flex flex-col gap-1 text-xs text-slate-400 font-medium">
-                        <span>Due: {formatDate(payment.dueDate)}</span>
-                        <span>{payment.paidAt ? `Paid: ${formatDate(payment.paidAt)}` : 'Awaiting confirmation'}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      {payment.status === 'paid' ? (
-                        <a
-                          href={getReceiptDownloadUrl(payment)}
-                          download={getReceiptFileName(payment)}
-                          target={payment.receiptUrl ? '_blank' : undefined}
-                          rel={payment.receiptUrl ? 'noreferrer' : undefined}
-                          className="inline-flex w-full h-9 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
-                        >
-                          <FontAwesomeIcon icon={payment.receiptUrl ? faExternalLinkAlt : faDownload} className="h-3 w-3" />
-                          Download Receipt
-                        </a>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="w-full h-9 rounded-xl font-bold text-xs"
-                          onClick={() => setActiveTab('dashboard')}
-                        >
-                          Pay Invoice
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                <FontAwesomeIcon icon={faHistory} className="h-6 w-6 opacity-40 mb-2" />
-                <p className="font-semibold text-xs">No Payment Records Found</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {currentTab === 'maintenance' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">Maintenance Tickets</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Track reported issues and management repair status.</p>
-              </div>
-              <Button size="sm" className="font-bold text-xs gap-1.5 rounded-xl" onClick={() => setIsReportOpen(true)}>
-                <FontAwesomeIcon icon={faPlus} className="h-3 w-3" /> New Request
-              </Button>
-            </div>
-
-            {requests.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {[...requests].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(req => (
-                  <div key={req.id} className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 shadow-xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-bold text-sm text-slate-900 dark:text-white">{req.title}</h3>
-                        <Badge variant={req.status === 'resolved' ? 'success' : req.status === 'in-progress' ? 'info' : 'warning'}>
-                          {req.status}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{req.description}</p>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-                      <span className="text-slate-400 font-medium">{formatDate(req.createdAt)}</span>
-                      <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-500">{req.priority} Priority</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                <FontAwesomeIcon icon={faTools} className="h-6 w-6 opacity-40 mb-2" />
-                <p className="font-semibold text-xs">No Maintenance Requests</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {currentTab === 'notices' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Resident Notices</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Rent clearance notices and community broadcasts.</p>
-            </div>
-
-            {noticeItems.length > 0 ? (
-              <div className="space-y-2.5">
-                {noticeItems.map(note => (
-                  <div
-                    key={note.id}
-                    className={`w-full flex items-start gap-3.5 p-4 rounded-2xl border transition-all text-left ${note.read ? 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 opacity-80' : 'bg-white dark:bg-slate-900 border-blue-200 dark:border-blue-800 shadow-xs'}`}
-                    onClick={() => note.stored && !note.read && markNotificationRead(note.id)}
-                  >
-                    <div className="h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center shrink-0">
-                      <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-0.5">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">{note.title}</h4>
-                        {!note.read && <span className="h-2 w-2 rounded-full bg-blue-600" />}
-                      </div>
-                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{note.message}</p>
-                      <span className="text-[10px] text-slate-400 font-medium mt-1.5 block">
-                        {formatDate(note.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                <FontAwesomeIcon icon={faBell} className="h-6 w-6 opacity-40 mb-2" />
-                <p className="font-semibold text-xs">No Notices Recorded</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Profile Settings Dialog */}
-      <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-        <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-            <DialogTitle className="text-lg font-bold text-slate-900 dark:text-white">Resident Profile</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Update your contact credentials and notification details.
-            </DialogDescription>
-          </div>
-          <div className="p-6 space-y-3.5">
-            <div className="flex flex-col items-center gap-3">
-              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 shadow-sm">
-                <img src={tenantProfile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                  <FontAwesomeIcon icon={faEdit} className="h-4 w-4" />
-                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={isUploading} />
-                </label>
-              </div>
-              {isUploading && <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 animate-pulse">Uploading...</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Full Name</Label>
-              <Input className="h-10" value={tenantProfile.displayName} onChange={e => setTenantProfile({...tenantProfile, displayName: e.target.value})} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Phone Number</Label>
-              <Input className="h-10" value={tenantProfile.phone} onChange={e => setTenantProfile({...tenantProfile, phone: e.target.value})} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Permanent Address / Notes</Label>
-              <Textarea className="rounded-xl min-h-[70px] text-xs" value={tenantProfile.address} onChange={e => setTenantProfile({...tenantProfile, address: e.target.value})} />
-            </div>
-          </div>
-          <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" className="font-semibold text-xs rounded-xl" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
-            <Button size="sm" className="font-bold text-xs rounded-xl" onClick={handleUpdateProfile}>Save Changes</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Bank Transfer Dialog */}
-      <Dialog open={isBankOpen} onOpenChange={setIsBankOpen}>
-        <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-blue-950/20">
-            <DialogTitle className="text-lg font-bold text-blue-600 dark:text-blue-400">Direct Bank Settlement</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Transfer funds via EFT/RTGS to the landlord's designated account.
-            </DialogDescription>
-          </div>
-          <div className="p-6 space-y-3.5">
-            <div className="space-y-2.5">
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Bank Institution</span>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{landlord?.bankName || 'Equity Bank / KCB (Default)'}</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Name</span>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{landlord?.bankAccountName || landlord?.displayName || 'Property Management'}</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Account Number</span>
-                <p className="text-xs font-bold font-mono text-slate-900 dark:text-white tracking-wider">{landlord?.bankAccountNumber || '0123456789012'}</p>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 text-amber-800 dark:text-amber-300 text-xs leading-relaxed">
-              After payment, share the transaction receipt with the landlord to mark the invoice as settled.
-            </div>
-          </div>
-          <div className="px-6 py-3.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-            <Button size="sm" className="font-bold text-xs rounded-xl" onClick={() => setIsBankOpen(false)}>Done</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </Card>
+      )}
     </div>
+  );
+}
+
+/* Repairs --------------------------------------------------------------- */
+
+function RepairsTab({
+  requests,
+  repairsEnabled,
+  hasHome,
+  onReport,
+}: {
+  requests: MaintenanceRequest[];
+  repairsEnabled: boolean;
+  hasHome: boolean;
+  onReport: () => void;
+}) {
+  const sorted = useMemo(() => [...requests].sort((a, b) => parseDate(b.createdAt).getTime() - parseDate(a.createdAt).getTime()), [requests]);
+  const { pageItems, ...pagination } = usePagination(sorted, 8);
+
+  if (!sorted.length) {
+    return (
+      <EmptyState
+        icon={Wrench}
+        title="No repairs reported"
+        body={
+          !hasHome
+            ? 'Repairs can be reported once your landlord links you to a home.'
+            : repairsEnabled
+              ? 'If something in your home needs fixing, report it here and follow the progress.'
+              : 'Your landlord takes repair requests directly. Call or email them from your Home page.'
+        }
+      >
+        {hasHome && repairsEnabled && (
+          <Button onClick={onReport}>
+            <Plus /> Report a repair
+          </Button>
+        )}
+      </EmptyState>
+    );
+  }
+
+  return (
+    <Card>
+      <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+        {pageItems.map((request) => (
+          <li key={request.id} className="py-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <h3 className="font-semibold text-zinc-950 dark:text-white">{request.title}</h3>
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  request.status === 'resolved'
+                    ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+                    : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
+                }`}
+              >
+                {REPAIR_STATUS_LABELS[request.status]}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{request.description}</p>
+            <p className="mt-2 text-xs text-zinc-500">
+              Reported {formatDate(request.createdAt)} · {PRIORITY_LABELS[request.priority]}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <Pagination {...pagination} onPageChange={pagination.setPage} label="repairs" />
+    </Card>
+  );
+}
+
+/* Notices --------------------------------------------------------------- */
+
+function NoticesTab({
+  notifications,
+  onRead,
+  onReadAll,
+}: {
+  notifications: TenantNotification[];
+  onRead: (id: string) => void;
+  onReadAll: () => void;
+}) {
+  const sorted = useMemo(
+    () => [...notifications].sort((a, b) => parseDate(b.createdAt).getTime() - parseDate(a.createdAt).getTime()),
+    [notifications],
+  );
+  const { pageItems, ...pagination } = usePagination(sorted, 10);
+  const unread = notifications.filter((n) => !n.read).length;
+
+  if (!sorted.length) {
+    return <EmptyState icon={Bell} title="No notices" body="Rent reminders and messages from your landlord will show up here." />;
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-zinc-500">{unread ? `${unread} unread` : 'All read'}</p>
+        {unread > 0 && (
+          <Button variant="outline" size="sm" onClick={onReadAll}>
+            Mark all as read
+          </Button>
+        )}
+      </div>
+      <ul className="mt-2 divide-y divide-zinc-100 dark:divide-zinc-800">
+        {pageItems.map((note) => (
+          <li key={note.id}>
+            <button
+              type="button"
+              onClick={() => !note.read && onRead(note.id)}
+              className="flex w-full items-start gap-3 py-4 text-left"
+            >
+              <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${note.read ? 'bg-transparent' : 'bg-zinc-950 dark:bg-white'}`} />
+              <span className="min-w-0 flex-1">
+                <span className={`block text-sm ${note.read ? 'text-zinc-700 dark:text-zinc-300' : 'font-semibold text-zinc-950 dark:text-white'}`}>{note.title}</span>
+                <span className="mt-0.5 block text-sm text-zinc-500">{note.message}</span>
+                <span className="mt-1 block text-xs text-zinc-400">{formatDate(note.createdAt)}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <Pagination {...pagination} onPageChange={pagination.setPage} label="notices" />
+    </Card>
   );
 }

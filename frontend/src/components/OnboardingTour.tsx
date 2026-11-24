@@ -2,148 +2,38 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { UserRole } from '../App';
 
 interface Step {
-  icon: string;
   title: string;
   description: string;
   /** data-tour attribute value of the element to spotlight */
   spotlight?: string;
-  color: string;
 }
 
 const STEPS: Record<UserRole, Step[]> = {
   landlord: [
-    {
-      icon: '🏡',
-      title: 'Welcome to myboma Command Center',
-      description: "Your all-in-one property management OS. We'll walk you through the key features so you can get up and running fast.",
-      color: 'from-indigo-500 to-purple-600',
-    },
-    {
-      icon: '🏢',
-      title: 'Assets Tab',
-      description: 'This is your Assets tab — start here to manage all your properties and buildings. Click "Add Building" to group your units.',
-      spotlight: 'tab-properties',
-      color: 'from-blue-500 to-cyan-500',
-    },
-    {
-      icon: '🔑',
-      title: 'List Your Properties',
-      description: 'Use "New Asset" to add individual units, or "Bulk Add Units" to create many at once. Set price, type, and availability.',
-      spotlight: 'tab-properties',
-      color: 'from-violet-500 to-fuchsia-500',
-    },
-    {
-      icon: '👥',
-      title: 'Tenants Tab',
-      description: 'Invite tenants by email from the Tenants tab. Once they sign up, assign them to any available property unit.',
-      spotlight: 'tab-tenants',
-      color: 'from-emerald-500 to-teal-500',
-    },
-    {
-      icon: '💰',
-      title: 'Finances Tab',
-      description: 'Record rent payments, log expenses, and get a real-time P&L overview with charts. Export to CSV anytime.',
-      spotlight: 'tab-finances',
-      color: 'from-amber-500 to-orange-500',
-    },
-    {
-      icon: '🔧',
-      title: 'Maintenance Tab',
-      description: "Tenant requests land here. Update statuses in real time so your tenants always know what's happening.",
-      spotlight: 'tab-maintenance',
-      color: 'from-rose-500 to-pink-500',
-    },
-    {
-      icon: '🔔',
-      title: 'Notifications Hub',
-      description: 'Stay updated in real time on booking requests, maintenance alerts, and rent ledger updates.',
-      spotlight: 'tab-automations',
-      color: 'from-purple-500 to-indigo-600',
-    },
+    { title: 'Welcome to MyBoma', description: "Here's a quick look at where everything is. It takes under a minute, and you can skip it." },
+    { title: 'Your properties', description: 'Add each house or unit here with its rent and photos. Mark a unit as available to show it on the public listings.', spotlight: 'tab-properties' },
+    { title: 'Tenants', description: 'Invite a tenant by email. They get a secure link to set up their account, and their lease and invoices appear automatically.', spotlight: 'tab-tenants' },
+    { title: 'Rent and money', description: 'See who has paid, record cash payments and expenses, and download your records.', spotlight: 'tab-finances' },
+    { title: 'Repairs', description: 'Repair requests from tenants appear here. Update the status so tenants know what is happening.', spotlight: 'tab-maintenance' },
+    { title: 'Reminders', description: 'Rent reminders go out automatically from three days before the due date. Adjust them here.', spotlight: 'tab-automations' },
   ],
   tenant: [
-    {
-      icon: '🏠',
-      title: 'Welcome to myboma',
-      description: 'Your personal rental dashboard. Manage your rent, maintenance requests, and stay on top of everything from one place.',
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
-      icon: '💳',
-      title: 'View & Pay Rent',
-      description: 'See your current rent status, upcoming due dates, and payment history. Pay via M-Pesa directly from the app.',
-      spotlight: 'tab-rent',
-      color: 'from-blue-500 to-indigo-600',
-    },
-    {
-      icon: '🔧',
-      title: 'Submit Maintenance Requests',
-      description: 'Something broken? Submit a request from the Maintenance tab — your landlord gets notified immediately.',
-      spotlight: 'tab-maintenance',
-      color: 'from-amber-500 to-orange-500',
-    },
-    {
-      icon: '📬',
-      title: 'Stay Updated',
-      description: 'Check Notifications for messages from your landlord, payment confirmations, and reminders. Never miss a thing.',
-      spotlight: 'tab-notifications',
-      color: 'from-violet-500 to-purple-600',
-    },
+    { title: 'Welcome to MyBoma', description: 'This is where you see your rent, pay it and report repairs.' },
+    { title: 'Rent', description: 'Check what you owe and when it is due. Pay by M-Pesa or card, and every payment gets a receipt.', spotlight: 'tab-rent' },
+    { title: 'Repairs', description: 'Report a problem in your house and follow it until it is fixed. Your landlord is notified straight away.', spotlight: 'tab-maintenance' },
+    { title: 'Notifications', description: 'Reminders, receipts and messages from your landlord appear here.', spotlight: 'tab-notifications' },
   ],
   hunter: [
-    {
-      icon: '🔍',
-      title: 'Welcome to myboma',
-      description: 'Discover verified properties across Kenya. Browse listings, schedule viewings, and book BnB stays — all in one place.',
-      color: 'from-indigo-500 to-blue-600',
-    },
-    {
-      icon: '🗺️',
-      title: 'Browse Listings',
-      description: 'Use the search bar and filters to find properties by location, price, and type. Each card shows photos, amenities, and price.',
-      color: 'from-cyan-500 to-teal-500',
-    },
-    {
-      icon: '📅',
-      title: 'Book a BnB Stay',
-      description: 'Found a short-term listing? Click it to view details, pick your dates, and book instantly. Confirmation is sent immediately.',
-      color: 'from-rose-500 to-pink-500',
-    },
-    {
-      icon: '📩',
-      title: 'Contact Landlords',
-      description: 'Interested in a long-term rental? Use the contact option on any listing to reach the property owner directly.',
-      color: 'from-amber-500 to-orange-500',
-    },
+    { title: 'Welcome to MyBoma', description: 'Browse homes, offices and short stays across Kenya, and contact landlords directly.' },
+    { title: 'Search', description: 'Search by area or building name, and filter by type. Tap any listing to see photos and details.' },
+    { title: 'Send an enquiry', description: 'On a listing, enter your details and send an enquiry. The landlord gets your contact details and gets back to you about availability.' },
+    { title: 'Stay safe', description: 'View a house in person before paying anything, and never pay a deposit to someone you have not met.' },
   ],
   admin: [
-    {
-      icon: '🛡️',
-      title: 'Welcome, Super Admin',
-      description: 'You have full platform access. Manage all users, monitor activity, and control platform-wide settings from this dashboard.',
-      color: 'from-slate-800 to-zinc-900',
-    },
-    {
-      icon: '👤',
-      title: 'User Management',
-      description: 'View all registered users, search by role or email, edit profiles, and impersonate any account for support.',
-      spotlight: 'tab-users',
-      color: 'from-blue-600 to-indigo-700',
-    },
-    {
-      icon: '📊',
-      title: 'Platform Analytics',
-      description: 'Monitor key metrics — total properties, active tenants, revenue flow, and system health.',
-      spotlight: 'tab-analytics',
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
-      icon: '🔔',
-      title: 'Audit & Activity Log',
-      description: 'All user actions are logged. Review the audit trail for any account to trace changes, logins, and admin actions.',
-      spotlight: 'tab-activity',
-      color: 'from-amber-500 to-orange-500',
-    },
+    { title: 'Welcome', description: 'You can manage users, properties and platform settings from here.' },
+    { title: 'Users', description: 'Find any account, change roles, invite people and suspend accounts. You can also view the app as a user to help them.', spotlight: 'tab-users' },
+    { title: 'Overview', description: 'Key numbers for the platform: users, properties, leases and rent collected.', spotlight: 'tab-analytics' },
+    { title: 'Activity log', description: 'Every admin action is recorded. Use it to see who changed what and when.', spotlight: 'tab-activity' },
   ],
 };
 
@@ -257,7 +147,7 @@ export default function OnboardingTour({ role, onComplete }: Props) {
 
   return (
     <div
-      className="fixed bottom-6 right-6 z-50 w-full max-w-[340px] pointer-events-none"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 pointer-events-none sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[360px]"
       role="dialog"
       aria-label="Onboarding tour"
       style={{ animation: exiting ? 'tourFadeOut 0.35s ease forwards' : 'tourFadeIn 0.3s ease both' }}
@@ -271,7 +161,7 @@ export default function OnboardingTour({ role, onComplete }: Props) {
             left: spotlightRect.left,
             width: spotlightRect.width,
             height: spotlightRect.height,
-            boxShadow: '0 0 0 2px rgba(99,102,241,1), 0 0 20px 4px rgba(99,102,241,0.3)',
+            boxShadow: '0 0 0 2px rgba(9,9,11,0.9), 0 0 20px 4px rgba(9,9,11,0.12)',
             animation: 'tourPulseRing 1.8s ease-in-out infinite',
           }}
         />
@@ -289,92 +179,52 @@ export default function OnboardingTour({ role, onComplete }: Props) {
               : 'tourCardInBottom 0.35s cubic-bezier(0.34,1.4,0.64,1) both',
         }}
       >
-        <div className="bg-white rounded-[1.75rem] overflow-hidden shadow-2xl">
-          {/* Gradient header */}
-          <div className={`bg-gradient-to-br ${current.color} px-5 pt-5 pb-8 relative overflow-hidden`}>
-            <div className="absolute top-[-40%] right-[-20%] w-36 h-36 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-
-            {/* Skip */}
-            <button
-              onClick={(e) => { e.stopPropagation(); finish(); }}
-              className="absolute top-3.5 right-4 text-white/60 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors"
-            >
-              Skip ✕
-            </button>
-
-            {/* Progress dots */}
-            <div className="flex items-center gap-1.5 mb-4">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_24px_64px_-12px_rgba(9,9,11,0.3)] dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between px-5 pt-5">
+            <div className="flex items-center gap-1.5" aria-label={`Step ${step + 1} of ${steps.length}`}>
               {steps.map((_, i) => (
                 <button
                   key={i}
                   onClick={(e) => { e.stopPropagation(); if (i <= step) goTo(i); }}
-                  className="rounded-full transition-all duration-300"
-                  style={{
-                    width: i === step ? 20 : 6,
-                    height: 6,
-                    background: i === step ? 'rgba(255,255,255,0.95)' : i < step ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',
-                  }}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-5 bg-zinc-950 dark:bg-white' : i < step ? 'w-1.5 bg-zinc-400' : 'w-1.5 bg-zinc-200 dark:bg-zinc-700'}`}
                   aria-label={`Go to step ${i + 1}`}
                 />
               ))}
             </div>
-
-            <div className="text-4xl mb-2 select-none" role="img" aria-hidden>{current.icon}</div>
-            <h2
-              key={`t${step}`}
-              className="text-white font-black text-xl leading-snug tracking-tight"
-              style={{ animation: 'tourContentIn 0.25s ease both' }}
+            <button
+              onClick={(e) => { e.stopPropagation(); finish(); }}
+              className="rounded-lg px-2 py-1 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-white"
             >
-              {current.title}
-            </h2>
+              Skip
+            </button>
           </div>
 
-          {/* Body */}
-          <div className="px-5 pt-4 pb-5">
-            <p
-              key={`d${step}`}
-              className="text-zinc-600 text-sm leading-relaxed"
-              style={{ animation: 'tourContentIn 0.3s 0.04s ease both' }}
-            >
+          <div className="px-5 pb-5 pt-4">
+            <h2 key={`t${step}`} className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-white" style={{ animation: 'tourContentIn 0.25s ease both' }}>
+              {current.title}
+            </h2>
+            <p key={`d${step}`} className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300" style={{ animation: 'tourContentIn 0.3s 0.04s ease both' }}>
               {current.description}
             </p>
 
-            {current.spotlight && (
-              <div
-                key={`s${step}`}
-                className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100"
-                style={{ animation: 'tourContentIn 0.3s 0.08s ease both' }}
-              >
-                <span className="text-indigo-500 text-sm">👆</span>
-                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                  Highlighted above
-                </span>
-              </div>
-            )}
-
-            {/* Controls */}
-            <div className="flex items-center justify-between mt-4">
+            <div className="mt-5 flex items-center justify-between gap-3">
               <button
                 onClick={(e) => { e.stopPropagation(); prev(); }}
                 disabled={step === 0}
-                className="text-[11px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-700 disabled:opacity-0 transition-all"
+                className="h-10 rounded-xl px-3 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:invisible dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
-                ← Back
+                Back
               </button>
-              <span className="text-[10px] font-bold text-zinc-400">{step + 1} / {steps.length}</span>
+              <span className="text-xs tabular-nums text-zinc-400">{step + 1} of {steps.length}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); next(); }}
-                className={`px-5 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest text-white active:scale-95 shadow-md bg-gradient-to-r ${current.color} transition-transform`}
+                className="h-10 rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98] dark:bg-white dark:text-zinc-950"
               >
-                {isLast ? 'Get Started →' : 'Next →'}
+                {isLast ? 'Done' : 'Next'}
               </button>
             </div>
           </div>
         </div>
-
-        <p className="text-center text-white/40 text-[9px] font-bold uppercase tracking-widest mt-3">
-          Tap backdrop · Arrow keys · Esc to skip
-        </p>
       </div>
 
       <style>{`
@@ -383,8 +233,8 @@ export default function OnboardingTour({ role, onComplete }: Props) {
         @keyframes tourCardInBottom { from { opacity:0; transform:translateY(20px) scale(0.96) } to { opacity:1; transform:translateY(0) scale(1) } }
         @keyframes tourContentIn { from { opacity:0; transform:translateY(5px) } to { opacity:1; transform:translateY(0) } }
         @keyframes tourPulseRing {
-          0%,100% { box-shadow: 0 0 0 2px rgba(99,102,241,1), 0 0 12px 2px rgba(99,102,241,0.25); }
-          50%      { box-shadow: 0 0 0 3px rgba(99,102,241,1),   0 0 24px 6px rgba(99,102,241,0.4); }
+          0%,100% { box-shadow: 0 0 0 2px rgba(9,9,11,0.9), 0 0 12px 2px rgba(9,9,11,0.10); }
+          50%      { box-shadow: 0 0 0 3px rgba(9,9,11,0.9),   0 0 24px 6px rgba(9,9,11,0.06); }
         }
       `}</style>
     </div>

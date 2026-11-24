@@ -3,8 +3,9 @@ import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
 import {canCreateMaintenanceRequest} from '../../db/authz.ts';
-import {toActor} from '../types.ts';
-import {asyncHandler, getValidatedBody, requireAuth, validateBody} from '../http/middleware.ts';
+import {toActor, type UserProfileRecord} from '../types.ts';
+import {asyncHandler, getValidatedBody, hasActiveSubscription, requireAuth, validateBody} from '../http/middleware.ts';
+import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
 
 const createMaintenanceRequestSchema = z
   .object({
@@ -80,7 +81,19 @@ export function registerTenantRoutes(bffRouter: Router) {
         orderBy: desc(schema.leases.startDate),
       });
 
-      res.json({property, properties: tenantProperties, leases, landlord, requests, payments, notifications});
+      // Repairs are part of the unit owner's plan (Pro / Pro Plus); platform admins always have them.
+      let repairsEnabled = false;
+      if (property) {
+        const owner = await db.query.users.findFirst({where: eq(schema.users.uid, property.landlordId)});
+        const tier = parseSubscriptionPlan(owner?.subscriptionPlan)?.tier;
+        repairsEnabled =
+          Boolean(owner?.isAdmin || owner?.isSuperAdmin) ||
+          (Boolean(owner) &&
+            hasActiveSubscription(owner as unknown as UserProfileRecord) &&
+            Boolean(tier && SUBSCRIPTION_TIERS[tier].features.maintenanceHub));
+      }
+
+      res.json({property, properties: tenantProperties, leases, landlord, requests, payments, notifications, repairsEnabled});
     }),
   );
 

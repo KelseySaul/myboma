@@ -11,7 +11,7 @@ import {toNodeHandler} from 'better-auth/node';
 import cron from 'node-cron';
 import {auth} from './server/auth.ts';
 import {PORT, deploymentOrigins, isProduction, nonSecretConfigStatus} from './server/http/config.ts';
-import {authLimiter, credentialLimiter, publicLimiter, webhookLimiter} from './server/http/middleware.ts';
+import {apiLimiter, authLimiter, credentialLimiter, webhookLimiter, writeLimiter} from './server/http/middleware.ts';
 import {runDailyJobs} from './server/services/dailyJobs.ts';
 import {staticCacheControl} from './server/http/cache.ts';
 import {stripeWebhookHandler} from './server/services/payments.ts';
@@ -64,8 +64,10 @@ app.use(
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+        // cdn.onesignal.com: the web push SDK, also importScripts()-ed by /OneSignalSDKWorker.js,
+        // which is served with this same policy.
+        scriptSrc: ["'self'", 'https://cdn.onesignal.com'],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://onesignal.com'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
         connectSrc: [
           "'self'",
@@ -76,6 +78,8 @@ app.use(
           'https://api.safaricom.co.ke',
           'https://cybqa.pesapal.com',
           'https://pay.pesapal.com',
+          'https://onesignal.com',
+          'https://api.onesignal.com',
         ].filter(Boolean),
       },
     },
@@ -97,26 +101,29 @@ app.use(
   }),
 );
 
+// Baseline for every /api request (per session, or per IP when signed out). Provider
+// webhooks are exempt here and keep their own webhookLimiter.
+app.use('/api', apiLimiter);
+
 // Better-Auth parses its own request body, so it's mounted before express.json() too.
 // Credential endpoints get a tight brute-force budget before anything else runs.
 app.use(
   ['/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/forget-password', '/api/auth/reset-password', '/api/auth/send-verification-email'],
   credentialLimiter,
 );
-app.all('/api/auth/*', publicLimiter, toNodeHandler(auth));
+app.all('/api/auth/*', toNodeHandler(auth));
 
 // Stripe requires the raw body for signature verification, so this route stays before express.json().
 app.post('/api/webhooks/stripe', webhookLimiter, express.raw({type: 'application/json'}), stripeWebhookHandler);
 
 app.use(express.json({limit: '256kb'}));
-app.use('/api', publicLimiter);
 
 // health, cron, legal, public listings, public files, waitlist, M-Pesa/Pesapal webhooks
 registerPublicRoutes(app);
 registerInviteRoutes(app);
 
 const bffRouter = express.Router();
-bffRouter.use(authLimiter);
+bffRouter.use(authLimiter, writeLimiter);
 
 // BFF routes, shared by the web and mobile clients. Registration is grouped by area; no two
 // routes in different groups match the same method + path, so group order is not significant.

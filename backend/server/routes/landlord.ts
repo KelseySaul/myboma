@@ -198,7 +198,37 @@ export function registerLandlordRoutes(bffRouter: Router) {
         }),
       ]);
 
-      res.json({buildings, properties, requests, payments, bookings, expenses, invitations, notifications});
+      // Lease terms for the tenant list, and which invitees have already created an account
+      // (an invitation without an account is still "waiting for the tenant to accept").
+      const invitedEmails = invitations.map((i) => i.email.toLowerCase());
+      const [leases, invitedAccounts] = await Promise.all([
+        propertyIds.length
+          ? db.query.leases.findMany({
+              where: and(inArray(schema.leases.propertyId, propertyIds), eq(schema.leases.status, 'active')),
+              columns: {id: true, propertyId: true, tenantEmail: true, startDate: true, endDate: true, rentAmount: true, dueDay: true, depositAmount: true},
+            })
+          : Promise.resolve([]),
+        invitedEmails.length
+          ? db
+              .select({email: schema.users.email})
+              .from(schema.users)
+              .where(inArray(sql`lower(${schema.users.email})`, invitedEmails))
+          : Promise.resolve([] as {email: string}[]),
+      ]);
+      const registeredEmails = invitedAccounts.map((u) => u.email.toLowerCase());
+
+      res.json({
+        buildings,
+        properties,
+        requests,
+        payments,
+        bookings,
+        expenses,
+        invitations,
+        notifications,
+        leases: leases.map((l) => ({...l, rentAmount: Number(l.rentAmount), depositAmount: Number(l.depositAmount)})),
+        registeredEmails,
+      });
     }),
   );
 

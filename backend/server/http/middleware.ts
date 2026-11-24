@@ -3,10 +3,9 @@ import {isRlsEnabled} from '../../db/requestContext.ts';
 import {runInRlsScope} from '../../db/rlsScope.ts';
 import {eq} from 'drizzle-orm';
 import {type NextFunction, type Request, type Response} from 'express';
-import rateLimit from 'express-rate-limit';
+import {makeLimiter as limiter} from './rateLimits.ts';
 import {fromNodeHeaders} from 'better-auth/node';
 import {type ZodSchema} from 'zod';
-import {sharedRateLimitStore} from '../rateLimitStore.ts';
 import {auth} from '../auth.ts';
 import {db, schema} from '../../db/client.ts';
 import {isSuperAdminEmail} from '../../config/superAdmin.ts';
@@ -221,68 +220,116 @@ export const requireSuperAdmin = asyncHandler(async (req, res, next) => {
 
 export const getValidatedBody = <T>(req: AuthenticatedRequest) => req.validatedBody as T;
 
-export const publicLimiter = rateLimit({
-  store: sharedRateLimitStore('publicLimiter'),
-  windowMs: 15 * 60 * 1000,
+/*
+ * Rate limits. Every /api request passes apiLimiter first; the rest stack on top.
+ * "session" keys use a hash of the session cookie or bearer token (falls back to IP when
+ * signed out), so people on one shared network/NAT do not throttle each other.
+ *
+ * | Limiter            | Applies to                                         | Limit             | Key          |
+ * |--------------------|----------------------------------------------------|-------------------|--------------|
+ * | apiLimiter         | every /api request (webhooks excluded)             | 300 / min         | session / IP |
+ * | credentialLimiter  | sign-in, sign-up, password reset, verify email     | 10 failed / 5 min | IP           |
+ * | publicLimiter      | public reads: listings, legal, files               | 600 / 15 min      | IP           |
+ * | writeLimiter       | every signed-in POST/PUT/PATCH/DELETE              | 60 / min          | session      |
+ * | uploadLimiter      | POST /uploads                                      | 20 / 10 min       | session      |
+ * | paymentLimiter     | rent + subscription checkout, STK push             | 12 / min          | session      |
+ * | inviteSendLimiter  | inviting / provisioning users and platforms        | 20 / hour         | session      |
+ * | enquiryLimiter     | POST /api/public/enquiries (2 emails each)         | 10 / hour         | IP           |
+ * | waitlistLimiter    | waitlist join / unsubscribe                        | 20 / 15 min       | IP           |
+ * | cronLimiter        | /api/cron/daily (also needs CRON_SECRET)           | 10 / hour         | IP           |
+ * | webhookLimiter     | M-Pesa, Pesapal, Stripe callbacks                  | 180 / min         | IP           |
+ *
+ * Better Auth also applies its own short-window limits on /api/auth (e.g. 3 sign-ins per
+ * 10 s per IP). Blocked requests get 429 {error} plus Retry-After / RateLimit headers.
+ */
+
+const MINUTE = 60 * 1000;
+
+/** Payment providers retry failed callbacks, but never let our own limiter drop them. */
+const isProviderCallback = (req: Request) => /^\/(webhooks\/|payments\/pesapal\/callback)/.test(req.path);
+
+export const apiLimiter = limiter('apiLimiter', {
+  windowMs: MINUTE,
   limit: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many requests, please try again later.'},
+  key: 'session',
+  error: 'Too many requests. Please slow down and try again in a minute.',
+  skip: isProviderCallback,
 });
 
-// NOTE: these limiters use the in-memory store, which is per serverless instance. For a
-// global limit, back them with a shared store (e.g. Upstash Redis) or Vercel WAF rules.
-export const credentialLimiter = rateLimit({
-  store: sharedRateLimitStore('credentialLimiter'),
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many sign-in attempts. Please wait and try again.'},
+export const credentialLimiter = limiter('credentialLimiter', {
+  windowMs: 5 * MINUTE,
+  limit: 10,
+  // Successful sign-ins do not count, so only repeated wrong passwords get blocked.
+  skipSuccessfulRequests: true,
+  error: 'Too many sign-in attempts. Please wait 5 minutes and try again.',
 });
 
-export const authLimiter = rateLimit({
-  store: sharedRateLimitStore('authLimiter'),
-  windowMs: 5 * 60 * 1000,
+export const publicLimiter = limiter('publicLimiter', {
+  windowMs: 15 * MINUTE,
   limit: 600,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'API rate limit exceeded, please try again later.'},
+  error: 'Too many requests, please try again later.',
 });
 
-export const paymentLimiter = rateLimit({
-  store: sharedRateLimitStore('paymentLimiter'),
-  windowMs: 60 * 1000,
-  limit: 12,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many payment attempts. Please wait and try again.'},
+/** Signed-in reads. Kept for the BFF router; apiLimiter already bounds overall volume. */
+export const authLimiter = limiter('authLimiter', {
+  windowMs: 5 * MINUTE,
+  limit: 600,
+  key: 'session',
+  error: 'Too many requests. Please slow down and try again shortly.',
 });
 
-export const webhookLimiter = rateLimit({
-  store: sharedRateLimitStore('webhookLimiter'),
-  windowMs: 60 * 1000,
-  limit: 180,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Webhook rate limit exceeded.'},
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export const writeLimiter = limiter('writeLimiter', {
+  windowMs: MINUTE,
+  limit: 60,
+  key: 'session',
+  error: 'You are making changes too quickly. Please wait a moment and try again.',
+  skip: (req) => !WRITE_METHODS.has(req.method),
 });
 
-export const waitlistLimiter = rateLimit({
-  store: sharedRateLimitStore('waitlistLimiter'),
-  windowMs: 15 * 60 * 1000,
+export const uploadLimiter = limiter('uploadLimiter', {
+  windowMs: 10 * MINUTE,
   limit: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many waitlist requests. Please wait and try again.'},
+  key: 'session',
+  error: 'Too many uploads. Please wait a few minutes and try again.',
+});
+
+export const paymentLimiter = limiter('paymentLimiter', {
+  windowMs: MINUTE,
+  limit: 12,
+  key: 'session',
+  error: 'Too many payment attempts. Please wait and try again.',
+});
+
+export const inviteSendLimiter = limiter('inviteSendLimiter', {
+  windowMs: 60 * MINUTE,
+  limit: 20,
+  key: 'session',
+  error: 'Too many invitations sent. Please try again in an hour.',
+});
+
+export const webhookLimiter = limiter('webhookLimiter', {
+  windowMs: MINUTE,
+  limit: 180,
+  error: 'Webhook rate limit exceeded.',
+});
+
+export const waitlistLimiter = limiter('waitlistLimiter', {
+  windowMs: 15 * MINUTE,
+  limit: 20,
+  error: 'Too many waitlist requests. Please wait and try again.',
 });
 
 /** Public enquiries cause two email deliveries, so keep a tighter independent limit. */
-export const enquiryLimiter = rateLimit({
-  store: sharedRateLimitStore('enquiryLimiter'),
-  windowMs: 60 * 60 * 1000,
+export const enquiryLimiter = limiter('enquiryLimiter', {
+  windowMs: 60 * MINUTE,
   limit: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many enquiries from this connection. Please try again later.'},
+  error: 'Too many enquiries from this connection. Please try again later.',
+});
+
+export const cronLimiter = limiter('cronLimiter', {
+  windowMs: 60 * MINUTE,
+  limit: 10,
+  error: 'Too many cron requests.',
 });

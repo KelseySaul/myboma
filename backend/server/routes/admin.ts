@@ -1,4 +1,4 @@
-import {and, desc, eq, inArray, isNull, or, sql} from 'drizzle-orm';
+import {and, desc, eq, inArray, isNull, like, or, sql} from 'drizzle-orm';
 import {withSystemAccess} from '../../db/requestContext.ts';
 import {type Router} from 'express';
 import {z} from 'zod';
@@ -10,6 +10,7 @@ import {toActor} from '../types.ts';
 import {
   asyncHandler,
   getValidatedBody,
+  inviteSendLimiter,
   isAgencyAdmin,
   recordAudit,
   requireAdmin,
@@ -18,6 +19,10 @@ import {
   validateBody,
 } from '../http/middleware.ts';
 import {emailSchema} from '../http/schemas.ts';
+import {createAndSendInvite} from '../inviteService.ts';
+import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload, type InvitePayload} from '../invitePolicy.ts';
+
+const resendInviteSchema = z.object({email: emailSchema}).strict();
 
 const updateRoleSchema = z.object({role: z.enum(['landlord', 'tenant', 'hunter', 'admin', 'superadmin'])}).strict();
 
@@ -96,6 +101,179 @@ export function registerAdminRoutes(bffRouter: Router) {
       const platforms = isSuperAdmin(actor) ? await db.query.platforms.findMany() : [];
 
       res.json({users, properties, invitations, payments, buildings, platforms});
+    }),
+  );
+
+  /**
+   * Re-sends an invitation email with a fresh 7-day link (the old link stops working).
+   * Keeps the settings stored with the latest link when there is one.
+   */
+  bffRouter.post(
+    '/admin/invitations/resend',
+    requireAuth,
+    requireAdmin,
+    validateBody(resendInviteSchema),
+    asyncHandler(async (req, res) => {
+      const actor = toActor(req.profile!);
+      const {email} = getValidatedBody<z.infer<typeof resendInviteSchema>>(req);
+      const target = email.trim().toLowerCase();
+      const invitation = await db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`});
+      if (!invitation) {
+        res.status(404).json({error: 'No pending invitation for that email.'});
+        return;
+      }
+      const allowed = isSuperAdmin(actor) || invitation.landlordId === actor.id || (actor.platformId && invitation.platformId === actor.platformId);
+      if (!allowed) {
+        res.status(403).json({error: 'You can only resend invitations you manage.'});
+        return;
+      }
+      const existingAccount = await db.query.users.findFirst({where: sql`lower(${schema.users.email}) = ${target}`, columns: {uid: true}});
+      if (existingAccount) {
+        res.status(409).json({error: 'This person has already set up their account.'});
+        return;
+      }
+
+      const tokens = await withSystemAccess(() =>
+        db
+          .select({value: schema.authVerification.value})
+          .from(schema.authVerification)
+          .where(like(schema.authVerification.identifier, `${INVITE_IDENTIFIER_PREFIX}%`)),
+      );
+      const previous = tokens.map((row) => parseInvitePayload(row.value)).find((payload) => payload?.email === target);
+
+      try {
+        const {expiresAt} = await createAndSendInvite({
+          email: target,
+          role: previous?.role ?? (invitation.role as InvitePayload['role']),
+          platformId: previous?.platformId ?? invitation.platformId ?? null,
+          landlordId: previous?.landlordId ?? invitation.landlordId ?? null,
+          invitedBy: actor.id,
+          invitedByName: req.profile!.displayName || 'MyBoma',
+          displayName: previous?.displayName ?? invitation.displayName ?? null,
+          phone: previous?.phone ?? invitation.phone ?? null,
+          profile: previous?.profile ?? {},
+        });
+        await recordAudit(req.profile!, 'INVITE_RESENT', 'invitation', target);
+        res.json({ok: true, expiresAt});
+      } catch (err) {
+        console.error('[Invite] Resend failed:', err);
+        res.status(502).json({error: 'The email could not be sent. Try again shortly.'});
+      }
+    }),
+  );
+
+  /**
+   * Real numbers for the admin overview: counts, money this month vs last month, 6-month
+   * trends and recent activity. Same visibility rules as /admin/dashboard above.
+   */
+  bffRouter.get(
+    '/admin/overview',
+    requireAuth,
+    requireAdmin,
+    asyncHandler(async (req, res) => {
+      const actor = toActor(req.profile!);
+      const superAdmin = isSuperAdmin(actor);
+      const platformIdParam = typeof req.query.platformId === 'string' ? req.query.platformId : undefined;
+      const filterId = superAdmin ? (platformIdParam && platformIdParam !== 'all' ? platformIdParam : null) : actor.platformId || 'none';
+      const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
+      const scoped = (landlordCol: any, platformCol: any) =>
+        superAdmin ? platformWhere(platformCol) : and(platformWhere(platformCol), eq(landlordCol, actor.id));
+      const invitedByMe = superAdmin
+        ? undefined
+        : or(
+            eq(schema.users.uid, actor.id),
+            sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${schema.invitations.landlordId} = ${actor.id})`,
+          );
+      const userWhere = invitedByMe ? and(platformWhere(schema.users.platformId), invitedByMe) : platformWhere(schema.users.platformId);
+      const count = sql<number>`count(*)::int`;
+
+      const [usersByRole, invitesPending, propertyRows, moneyRows, collectionsByMonth, signupsByMonth, maintenanceRows, activity] =
+        await Promise.all([
+          db.select({role: schema.users.role, n: count}).from(schema.users).where(userWhere).groupBy(schema.users.role),
+          db
+            .select({n: count})
+            .from(schema.invitations)
+            .where(
+              and(
+                scoped(schema.invitations.landlordId, schema.invitations.platformId),
+                sql`lower(${schema.invitations.email}) NOT IN (SELECT lower(${schema.users.email}) FROM ${schema.users})`,
+              ),
+            ),
+          db
+            .select({type: schema.properties.type, status: schema.properties.status, n: count})
+            .from(schema.properties)
+            .where(scoped(schema.properties.landlordId, schema.properties.platformId))
+            .groupBy(schema.properties.type, schema.properties.status),
+          db
+            .select({
+              collectedThisMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now())), 0)`,
+              collectedLastMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '1 month' and ${schema.rentPayments.paidAt} < date_trunc('month', now())), 0)`,
+              overdueCount: sql<number>`(count(*) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)))::int`,
+              overdueAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)), 0)`,
+              dueSoonAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} >= current_date), 0)`,
+            })
+            .from(schema.rentPayments)
+            .where(scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId)),
+          db
+            .select({
+              month: sql<string>`to_char(date_trunc('month', ${schema.rentPayments.paidAt}), 'YYYY-MM')`,
+              amount: sql<string>`sum(${schema.rentPayments.amount})`,
+            })
+            .from(schema.rentPayments)
+            .where(
+              and(
+                scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId),
+                eq(schema.rentPayments.status, 'paid'),
+                sql`${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '5 months'`,
+              ),
+            )
+            .groupBy(sql`1`),
+          db
+            .select({month: sql<string>`to_char(date_trunc('month', ${schema.users.createdAt}), 'YYYY-MM')`, n: count})
+            .from(schema.users)
+            .where(and(userWhere, sql`${schema.users.createdAt} >= date_trunc('month', now()) - interval '5 months'`))
+            .groupBy(sql`1`),
+          db
+            .select({status: schema.maintenanceRequests.status, n: count})
+            .from(schema.maintenanceRequests)
+            .where(scoped(schema.maintenanceRequests.landlordId, schema.maintenanceRequests.platformId))
+            .groupBy(schema.maintenanceRequests.status),
+          superAdmin || actor.platformId
+            ? db.query.auditLogs.findMany({
+                where: superAdmin ? platformWhere(schema.auditLogs.platformId) : eq(schema.auditLogs.platformId, actor.platformId!),
+                orderBy: desc(schema.auditLogs.createdAt),
+                limit: 8,
+                columns: {id: true, action: true, userEmail: true, resource: true, createdAt: true},
+              })
+            : Promise.resolve([]),
+        ]);
+
+      // Last 6 calendar months, oldest first, with zero-filled gaps.
+      const months: string[] = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i -= 1) {
+        const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+        months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+      }
+      const collected = new Map(collectionsByMonth.map((r) => [r.month, Number(r.amount)]));
+      const signups = new Map(signupsByMonth.map((r) => [r.month, r.n]));
+      const money = moneyRows[0];
+
+      res.json({
+        users: Object.fromEntries(usersByRole.map((r) => [r.role, r.n])),
+        pendingInvites: invitesPending[0]?.n ?? 0,
+        properties: propertyRows.map((r) => ({type: r.type, status: r.status, count: r.n})),
+        rent: {
+          collectedThisMonth: Number(money?.collectedThisMonth ?? 0),
+          collectedLastMonth: Number(money?.collectedLastMonth ?? 0),
+          overdueCount: money?.overdueCount ?? 0,
+          overdueAmount: Number(money?.overdueAmount ?? 0),
+          dueSoonAmount: Number(money?.dueSoonAmount ?? 0),
+        },
+        maintenance: Object.fromEntries(maintenanceRows.map((r) => [r.status, r.n])),
+        trend: months.map((month) => ({month, collected: collected.get(month) ?? 0, signups: signups.get(month) ?? 0})),
+        activity,
+      });
     }),
   );
 
@@ -226,6 +404,7 @@ export function registerAdminRoutes(bffRouter: Router) {
     '/admin/platforms',
     requireAuth,
     requireSuperAdmin,
+    inviteSendLimiter,
     validateBody(createPlatformSchema),
     asyncHandler(async (req, res) => {
       const body = getValidatedBody<z.infer<typeof createPlatformSchema>>(req);

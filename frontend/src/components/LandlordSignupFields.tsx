@@ -1,8 +1,4 @@
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMobileAlt, faUniversity, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons';
+import { Banknote, Building, Check, Smartphone } from 'lucide-react';
 import {
   SUBSCRIPTION_TIERS,
   BILLING_PERIODS,
@@ -13,6 +9,7 @@ import {
   type SubscriptionTier,
   type BillingPeriod,
 } from '../../../shared/landlordSubscription';
+import { Field, inputClass } from './auth/fields';
 
 export type LandlordSignupFormState = PendingLandlordSubscription;
 
@@ -34,195 +31,180 @@ export const defaultLandlordSignupState = (): LandlordSignupFormState => ({
   cashPayoutNotes: '',
 });
 
-export default function LandlordSignupFields({
-  value,
-  onChange,
-  showPayment = false,
-  paymentSlot,
-}: LandlordSignupFieldsProps) {
+const PERIOD_SHORT: Record<BillingPeriod, string> = { monthly: 'month', quarterly: '3 months', yearly: 'year' };
+const BILLING_LABELS: Record<BillingPeriod, string> = { monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' };
+
+const PAYOUT_METHODS: { id: RentPayoutMethod; label: string; icon: typeof Banknote }[] = [
+  { id: 'mpesa', label: 'M-Pesa', icon: Smartphone },
+  { id: 'bank', label: 'Bank', icon: Building },
+  { id: 'cash', label: 'Cash', icon: Banknote },
+];
+
+/** Plan choice and rent payout details, used in sign-up and on the subscription screen. */
+export default function LandlordSignupFields({ value, onChange, showPayment = false, paymentSlot }: LandlordSignupFieldsProps) {
   const patch = (partial: Partial<LandlordSignupFormState>) => onChange({ ...value, ...partial });
-  const amount = getSubscriptionAmount(value.tier, value.billing);
-  const tierMeta = SUBSCRIPTION_TIERS[value.tier];
   const isFree = value.tier === 'free';
+  const tiers = (Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).filter((id) => id !== 'basic');
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-        <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-900">
-          Choose your plan
-        </Label>
-        <div className="mt-3 grid gap-2">
-          {(Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[])
-            .filter((tierId) => tierId !== 'basic')
-            .map((tierId) => {
+    <div className="space-y-6">
+      <fieldset>
+        <legend className="text-sm font-semibold text-zinc-950 dark:text-white">Plan</legend>
+        <p className="mt-0.5 text-xs text-zinc-500">You can change plans later.</p>
+
+        <div role="radiogroup" aria-label="Plan" className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
+          {tiers.map((tierId, index) => {
             const tier = SUBSCRIPTION_TIERS[tierId];
-            const tierAmount = getSubscriptionAmount(tierId, value.billing);
-            const periodLabel = value.billing === 'monthly' ? 'mo' : value.billing === 'quarterly' ? '3 mos' : 'yr';
-            const isProPlus = tierId === 'proplus';
-            const isSelected = value.tier === tierId;
-
-            let stateClasses = '';
-            if (isProPlus) {
-              stateClasses = isSelected
-                ? 'border-amber-400 bg-zinc-900 shadow-sm'
-                : 'border-transparent bg-zinc-800 hover:border-amber-400/50';
-            } else {
-              stateClasses = isSelected
-                ? 'border-zinc-950 bg-white shadow-sm'
-                : 'border-transparent bg-white/60 hover:border-zinc-300';
-            }
-
+            const selected = value.tier === tierId;
+            const price = tierId === 'free' ? 'Free' : `${formatPlanPrice(getSubscriptionAmount(tierId, value.billing))}`;
             return (
               <button
                 key={tierId}
                 type="button"
+                role="radio"
+                aria-checked={selected}
                 onClick={() => patch({ tier: tierId })}
-                className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${stateClasses}`}
+                className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${index ? 'border-t border-zinc-200 dark:border-zinc-700' : ''} ${
+                  selected ? 'bg-zinc-50 dark:bg-zinc-800' : 'hover:bg-zinc-50/70 dark:hover:bg-zinc-800/60'
+                }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-xs font-black ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{tier.label}</span>
-                  <span className={`text-[10px] font-black ${isProPlus ? 'text-amber-400' : 'text-zinc-900'}`}>
-                    {tierId === 'free' ? 'Free' : `${formatPlanPrice(tierAmount)}/${periodLabel}`}
+                <span
+                  className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                    selected ? 'border-zinc-950 bg-zinc-950 dark:border-white dark:bg-white' : 'border-zinc-300'
+                  }`}
+                >
+                  {selected && <Check className="h-3 w-3 text-white dark:text-zinc-950" strokeWidth={3} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-semibold text-zinc-950 dark:text-white">{tier.label}</span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
+                      {price}
+                      {tierId !== 'free' && <span className="font-normal text-zinc-500"> / {PERIOD_SHORT[value.billing]}</span>}
+                    </span>
                   </span>
-                </div>
-                <p className={`mt-0.5 text-[10px] font-medium ${isProPlus ? 'text-zinc-400' : 'text-zinc-500'}`}>{tier.tagline}</p>
-                <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
-                  {tier.highlights.map((h) => (
-                    <li key={h} className={`text-[9px] font-bold ${isProPlus ? 'text-zinc-500' : 'text-zinc-400'}`}>
-                      · {h}
-                    </li>
-                  ))}
-                </ul>
+                  <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{tier.highlights.join(' · ')}</span>
+                </span>
               </button>
             );
           })}
         </div>
+
         {isFree ? (
-          <p className="mt-3 text-center text-sm font-black text-zinc-900">Free forever · no payment needed</p>
+          <p className="mt-3 text-xs text-zinc-500">No payment needed. One house unit, free for as long as you use it.</p>
         ) : (
-        <>
-        <div className="mt-3 flex gap-2">
-          {BILLING_PERIODS.map((period) => (
-            <button
-              key={period.id}
-              type="button"
-              onClick={() => patch({ billing: period.id as BillingPeriod })}
-              className={`flex-1 rounded-lg border-2 py-2 text-center transition-all ${
-                value.billing === period.id
-                  ? 'border-zinc-950 bg-white'
-                  : 'border-transparent bg-white/50'
-              }`}
-            >
-              <p className="text-[9px] font-black uppercase text-zinc-500">{period.label}</p>
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-center text-sm font-black text-zinc-900">
-          Total due: {formatPlanPrice(amount)}
-        </p>
-        </>
+          <div className="mt-3">
+            <div role="radiogroup" aria-label="Billing period" className="grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+              {BILLING_PERIODS.map((period) => {
+                const selected = value.billing === period.id;
+                return (
+                  <button
+                    key={period.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => patch({ billing: period.id })}
+                    className={`h-9 rounded-lg text-xs font-semibold transition ${
+                      selected ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 hover:text-zinc-950'
+                    }`}
+                  >
+                    {BILLING_LABELS[period.id]}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              Prepaid, {formatPlanPrice(getSubscriptionAmount(value.tier, value.billing))} for {PERIOD_SHORT[value.billing]}. It does not renew
+              automatically. You pay by card or M-Pesa after creating your account.
+            </p>
+          </div>
         )}
-      </div>
+      </fieldset>
 
       {showPayment && paymentSlot}
 
-      <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/40">
-        <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-400">
-          How should tenants pay you rent?
-        </Label>
-        <RadioGroup
-          value={value.rentPayoutMethod}
-          onValueChange={(v) => patch({ rentPayoutMethod: v as RentPayoutMethod })}
-          className="mt-3 grid grid-cols-3 gap-2"
-        >
-          {(
-            [
-              { id: 'cash', label: 'Cash', icon: faMoneyBillWave },
-              { id: 'mpesa', label: 'M-Pesa', icon: faMobileAlt },
-              { id: 'bank', label: 'Bank', icon: faUniversity },
-            ] as const
-          ).map((method) => (
-            <div key={method.id}>
-              <RadioGroupItem value={method.id} id={`rent-${method.id}`} className="sr-only" />
-              <Label
-                htmlFor={`rent-${method.id}`}
-                className={`flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 p-2 ${
-                  value.rentPayoutMethod === method.id
-                    ? 'border-zinc-950 bg-zinc-100'
-                    : 'border-zinc-200'
+      <fieldset>
+        <legend className="text-sm font-semibold text-zinc-950 dark:text-white">How do you receive rent?</legend>
+        <p className="mt-0.5 text-xs text-zinc-500">Only used to send you your tenants' rent. Never shown to tenants.</p>
+
+        <div role="radiogroup" aria-label="Rent payout method" className="mt-3 grid grid-cols-3 gap-2">
+          {PAYOUT_METHODS.map(({ id, label, icon: Icon }) => {
+            const selected = value.rentPayoutMethod === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => patch({ rentPayoutMethod: id })}
+                className={`flex h-16 flex-col items-center justify-center gap-1 rounded-xl border text-xs font-semibold transition ${
+                  selected
+                    ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950'
+                    : 'border-zinc-200 text-zinc-700 hover:border-zinc-400 dark:border-zinc-700 dark:text-zinc-200'
                 }`}
               >
-                <FontAwesomeIcon icon={method.icon} className="h-3.5 w-3.5 text-zinc-600" />
-                <span className="text-[9px] font-black uppercase">{method.label}</span>
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+                <Icon className="h-4 w-4" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
 
         {value.rentPayoutMethod === 'mpesa' && (
-          <div className="mt-3 space-y-1.5">
-            <Label htmlFor="mpesaSettlementPhone" className="text-xs font-bold">
-              Your M-Pesa number (tenants pay you here)
-            </Label>
-            <Input
-              id="mpesaSettlementPhone"
-              value={value.mpesaSettlementPhone || ''}
-              onChange={(e) => patch({ mpesaSettlementPhone: e.target.value })}
-              placeholder="07XX XXX XXX"
-              className="h-10 rounded-xl text-sm"
-              required
-            />
+          <div className="mt-4">
+            <Field id="mpesaSettlementPhone" label="M-Pesa number">
+              <input
+                id="mpesaSettlementPhone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={value.mpesaSettlementPhone || ''}
+                onChange={(e) => patch({ mpesaSettlementPhone: e.target.value })}
+                placeholder="07XX XXX XXX"
+                className={inputClass()}
+                required
+              />
+            </Field>
           </div>
         )}
 
         {value.rentPayoutMethod === 'bank' && (
-          <div className="mt-3 grid gap-2">
-            <Input
-              value={value.bankName || ''}
-              onChange={(e) => patch({ bankName: e.target.value })}
-              placeholder="Bank name"
-              className="h-10 rounded-xl text-sm"
-              required
-            />
-            <Input
-              value={value.bankAccountNumber || ''}
-              onChange={(e) => patch({ bankAccountNumber: e.target.value })}
-              placeholder="Account number"
-              className="h-10 rounded-xl text-sm"
-              required
-            />
-            <Input
-              value={value.bankAccountName || ''}
-              onChange={(e) => patch({ bankAccountName: e.target.value })}
-              placeholder="Account holder name"
-              className="h-10 rounded-xl text-sm"
-              required
-            />
+          <div className="mt-4 grid gap-3">
+            <Field id="bankName" label="Bank">
+              <input id="bankName" value={value.bankName || ''} onChange={(e) => patch({ bankName: e.target.value })} placeholder="e.g. Equity Bank" className={inputClass()} required />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field id="bankAccountNumber" label="Account number">
+                <input
+                  id="bankAccountNumber"
+                  inputMode="numeric"
+                  value={value.bankAccountNumber || ''}
+                  onChange={(e) => patch({ bankAccountNumber: e.target.value })}
+                  className={inputClass()}
+                  required
+                />
+              </Field>
+              <Field id="bankAccountName" label="Account name">
+                <input id="bankAccountName" value={value.bankAccountName || ''} onChange={(e) => patch({ bankAccountName: e.target.value })} className={inputClass()} required />
+              </Field>
+            </div>
           </div>
         )}
 
         {value.rentPayoutMethod === 'cash' && (
-          <div className="mt-3 space-y-1.5">
-            <Label htmlFor="cashPayoutNotes" className="text-xs font-bold">
-              Cash collection notes (optional)
-            </Label>
-            <Input
-              id="cashPayoutNotes"
-              value={value.cashPayoutNotes || ''}
-              onChange={(e) => patch({ cashPayoutNotes: e.target.value })}
-              placeholder="e.g. Collect at site office"
-              className="h-10 rounded-xl text-sm"
-            />
+          <div className="mt-4">
+            <Field id="cashPayoutNotes" label="Where do tenants pay?" hint="Optional">
+              <input
+                id="cashPayoutNotes"
+                value={value.cashPayoutNotes || ''}
+                onChange={(e) => patch({ cashPayoutNotes: e.target.value })}
+                placeholder="e.g. At the site office"
+                className={inputClass()}
+              />
+            </Field>
           </div>
         )}
-      </div>
-
-      {!tierMeta.features.maintenanceHub && (
-        <p className="text-[10px] font-medium text-amber-700 bg-amber-50 rounded-xl px-3 py-2 border border-amber-100">
-          {tierMeta.label} does not include the maintenance hub. Upgrade to Growth or Pro later for maintenance
-          tickets.
-        </p>
-      )}
+      </fieldset>
     </div>
   );
 }

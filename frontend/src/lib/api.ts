@@ -353,6 +353,24 @@ export const activateFreeLandlordPlan = (body: {
     body,
   });
 
+export type AdminOverview = {
+  users: Record<string, number>;
+  pendingInvites: number;
+  properties: {type: 'residential' | 'commercial' | 'bnb'; status: 'available' | 'rented' | 'booked'; count: number}[];
+  rent: {collectedThisMonth: number; collectedLastMonth: number; overdueCount: number; overdueAmount: number; dueSoonAmount: number};
+  maintenance: Record<string, number>;
+  trend: {month: string; collected: number; signups: number}[];
+  activity: {id: string; action: string; userEmail: string | null; resource: string | null; createdAt: string}[];
+};
+
+/** Emails a fresh 7-day setup link to someone who hasn't accepted their invitation. */
+export const resendInvitation = (email: string) =>
+  bffRequest<{ok: true; expiresAt: string}>('/admin/invitations/resend', {method: 'POST', body: {email}});
+
+/** Real counts and trends for the admin overview (see GET /admin/overview). */
+export const getAdminOverview = (platformId?: string) =>
+  bffRequest<AdminOverview>(`/admin/overview${platformId && platformId !== 'all' ? `?platformId=${encodeURIComponent(platformId)}` : ''}`);
+
 export const getAdminDashboard = (platformId?: string) =>
   bffRequest<{
     users: Record<string, any>[];

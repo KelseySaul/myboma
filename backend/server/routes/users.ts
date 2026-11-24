@@ -1,5 +1,5 @@
 import {and, eq, sql} from 'drizzle-orm';
-import {type Router} from 'express';
+import {type RequestHandler, type Router} from 'express';
 import multer from 'multer';
 import {fromNodeHeaders} from 'better-auth/node';
 import {z} from 'zod';
@@ -24,29 +24,34 @@ import {
   recordAudit,
   requireAdmin,
   requireAuth,
+  inviteSendLimiter,
+  uploadLimiter,
   validateBody,
 } from '../http/middleware.ts';
 import {uuidSchema} from '../http/schemas.ts';
 import {streamStoredObject} from '../services/files.ts';
+import {ImageRejectedError, imageKindForSubpath, MAX_UPLOAD_BYTES, toWebp} from '../services/images.ts';
 import {insertNotification, sendEmail} from '../services/notify.ts';
 
-// 4MB keeps uploads under Vercel's ~4.5MB request body cap.
+// Photos are re-encoded to WebP on the server (services/images.ts), so the stored file is
+// small no matter what the phone sends.
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {fileSize: 4 * 1024 * 1024},
+  limits: {fileSize: MAX_UPLOAD_BYTES, files: 1},
 });
 
-/** Identifies the image type from its magic bytes; the client-declared mimetype is never trusted. */
-const sniffImageType = (buffer: Buffer): {mime: string; ext: string} | null => {
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return {mime: 'image/jpeg', ext: 'jpg'};
-  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    return {mime: 'image/png', ext: 'png'};
-  }
-  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
-    return {mime: 'image/webp', ext: 'webp'};
-  }
-  if (buffer.length >= 6 && ['GIF87a', 'GIF89a'].includes(buffer.toString('ascii', 0, 6))) return {mime: 'image/gif', ext: 'gif'};
-  return null;
+/** multer's own errors (e.g. file too large) become clean 413/400 JSON responses. */
+const singleUpload: RequestHandler = (req, res, next) => {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+      res.status(tooLarge ? 413 : 400).json({
+        error: tooLarge ? `Images must be smaller than ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB.` : 'Upload one image at a time.',
+      });
+      return;
+    }
+    next(err);
+  });
 };
 
 const sanitizeUploadSubpath = (value: unknown) => {
@@ -98,21 +103,29 @@ export function registerUserRoutes(bffRouter: Router) {
   bffRouter.post(
     '/uploads',
     requireAuth,
-    upload.single('file'),
+    uploadLimiter,
+    singleUpload,
     asyncHandler(async (req, res) => {
       const file = (req as unknown as {file?: Express.Multer.File}).file;
       if (!file) {
         res.status(400).json({error: 'No file provided'});
         return;
       }
-      const detected = sniffImageType(file.buffer);
-      if (!detected) {
-        res.status(415).json({error: 'Only JPEG, PNG, WebP or GIF images are allowed'});
-        return;
-      }
       const subpath = sanitizeUploadSubpath(req.body?.subpath);
-      const key = buildObjectKey(req.profile!.uid, `upload.${detected.ext}`, subpath);
-      await uploadObject(key, file.buffer, detected.mime);
+      // The client-declared type is never trusted: sharp decodes the bytes, and anything
+      // that is not a real image is rejected before it reaches storage.
+      let webp: Buffer;
+      try {
+        webp = (await toWebp(file.buffer, imageKindForSubpath(subpath))).buffer;
+      } catch (err) {
+        if (err instanceof ImageRejectedError) {
+          res.status(err.status).json({error: err.message});
+          return;
+        }
+        throw err;
+      }
+      const key = buildObjectKey(req.profile!.uid, 'upload.webp', subpath);
+      await uploadObject(key, webp, 'image/webp');
       // `private/...` subpaths (receipts, IDs, expense evidence) are only reachable through
       // the authenticated route; everything else is a public marketing asset.
       const isPrivate = subpath?.split('/')[0] === 'private';
@@ -298,6 +311,7 @@ export function registerUserRoutes(bffRouter: Router) {
   bffRouter.post(
     '/users/provision',
     requireAuth,
+    inviteSendLimiter,
     validateBody(provisionUserSchema),
     asyncHandler(async (req, res) => {
       await handleProvisionUser(req, res, isAgencyAdmin(req.profile!));

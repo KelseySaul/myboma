@@ -321,7 +321,8 @@ body {
 }
 
 @media (max-width: 639px) {
-  .app-shell:not(.app-shell-impersonating) {
+  /* Signed-in shell only: public pages start with a full-bleed hero under a floating navbar. */
+  .app-shell:not(.app-shell-impersonating):not(.app-shell-public) {
     padding-top: calc(var(--sat, 0px) + 4px);
   }
 }
@@ -940,4 +941,10 @@ aside[class*="sticky"] {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }

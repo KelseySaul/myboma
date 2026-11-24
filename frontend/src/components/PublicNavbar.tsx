@@ -52,14 +52,14 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
       <div className="relative mx-auto max-w-7xl">
         <nav
           aria-label="Main"
-          className={`flex h-14 items-center justify-between rounded-2xl border px-3 backdrop-blur-2xl transition-[background-color,border-color,box-shadow] duration-300 sm:px-4 ${
+          className={`flex h-14 items-center justify-between rounded-2xl border px-3 backdrop-blur-md sm:backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-300 sm:px-4 ${
             dark
               ? 'border-white/30 bg-white/[0.14] text-white shadow-[0_12px_40px_rgba(0,0,0,0.22)] ring-1 ring-white/10'
               : 'border-white/70 bg-white/60 text-zinc-950 shadow-[0_12px_32px_rgba(15,23,42,0.10)] ring-1 ring-black/5'
           }`}
         >
           <a href="/" className="flex items-center gap-2.5" onClick={() => setMobileMenuOpen(false)}>
-            <img src={tenantConfig.logoUrl} alt="" className="h-8 w-8 rounded-lg bg-white object-contain p-0.5" width="32" height="32" />
+            <img src={tenantConfig.logoUrl} alt="" className={`h-8 w-8 object-contain transition-[filter] duration-300 ${dark ? "brightness-0 invert" : ""}`} width="32" height="32" />
             <span className="font-brand text-2xl font-semibold leading-none tracking-tight sm:text-3xl">{tenantConfig.appName}</span>
           </a>
 

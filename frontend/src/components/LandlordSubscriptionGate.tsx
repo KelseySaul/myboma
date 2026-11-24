@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
@@ -69,45 +70,34 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
 
   if (isProcessing) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center bg-[#f8f9fa]">
-        <div className="text-center space-y-4 px-6">
-          <div className="h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm font-black uppercase tracking-widest text-zinc-900">Activating your plan...</p>
-          <p className="text-xs font-medium text-zinc-500">We've received your payment. One moment please.</p>
-          
-          <div className="pt-4">
-             <button 
-               onClick={handleSync}
-               disabled={isSyncing}
-               className="text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:text-indigo-500 underline underline-offset-4 disabled:opacity-50"
-             >
-               {isSyncing ? 'Syncing...' : 'Refresh status manually'}
-             </button>
-          </div>
+      <div className="flex min-h-[60vh] items-center justify-center px-6">
+        <div className="max-w-sm text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-zinc-950" />
+          <h2 className="mt-5 text-lg font-semibold text-zinc-950">Activating your plan</h2>
+          <p className="mt-1 text-sm text-zinc-500">We've received your payment. This usually takes a few seconds.</p>
+          <button
+            type="button"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="mt-5 text-sm font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-950 disabled:opacity-50"
+          >
+            {isSyncing ? 'Checking…' : 'Check again'}
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-[60vh] bg-[#f8f9fa]">
-      <div className="mx-auto max-w-lg px-4 py-10">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm">
-          <h2 className="text-xl font-black text-zinc-900">Complete your subscription</h2>
-          <p className="mt-2 text-sm font-medium text-zinc-600">
-            Signed in as <span className="font-bold text-zinc-900">{email}</span>. Start on the free plan, or choose a paid
-            plan and pay with card or M-Pesa to unlock more units.
-          </p>
-          <button 
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="mt-4 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-zinc-600 transition-colors disabled:opacity-50"
-          >
-            {isSyncing ? 'Syncing profile...' : 'Already paid? Tap here to sync'}
-          </button>
-        </div>
+    <div className="min-h-[60vh] px-4 py-8 sm:py-12">
+      <div className="mx-auto max-w-xl">
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">Choose a plan to start</h1>
+        <p className="mt-2 text-sm leading-6 text-zinc-500">
+          Signed in as <span className="font-medium text-zinc-950">{email}</span>. Start free with one house, or pick a paid plan
+          for more units. Paid plans are prepaid and don't renew automatically.
+        </p>
 
-        <div className="mt-6 rounded-3xl border border-zinc-100 bg-white p-5 shadow-sm">
+        <div className="mt-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-7">
           <LandlordSignupFields
             value={form}
             onChange={setForm}
@@ -118,9 +108,10 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
                   type="button"
                   onClick={handleActivateFree}
                   disabled={activatingFree}
-                  className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 text-[15px] font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
                 >
-                  {activatingFree ? 'Activating...' : 'Activate free plan'}
+                  {activatingFree && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Start with the free plan
                 </button>
               ) : (
                 <LandlordSubscriptionPay payload={form} phone={phone} onSuccess={onActivated} />
@@ -128,6 +119,13 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
             }
           />
         </div>
+
+        <p className="mt-5 text-center text-sm text-zinc-500">
+          Already paid?{' '}
+          <button type="button" onClick={handleSync} disabled={isSyncing} className="font-medium text-zinc-950 underline underline-offset-4 disabled:opacity-50">
+            {isSyncing ? 'Checking…' : 'Check payment status'}
+          </button>
+        </p>
       </div>
     </div>
   );

@@ -116,9 +116,15 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
 
   return (
     <div className="bg-white">
-      <section className="bg-zinc-950 px-4 pb-20 pt-36 text-white sm:px-6 sm:pb-28 sm:pt-44">
+      <section className="relative isolate overflow-hidden bg-zinc-950 px-4 pb-20 pt-36 text-white sm:px-6 sm:pb-28 sm:pt-44">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-20 scale-105 bg-cover bg-center"
+          style={{ backgroundImage: "url('/hero/hero-2.webp')" }}
+        />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-black/80 via-black/65 to-black/85" />
         <div className="mx-auto max-w-4xl animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">About {tenantConfig.appName}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-300">About {tenantConfig.appName}</p>
           <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl">
             Renting in Kenya, made simpler for everyone involved.
           </h1>

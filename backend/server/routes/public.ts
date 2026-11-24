@@ -9,6 +9,7 @@ import {appBaseUrl, isProduction, nonSecretConfigStatus} from '../http/config.ts
 import {
   asyncHandler,
   getValidatedBody,
+  cronLimiter,
   enquiryLimiter,
   publicLimiter,
   validateBody,
@@ -91,6 +92,7 @@ export function registerPublicRoutes(app: Express) {
 
   app.get(
     '/api/cron/daily',
+    cronLimiter,
     asyncHandler(async (req, res) => {
       const secret = process.env.CRON_SECRET;
       const provided = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -105,7 +107,7 @@ export function registerPublicRoutes(app: Express) {
       res.json({ok: true, ...result});
     }),
   );
-  app.get('/api/legal', (_req, res) => res.json(LEGAL_DOCUMENTS));
+  app.get('/api/legal', publicLimiter, (_req, res) => res.json(LEGAL_DOCUMENTS));
 
   /**
    * Lets a visitor ask about an available listing without creating an account.
