@@ -1,9 +1,13 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig, loadEnv} from 'vite';
 
 const repoRoot = path.resolve(__dirname, '..');
+
+// Proxy /api to the local backend on whatever SERVER_PORT backend/.env sets, so the two
+// never drift apart (3001 is often taken by other local projects).
+const backendPort = loadEnv('development', path.resolve(repoRoot, 'backend'), 'SERVER_PORT').SERVER_PORT || '3002';
 
 export default defineConfig({
   root: __dirname,
@@ -33,7 +37,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
     },

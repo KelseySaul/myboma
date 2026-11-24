@@ -1,7 +1,7 @@
 import {emailTransporter} from '../services/notify.ts';
 
 // Render (and most hosts) inject PORT; SERVER_PORT is the local-dev override.
-export const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3001);
+export const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3002);
 export const isProduction = process.env.NODE_ENV === 'production';
 export const defaultCorsOrigins = 'http://localhost:5173,http://localhost:4173';
 
