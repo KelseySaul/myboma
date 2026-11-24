@@ -1,58 +1,82 @@
-export const TERMS_VERSION = '2026-06-02';
-export const PRIVACY_VERSION = '2026-06-02';
+export const TERMS_VERSION = '2026-11-24';
+export const PRIVACY_VERSION = '2026-11-24';
 
 export const TERMS_OF_USE = {
   version: TERMS_VERSION,
-  title: 'MyBoma Terms and Conditions',
-  effectiveDate: 'June 2, 2026',
+  title: 'MyBoma Terms of Use',
+  effectiveDate: 'November 24, 2026',
   sections: [
     {
-      title: 'Acceptance of Terms',
-      body: 'By creating an account or using MyBoma, you agree to these Terms of Use and any policies referenced in them. If you use MyBoma for a company, property owner, landlord, or tenant organization, you confirm that you are authorized to bind that organization.',
+      title: '1. About these terms',
+      body: 'These terms govern your use of MyBoma, a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev and in the MyBoma mobile apps. By creating an account, sending an enquiry or otherwise using MyBoma, you agree to these terms and to our Privacy Policy. If you use MyBoma for a company, agency or property owner, you confirm you are authorised to accept these terms on their behalf.',
     },
     {
-      title: 'Accounts and Eligibility',
-      body: 'You must provide accurate account information, keep credentials confidential, and notify us of unauthorized access. You are responsible for activity under your account. MyBoma may suspend accounts used for fraud, abuse, unlawful activity, or security risk.',
+      title: '2. What MyBoma does and does not do',
+      body: 'MyBoma is a software platform. It lets landlords, property managers and agencies list units, invite tenants, issue rent invoices, collect rent and track repairs, and it lets house hunters browse listings and contact landlords. MyBoma is not a landlord, tenant, estate agent or party to any tenancy, lease or booking. Any agreement for a house, office or short stay is between the landlord and the tenant or guest. We do not inspect or guarantee properties, listings, people or prices.',
     },
     {
-      title: 'Property and Tenant Data',
-      body: 'You are responsible for the accuracy and legality of property listings, tenant records, rent ledgers, maintenance requests, documents, and messages you upload or create. Do not upload content that infringes rights, violates law, or exposes sensitive information without authority.',
+      title: '3. Accounts',
+      body: 'You must be at least 18 years old to open an account. Give accurate information, keep your password private and tell us at support@myboma.com if you think someone has accessed your account. You are responsible for activity on your account. We may suspend or close accounts used for fraud, harassment, unlawful activity or anything that puts other users or the platform at risk.',
     },
     {
-      title: 'Payments',
-      body: 'MyBoma may support payments through third-party providers such as Stripe and M-Pesa. Payment availability depends on provider approval, account configuration, and local rules. Rent is only marked paid when the payment provider confirms a successful transaction through a trusted server-side callback or webhook.',
+      title: '4. Landlords, property managers and agencies',
+      body: 'If you list or manage property on MyBoma, you confirm that you own it or are authorised to let it, and that your listings, prices and photos are accurate and kept up to date. You remain responsible for complying with Kenyan tenancy, property and tax law, including the Land Act 2012, the Rent Restriction Act (Cap. 296), the Landlord and Tenant (Shops, Hotels and Catering Establishments) Act (Cap. 301), and the Distress for Rent Act (Cap. 293), where they apply. You must not use MyBoma to evict, threaten or unlawfully pressure a tenant. You are responsible for your own taxes, including any residential rental-income tax, returns and record keeping required by KRA. Rates, thresholds and deadlines can change; check current KRA guidance or obtain professional advice. MyBoma does not file or pay tax on your behalf.',
     },
     {
-      title: 'Subscription Billing and Auto-Renewal',
-      body: 'Current MyBoma landlord plans are prepaid for the monthly, quarterly, or yearly coverage period selected at checkout. They do not automatically renew, and MyBoma will not charge a renewal unless you actively authorize a new payment. If MyBoma offers an auto-renewing plan in the future, the checkout will clearly disclose the renewal price and frequency and ask for your consent before payment.',
+      title: '5. Tenants',
+      body: 'Tenants use MyBoma to view their lease details, invoices and balances, pay rent and report repairs. Your tenancy is with your landlord, not with MyBoma. Questions about rent amounts, deposits, repairs or notices should go to your landlord or their agent. A payment is only marked as paid once the payment provider confirms it.',
     },
     {
-      title: 'Cancellation',
-      body: 'Current prepaid landlord plans expire at the end of the purchased coverage period, so no cancellation step is required to prevent a future subscription charge. You can stop using MyBoma by not renewing. Any future auto-renewing plan will include a simple cancellation option before the next charge. Account closure requests remain subject to record-retention obligations.',
+      title: '6. House hunters and enquiries',
+      body: 'You can browse listings and send an enquiry without an account. When you send an enquiry, the name, email address, phone number and message you provide are shared with the landlord or agent of that listing so they can contact you about availability. An enquiry is not a booking or a reservation, and the landlord is not obliged to respond. Never pay a deposit or viewing fee before you have seen the property and confirmed the landlord is genuine. Report suspicious listings to support@myboma.com.',
     },
     {
-      title: 'Waitlist and Marketing Emails',
-      body: 'If you join the MyBoma waitlist, you agree to receive launch and important product emails. You can unsubscribe at any time through the unsubscribe link in a waitlist email or the unsubscribe form on the MyBoma website.',
+      title: '7. Payments',
+      body: 'Rent and plan payments are processed by third parties: Safaricom M-Pesa, Pesapal and Stripe. Their own terms also apply. MyBoma does not store full card numbers or M-Pesa PINs. Payments can be delayed, reversed or declined by the provider. MyBoma records the provider reference for each payment so landlords and tenants can reconcile it, but we are not responsible for a provider outage or for funds held by a provider.',
     },
     {
-      title: 'Landlord Settlement',
-      body: 'Landlords are responsible for providing valid payment settlement details. M-Pesa and Stripe transfers may be delayed, rejected, reversed, or require additional verification by the payment provider. MyBoma records provider references for reconciliation but does not guarantee provider uptime.',
+      title: '8. Landlord plans and billing',
+      body: 'Landlords can use the Free plan, which covers one house unit, or a paid plan (Basic, Starter, Pro or Pro Plus). Paid plans are prepaid for the monthly, quarterly or yearly period you choose and do not renew automatically. You will only be charged when you approve a new payment. The price is shown in Kenyan shillings before you pay. When a paid period ends, your account keeps its data but the paid features stop until you renew. We may change plan prices for future periods; a change never affects a period you have already paid for.',
     },
     {
-      title: 'Acceptable Use',
-      body: 'You may not misuse the service, attempt unauthorized access, bypass rate limits, probe systems, upload malicious code, scrape data without permission, or use MyBoma for fraudulent, discriminatory, harassing, or illegal activity.',
+      title: '9. Refunds',
+      body: 'Because plans are prepaid and do not renew, we do not charge for periods you have not chosen. If you were charged in error, charged twice, or could not use a paid feature because of a fault on our side, email support@myboma.com within 30 days and we will review it and refund where appropriate. This does not limit any right you have under the Consumer Protection Act 2012.',
     },
     {
-      title: 'Service Changes',
-      body: 'Features may change over time. We may update, suspend, or discontinue parts of the service when necessary for security, compliance, maintenance, or business reasons.',
+      title: '10. Acceptable use',
+      body: 'Do not use MyBoma to post false, misleading or discriminatory listings; collect other users\' data without permission; send spam; upload malware; probe, scrape or overload the service; access accounts or data that are not yours; or do anything unlawful, including offences under the Computer Misuse and Cybercrimes Act 2018. We may remove content and suspend accounts that break these rules, and we may report unlawful activity to the authorities.',
     },
     {
-      title: 'Disclaimers and Limitation of Liability',
-      body: 'MyBoma is provided as a software platform and does not provide legal, financial, tax, or real-estate advice. To the maximum extent permitted by law, MyBoma is not liable for indirect, incidental, consequential, special, punitive, or lost-profit damages.',
+      title: '11. Your content',
+      body: 'You keep ownership of the listings, photos, documents and messages you add. You give MyBoma permission to store, display and process that content only to run the service, for example to show your listing to house hunters or send an invoice to a tenant. Only upload content you have the right to share.',
     },
     {
-      title: 'Changes to Terms',
-      body: 'We may update these Terms. Continued use after an update means you accept the revised Terms. Material changes may require renewed acceptance in the app.',
+      title: '12. Electronic records and notices',
+      body: 'Invoices, receipts, notices and other records issued through MyBoma are electronic records and are valid as such under the Kenya Information and Communications Act. We may send you service messages by email, in-app notification or push notification. These are part of the service and are not marketing.',
+    },
+    {
+      title: '13. Availability and changes',
+      body: 'We work to keep MyBoma available and secure, but we cannot promise it will always be uninterrupted or error-free. We may add, change or remove features. If a change materially reduces what you have paid for, we will tell you in advance.',
+    },
+    {
+      title: '14. Liability',
+      body: 'MyBoma is provided as is. To the extent Kenyan law allows, we are not liable for losses arising from agreements between landlords, tenants and guests, from the condition of any property, from third-party payment providers, or for indirect or consequential losses. Where we are liable, our total liability is limited to the amount you paid MyBoma in the 12 months before the claim. Nothing in these terms limits liability that cannot be limited by law, including your rights as a consumer.',
+    },
+    {
+      title: '15. Closing your account',
+      body: 'You can stop using MyBoma at any time and ask us to close your account by emailing support@myboma.com. We may keep some records after closure where the law requires it, for example payment and tax records, as explained in the Privacy Policy.',
+    },
+    {
+      title: '16. Governing law and disputes',
+      body: 'These terms are governed by the laws of Kenya. If you have a complaint, contact support@myboma.com first and we will try to resolve it within 14 days. If we cannot agree, either side may take the dispute to the courts of Kenya. Data protection complaints can also be made to the Office of the Data Protection Commissioner.',
+    },
+    {
+      title: '17. Changes to these terms',
+      body: 'We may update these terms. The version date at the top shows when they last changed. If a change is significant, we will tell you by email or in the app before it takes effect. Continuing to use MyBoma after that means you accept the updated terms.',
+    },
+    {
+      title: '18. Contact',
+      body: 'Questions about these terms: support@myboma.com.',
     },
   ],
 };
@@ -60,43 +84,59 @@ export const TERMS_OF_USE = {
 export const PRIVACY_POLICY = {
   version: PRIVACY_VERSION,
   title: 'MyBoma Privacy Policy',
-  effectiveDate: 'June 2, 2026',
+  effectiveDate: 'November 24, 2026',
   sections: [
     {
-      title: 'Information We Collect',
-      body: 'We collect account information such as name, email, phone number, role, address, profile image, authentication metadata, property records, tenant records, rent payment records, maintenance requests, notifications, audit logs, and device or usage data needed to operate and secure the service. If you join the waitlist, we collect your email address, sign-up source, consent time, and subscription status.',
+      title: '1. Who we are',
+      body: 'MyBoma is a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev. For the personal data described in this policy, MyBoma is the data controller under the Data Protection Act 2019. Where a landlord or agency uses MyBoma to manage their own tenants, that landlord or agency independently decides why and how it uses that tenant data and is responsible for that use. Contact us about privacy at support@myboma.com.',
     },
     {
-      title: 'How We Use Information',
-      body: 'We use information to provide the app, authenticate users, manage properties and rent ledgers, process payments, notify landlords and tenants, prevent fraud, monitor security, debug errors, comply with law, and improve reliability.',
+      title: '2. What we collect',
+      body: 'Account details: name, email address, phone number, password (stored only as a secure hash) and your role. Landlord details: payout method and M-Pesa number or bank account details used to receive rent. Property data: listings, units, photos, rent amounts and leases. Tenant data: lease dates, invoices, payments, balances and repair requests. Payment data: amounts, dates and provider references from M-Pesa, Pesapal or Stripe; we never see your card number or M-Pesa PIN. Enquiries: the name, email address, phone number and message a house hunter sends about a listing, with or without an account. Technical data: device and browser information, IP address, and error reports used to keep the service secure and working.',
     },
     {
-      title: 'Payments and Providers',
-      body: 'Payment details are processed by third-party payment providers such as Stripe and M-Pesa. MyBoma stores payment status, references, metadata needed for reconciliation, and settlement status. We do not store full card numbers or payment provider secret keys in the client app.',
+      title: '3. Why we use it and our lawful basis',
+      body: 'We process personal data only where the Data Protection Act 2019 allows it. To provide the service you asked for, such as your account, rent invoices, payments and enquiries, we rely on performance of a contract or steps you asked us to take before one. To keep payment, invoice and tax records, we rely on legal obligation. To secure the platform, prevent fraud and fix errors, we rely on legitimate interest. For optional messages such as product news, and for push notifications, we rely on your consent, which you can withdraw at any time. We do not sell personal data and we do not use it for automated decisions that have legal or similarly significant effects on you.',
     },
     {
-      title: 'Error Tracking and Diagnostics',
-      body: 'We may use Sentry or similar tools to collect diagnostic events, stack traces, device/browser information, release data, and performance telemetry. We configure these tools to avoid intentionally sending payment secrets, passwords, or unnecessary personal data.',
+      title: '4. Who we share it with',
+      body: 'Landlords and agents see the details of their own tenants and of house hunters who enquire about their listings. Tenants see their landlord\'s name and payment details needed to pay rent. We also use service providers who process data on our behalf under contract: Neon (database hosting), Cloudflare R2 (file and photo storage), Render (application hosting), Resend (email delivery), OneSignal (push notifications), Sentry (error monitoring), Safaricom M-Pesa, Pesapal and Stripe (payments), and Google (if you choose to sign in with Google). We may disclose data where Kenyan law requires it, for example to KRA or a court, or to protect users from fraud or harm.',
     },
     {
-      title: 'Sharing',
-      body: 'We share information with service providers that help operate MyBoma, including hosting, database, authentication, payment, email, and error-monitoring providers. We may also share information when required by law, to protect rights and safety, or with your organization as part of property management workflows.',
+      title: '5. Transfers outside Kenya',
+      body: 'Some of our providers store or process data outside Kenya, mainly in the United States and the European Union. We only transfer data where the Data Protection Act 2019 and the Data Protection (General) Regulations 2021 allow it, using providers that offer appropriate security safeguards and contractual protections, and we keep a record of these transfers.',
     },
     {
-      title: 'Security',
-      body: 'We use technical and organizational safeguards such as server-side validation, access controls, rate limits, webhook signature checks, environment-based secret handling, HTTPS-oriented deployment, audit logging, and least-privilege operational practices. No system can be guaranteed completely secure.',
+      title: '6. How long we keep it',
+      body: 'We keep account and property data while your account is active. If you close your account, we delete or anonymise personal data that we no longer need, except where we have a lawful reason to retain it. Payment, invoice and receipt records are generally kept for at least 5 years to meet Kenyan tax and accounting requirements. When you submit a guest enquiry, we use its details to deliver the emails; the landlord, agent and email recipient may retain their copy under their own policies. We review error reports and security logs periodically and retain them only as long as reasonably necessary for security, troubleshooting and legal obligations.',
     },
     {
-      title: 'Retention',
-      body: 'We retain information for as long as needed to provide the service, satisfy legal and accounting obligations, resolve disputes, enforce agreements, and preserve audit trails. Retention periods may vary by data type and account status.',
+      title: '7. How we protect it',
+      body: 'Data is encrypted in transit. Passwords are hashed. Access to each landlord\'s data is restricted at the database level so one landlord cannot see another\'s tenants. Only authorised staff can access production systems. If a personal data breach is likely to put you at real risk of harm, we will notify the Office of the Data Protection Commissioner within 72 hours of becoming aware of it and tell affected users without undue delay.',
     },
     {
-      title: 'Your Choices',
-      body: 'You may update account information in the app. You can stop waitlist and marketing emails at any time through the unsubscribe link in an email or the unsubscribe form on the website. Depending on your location and role, you may request access, correction, deletion, or export of personal information, subject to legal, security, and accounting limits.',
+      title: '8. Your rights',
+      body: 'Under the Data Protection Act 2019 you have the right to be told how your data is used; to access your data; to correct inaccurate data; to have false, misleading or unnecessary data deleted; to restrict or object to processing; to withdraw consent; and to receive your data in a portable format. To use any of these rights, email support@myboma.com. We may need to verify your identity. Under the Data Protection (General) Regulations 2021, access requests are handled within 7 days; rectification, erasure, restriction and objections within 14 days; and portability within 30 days, subject to the applicable rules and any lawful exception. Some requests may be limited where we must keep records by law, for example payment records.',
     },
     {
-      title: 'Contact',
-      body: 'For privacy or account questions, contact the MyBoma administrator or support contact configured for your deployment.',
+      title: '9. Children',
+      body: 'MyBoma is not intended for anyone under 18. We do not knowingly collect personal data from children. If you believe a child has given us personal data, contact us and we will delete it.',
+    },
+    {
+      title: '10. Cookies and similar technologies',
+      body: 'We use essential cookies and local storage to keep you signed in, remember your preferences and protect your account. We do not use advertising cookies. Push notifications are only sent if you allow them on your device.',
+    },
+    {
+      title: '11. Emails',
+      body: 'Service emails, such as invoices, payment receipts, rent reminders and enquiry confirmations, are part of using MyBoma. Product news is only sent if you agreed to receive it, and every such email includes an unsubscribe link.',
+    },
+    {
+      title: '12. Complaints',
+      body: 'If you have a concern about how we handle your data, contact support@myboma.com first. You also have the right to lodge a complaint with the Office of the Data Protection Commissioner (ODPC), Kenya, at https://www.odpc.go.ke.',
+    },
+    {
+      title: '13. Changes to this policy',
+      body: 'We may update this policy. The version date at the top shows when it last changed. If a change is significant, we will tell you by email or in the app before it takes effect.',
     },
   ],
 };

@@ -3,10 +3,12 @@ import { authClient } from './lib/auth-client';
 import { getSession, completePasswordReset, bffRequest, setImpersonatedUser, activateFreeLandlordPlan } from './lib/api';
 import LandingPage from './components/LandingPage';
 import Navbar from './components/Navbar';
+import PublicNavbar from './components/PublicNavbar';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
+import AboutPage from './components/AboutPage';
 import { tenantConfig } from './config/tenant';
 
 // Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
@@ -527,13 +529,16 @@ export default function App() {
         : window.location.pathname === '/privacy'
           ? 'privacy'
           : null;
+    const isAboutPage = window.location.pathname === '/about';
 
     return (
       <div className="db app-shell min-h-screen bg-[#f8f9fa]">
-        <Navbar user={null} profile={null} onLoginClick={() => setIsAuthOpen(true)} />
+        <PublicNavbar onLoginClick={() => setIsAuthOpen(true)} overHero={!legalPageType && !isAboutPage} />
         <main>
           {legalPageType ? (
             <PublicLegalPage type={legalPageType} />
+          ) : isAboutPage ? (
+            <AboutPage onSignUp={() => setIsAuthOpen(true)} />
           ) : (
             <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
           )}

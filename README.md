@@ -51,6 +51,7 @@ npm run server
 - Web BFF: `/api/web`
 - Mobile BFF: `/api/mobile`
 - Legal documents: `/api/legal`
+- Public listing enquiry: `POST /api/public/enquiries`
 - Waitlist signup: `POST /api/waitlist`
 - Waitlist unsubscribe: `POST /api/waitlist/unsubscribe`
 - Stripe webhook: `/api/webhooks/stripe`
@@ -67,14 +68,14 @@ Before enabling payments in production:
 2. Apply the schema to Neon with `npm run db:push` (Drizzle schema in `backend/db/schema/`). On an existing database run `backend/migrations/05-indexes-and-invoice-dedupe.sql` first so duplicate invoices don't block the new unique index. `backend/supabase-setup.sql` is historical only.
 3. Configure Stripe webhook events for `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 4. Configure Pesapal API 3.0:
-   - Website URL: `https://myboma.vercel.app`
-   - Callback URL: `https://myboma.vercel.app/api/payments/pesapal/callback`
-   - IPN listener URL: `https://myboma.vercel.app/api/webhooks/pesapal/ipn`
+   - Website URL: `https://myboma.kelseysaul.dev`
+   - Callback URL: `https://myboma.kelseysaul.dev/api/payments/pesapal/callback`
+   - IPN listener URL: `https://myboma.kelseysaul.dev/api/webhooks/pesapal/ipn`
    - Register the IPN listener in Pesapal and set the returned IPN ID as `PESAPAL_NOTIFICATION_ID`.
 5. Set `MPESA_CALLBACK_URL` to `https://your-domain/api/webhooks/mpesa/stk` and set `MPESA_CALLBACK_SECRET` (required in every environment). The server appends `?secret=` to the URL it sends Safaricom; callbacks without it are rejected, and the paid amount is checked against the invoice.
 6. Set `SUPER_ADMIN_EMAILS` (comma-separated). An address is promoted only after its owner verifies it (email link or Google sign-in).
 7. Set `CRON_SECRET` in Vercel so the daily cron in `vercel.json` can call `/api/cron/daily`.
-8. Configure SMTP. It is required for email verification (which gates super-admin bootstrap and admin invitations for email/password sign-ups), as well as notifications and waitlist emails.
+8. Configure Resend with `RESEND_API_KEY` and `RESEND_FROM="MyBoma Support <support@myboma.kelseysaul.dev>"`. Resend now sends verification, waitlist, payment, reminder and public-listing enquiry emails. `support@myboma.com` remains the reply-to address; it cannot be the sender unless `myboma.com` itself is verified in Resend. SMTP remains an optional fallback. Keep the API key only in the host's server environment variables.
 9. Add each landlord payout configuration:
    - Stripe: `users.stripeAccountId` must be a Stripe Connect account ID.
    - M-Pesa: `users.mpesaSettlementPhone` is used for optional B2C settlement after successful STK confirmation.

@@ -1,20 +1,9 @@
-import nodemailer from 'nodemailer';
 import {sql} from 'drizzle-orm';
 import {db, schema} from '../../db/client.ts';
 import type {RentPaymentRecord, UserProfileRecord} from '../types.ts';
+import {sendEmail} from './email.ts';
 
-export const emailTransporter =
-  process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-    ? nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      })
-    : null;
+export {sendEmail};
 
 export const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
   const ONE_SIGNAL_APP_ID = "16fe44a9-e285-4d7d-85f0-8b82014b9a71";
@@ -67,17 +56,6 @@ export const insertNotification = async (payload: {
   }
 };
 
-export const sendEmail = async ({to, subject, text}: {to?: string | null; subject: string; text: string}) => {
-  if (!to || !emailTransporter) return;
-
-  await emailTransporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to,
-    subject,
-    text,
-  });
-};
-
 export const notifyRentPaymentSuccess = async ({
   payment,
   tenant,
@@ -117,17 +95,36 @@ export const notifyRentPaymentSuccess = async ({
     }),
     sendEmail({
       to: tenantEmail,
-      subject: 'MyBoma rent receipt',
-      text: `Your rent payment of KES ${amount} for ${propertyLabel} was successful.${
-        providerReference ? ` Reference: ${providerReference}.` : ''
-      }`,
+      subject: `Rent receipt: KES ${amount} for ${propertyLabel}`,
+      template: {
+        preheader: `We received your rent payment of KES ${amount}.`,
+        heading: 'Rent payment received',
+        paragraphs: [`Your rent payment for ${propertyLabel} went through. Keep this email as your receipt.`],
+        details: [
+          ['Amount', `KES ${amount}`],
+          ['Property', propertyLabel],
+          ...(property?.location ? [['Location', property.location] as [string, string]] : []),
+          ['Date', new Date().toLocaleDateString('en-KE', {day: 'numeric', month: 'long', year: 'numeric'})],
+          ...(providerReference ? [['Reference', providerReference] as [string, string]] : []),
+        ],
+        footerNote: 'You received this because you paid rent through MyBoma.',
+      },
     }),
     sendEmail({
       to: landlord.email,
-      subject: 'MyBoma rent received',
-      text: `${tenant?.displayName || tenantEmail} paid KES ${amount} for ${propertyLabel}.${
-        providerReference ? ` Reference: ${providerReference}.` : ''
-      }`,
+      subject: `Rent received: KES ${amount} from ${tenant?.displayName || tenantEmail}`,
+      template: {
+        preheader: `${tenant?.displayName || tenantEmail} paid KES ${amount}.`,
+        heading: 'Rent received',
+        paragraphs: [`${tenant?.displayName || tenantEmail} paid rent for ${propertyLabel}. The invoice has been marked as paid.`],
+        details: [
+          ['Tenant', tenant?.displayName || tenantEmail],
+          ['Amount', `KES ${amount}`],
+          ['Property', propertyLabel],
+          ...(providerReference ? [['Reference', providerReference] as [string, string]] : []),
+        ],
+        footerNote: 'You received this because you manage this property on MyBoma.',
+      },
     }),
   ]);
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, Bell, Building2, CheckCircle2, MapPin, Search, Smartphone, Wrench } from 'lucide-react';
-import { useAvailableProperties } from '../../lib/queries';
+import Reveal from './Reveal';
 
 /** Hero backgrounds, pre-blurred and compressed by scripts/build-hero-images.mjs. */
 const HERO_IMAGES = ['/hero/hero-1.webp', '/hero/hero-2.webp', '/hero/hero-3.webp', '/hero/hero-4.webp', '/hero/hero-5.webp'];
@@ -26,8 +26,6 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
   const [slide, setSlide] = useState(0);
   const [query, setQuery] = useState('');
   const [type, setType] = useState<ListingType>('all');
-  const { data: listings } = useAvailableProperties();
-  const listingCount = Array.isArray(listings) ? listings.length : 0;
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -41,7 +39,7 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
   };
 
   return (
-    <section className="relative isolate flex h-[86svh] min-h-[600px] max-h-[900px] items-center overflow-hidden bg-zinc-950">
+    <section className="relative isolate flex min-h-[620px] items-center overflow-hidden bg-zinc-950 py-24 sm:h-[92svh] sm:max-h-[900px]">
       {HERO_IMAGES.map((src, index) => (
         <div
           key={src}
@@ -52,52 +50,48 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
           style={{ backgroundImage: `url('${src}')` }}
         />
       ))}
-      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-black/80 via-black/55 to-black/30" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-black/75 via-black/50 to-black/65" />
       <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-black/60 to-transparent" />
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
-        <div className="max-w-3xl">
-          {listingCount > 0 && (
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-              <span className="h-1.5 w-1.5 rounded-full bg-white" />
-              {listingCount} {listingCount === 1 ? 'home' : 'homes'} available now
-            </span>
-          )}
-          <h1 className="mt-5 text-[2.6rem] font-extrabold leading-[1.02] tracking-tight text-white sm:text-7xl">
+        <div className="mx-auto max-w-3xl animate-in text-center fade-in slide-in-from-bottom-6 duration-1000">
+          <h1 className="text-[2.6rem] font-extrabold leading-[1.02] tracking-tight text-white sm:text-7xl">
             Find a home.
             <br />
             <span className="text-white/70">Manage your rentals.</span>
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-200">
+          <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-zinc-200 sm:mt-6 sm:text-lg sm:leading-8">
             Browse houses across Kenya, or list your property and collect rent on{' '}
             <span className="whitespace-nowrap">M-Pesa</span>.
           </p>
 
           <form
             onSubmit={submit}
-            className="mt-9 flex w-full max-w-2xl flex-col gap-2 rounded-2xl bg-white p-2 shadow-2xl shadow-black/30 sm:flex-row sm:items-center"
+            className="mx-auto mt-8 flex w-full max-w-2xl flex-col gap-2 rounded-2xl border border-white/30 bg-white/[0.16] p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:flex-row sm:items-stretch"
             role="search"
           >
-            <label className="flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 sm:py-0">
-              <MapPin className="h-5 w-5 shrink-0 text-zinc-400" />
-              <span className="sr-only">Location</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Where do you want to live? e.g. Kilimani"
-                className="h-10 w-full bg-transparent text-sm text-zinc-950 placeholder:text-zinc-400 focus:outline-none"
-              />
+            <label className="flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left sm:py-0">
+              <MapPin className="h-5 w-5 shrink-0 text-white/75" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">Location</span>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Where do you want to live? e.g. Kilimani"
+                  className="h-6 w-full bg-transparent text-sm text-white placeholder:text-white/65 focus:outline-none"
+                />
+              </span>
             </label>
-            <div className="hidden h-8 w-px bg-zinc-200 sm:block" />
-            <label className="flex items-center rounded-xl px-3 sm:w-40">
-              <span className="sr-only">Property type</span>
+            <div className="hidden w-px bg-white/25 sm:block" />
+            <label className="block px-3 py-1 text-left sm:w-40 sm:py-2">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">Property type</span>
               <select
                 value={type}
                 onChange={(event) => setType(event.target.value as ListingType)}
-                className="h-10 w-full cursor-pointer bg-transparent text-sm font-medium text-zinc-950 focus:outline-none"
+                className="h-6 w-full cursor-pointer bg-transparent text-sm font-medium text-white focus:outline-none"
               >
                 {LISTING_TYPES.map((option) => (
-                  <option key={option.id} value={option.id}>
+                  <option key={option.id} value={option.id} className="text-zinc-950">
                     {option.label}
                   </option>
                 ))}
@@ -105,7 +99,7 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
             </label>
             <button
               type="submit"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98]"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 active:scale-[0.98]"
             >
               <Search className="h-4 w-4" />
               Search
@@ -115,7 +109,7 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
           <button
             type="button"
             onClick={onStartLandlord}
-            className="group mt-6 inline-flex items-center gap-2 text-sm font-semibold text-white"
+            className="group mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white"
           >
             Own a property? List it for free
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -159,14 +153,14 @@ export function ListingsSection({ activeType, onTypeChange, children }: Listings
     <section id="homes" className="scroll-mt-16 bg-white px-2 py-16 sm:px-4 sm:py-24">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-col gap-8 px-2 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-xl">
+          <Reveal className="max-w-xl">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Available now</p>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-950 sm:text-5xl">Homes and spaces listed on MyBoma</h2>
             <p className="mt-4 text-base leading-7 text-zinc-600">
-              Apartments, commercial spaces and short stays, listed by their landlords and agents. Sign in to enquire or book a viewing.
+              Apartments, offices and short stays, listed by their landlords and agents. Tap a home to see details and ask about it.
             </p>
-          </div>
-          <div className="grid grid-cols-3 gap-3 lg:w-[460px]">
+          </Reveal>
+          <Reveal delay={150} className="grid grid-cols-3 gap-3 lg:w-[460px]">
             {TYPE_TILES.map((tile) => {
               const selected = activeType === tile.id;
               return (
@@ -192,9 +186,9 @@ export function ListingsSection({ activeType, onTypeChange, children }: Listings
                 </button>
               );
             })}
-          </div>
+          </Reveal>
         </div>
-        <div className="mt-10">{children}</div>
+        <Reveal delay={100} className="mt-10">{children}</Reveal>
       </div>
     </section>
   );
@@ -210,9 +204,9 @@ export function LandlordFeatures({ onStartLandlord }: { onStartLandlord: () => v
     { icon: Wrench, title: 'Repairs', body: 'Tenants report issues. You track them until fixed.' },
   ];
   return (
-    <section id="landlords" className="scroll-mt-16 bg-zinc-50 px-4 py-16 sm:px-6 sm:py-24">
-      <div className="mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-2 lg:gap-16">
-        <div className="relative">
+    <section id="landlords" className="scroll-mt-16 bg-zinc-50 px-4 py-12 sm:px-6 sm:py-20">
+      <div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-2 lg:gap-16">
+        <Reveal className="relative hidden lg:block">
           <div className="overflow-hidden rounded-3xl">
             <img
               src="/categories/landlords.webp"
@@ -232,21 +226,21 @@ export function LandlordFeatures({ onStartLandlord }: { onStartLandlord: () => v
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
 
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">For landlords & agents</p>
-          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-zinc-950 sm:text-5xl">Run your rentals from your phone</h2>
-          <p className="mt-4 text-base leading-7 text-zinc-600">Start free with one house. Upgrade when your portfolio grows.</p>
-          <div className="mt-10 grid gap-x-8 gap-y-7 sm:grid-cols-2">
+        <Reveal delay={150}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">For landlords & agents</p>
+          <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-zinc-950 sm:mt-3 sm:text-4xl">Run your rentals from your phone</h2>
+          <p className="mt-3 text-sm leading-6 text-zinc-600 sm:mt-4 sm:text-base sm:leading-7">Start free with one house. Upgrade when your portfolio grows.</p>
+          <div className="mt-7 grid gap-x-7 gap-y-5 sm:grid-cols-2 sm:gap-y-7">
             {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-white">
-                  <Icon className="h-5 w-5" />
+              <div key={title} className="flex gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-white">
+                  <Icon className="h-4 w-4" />
                 </span>
                 <div>
-                  <h3 className="text-base font-semibold text-zinc-950">{title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">{body}</p>
+                  <h3 className="text-sm font-semibold text-zinc-950">{title}</h3>
+                  <p className="mt-0.5 text-xs leading-5 text-zinc-600 sm:mt-1 sm:text-sm sm:leading-6">{body}</p>
                 </div>
               </div>
             ))}
@@ -254,12 +248,12 @@ export function LandlordFeatures({ onStartLandlord }: { onStartLandlord: () => v
           <button
             type="button"
             onClick={onStartLandlord}
-            className="mt-10 inline-flex h-12 items-center gap-2 rounded-xl bg-zinc-950 px-6 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98]"
+            className="mt-7 inline-flex h-11 items-center gap-2 rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98]"
           >
             List your property free
             <ArrowRight className="h-4 w-4" />
           </button>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -274,15 +268,15 @@ export function GetStarted({ onStartLandlord, onSignIn }: { onStartLandlord: () 
     { title: 'Get paid on M-Pesa', body: 'Reminders do the chasing.' },
   ];
   return (
-    <section className="bg-white px-4 py-16 sm:px-6 sm:py-24">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-zinc-950 px-6 py-12 text-white sm:px-12 sm:py-16">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
-          <h2 className="max-w-md text-3xl font-extrabold tracking-tight sm:text-5xl">Get started in 3 steps</h2>
-          <div className="flex flex-col gap-3 sm:flex-row">
+    <section className="bg-white px-4 py-12 sm:px-6 sm:py-20">
+      <Reveal className="mx-auto max-w-7xl overflow-hidden rounded-3xl bg-zinc-950 px-5 py-7 text-white sm:px-10 sm:py-12">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="max-w-md text-2xl font-extrabold tracking-tight sm:text-4xl">Get started in 3 steps</h2>
+          <div className="flex gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onStartLandlord}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 active:scale-[0.98]"
+              className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 active:scale-[0.98]"
             >
               Start free
               <ArrowRight className="h-4 w-4" />
@@ -290,22 +284,22 @@ export function GetStarted({ onStartLandlord, onSignIn }: { onStartLandlord: () 
             <button
               type="button"
               onClick={onSignIn}
-              className="inline-flex h-12 items-center justify-center rounded-xl border border-white/30 px-6 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-[0.98]"
+              className="inline-flex h-10 flex-1 items-center justify-center rounded-xl border border-white/30 px-4 text-sm font-semibold text-white transition hover:bg-white/10 active:scale-[0.98]"
             >
               Sign in
             </button>
           </div>
         </div>
-        <ol className="mt-12 grid gap-px overflow-hidden rounded-2xl bg-white/10 sm:grid-cols-3">
+        <ol className="mt-7 grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-white/10">
           {steps.map((step, index) => (
-            <li key={step.title} className="bg-zinc-950 p-6 sm:p-8">
-              <span className="text-sm font-semibold text-zinc-500">0{index + 1}</span>
-              <h3 className="mt-3 text-lg font-semibold">{step.title}</h3>
-              <p className="mt-1 text-sm text-zinc-400">{step.body}</p>
+            <li key={step.title} className="bg-zinc-950 p-3 sm:p-6">
+              <span className="text-xs font-semibold text-zinc-500 sm:text-sm">0{index + 1}</span>
+              <h3 className="mt-2 text-xs font-semibold sm:mt-3 sm:text-lg">{step.title}</h3>
+              <p className="mt-1 hidden text-sm text-zinc-400 sm:block">{step.body}</p>
             </li>
           ))}
         </ol>
-      </div>
+      </Reveal>
     </section>
   );
 }

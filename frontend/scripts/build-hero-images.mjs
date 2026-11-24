@@ -1,6 +1,6 @@
 // Converts source photos into the landing page's hero carousel backgrounds.
 // The hero sits under a dark overlay with text on top, so the images are slightly blurred
-// and heavily compressed: they only need to read as "a house", not show detail.
+// and compressed: the dark overlay and text on top hide fine detail anyway.
 //
 //   node scripts/build-hero-images.mjs <source-dir>
 //
@@ -30,7 +30,7 @@ for (const name of sources) {
   const info = await sharp(path.join(sourceDir, name))
     .rotate()
     .resize({width: 1920, height: 1080, fit: 'cover', position: 'attention'})
-    .blur(2.5)
+    .blur(1.2)
     .webp({quality: 55, effort: 6})
     .toFile(output);
   console.log(`${name} -> public/hero/hero-${index}.webp (${Math.round(info.size / 1024)} KB)`);

@@ -21,7 +21,7 @@ export default function ImpersonationBanner({ target, onExit }: ImpersonationBan
         bg-amber-950/95 backdrop-blur-md border-b border-amber-700/60
         shadow-[0_4px_30px_rgba(245,158,11,0.25)]"
       style={{
-        fontFamily: 'Inter, system-ui, sans-serif',
+        fontFamily: 'Poppins, system-ui, sans-serif',
         paddingTop: 'var(--sat)',
         minHeight: 'var(--impersonation-height)',
         boxSizing: 'border-box',

@@ -16,7 +16,7 @@ export default function Footer({ variant = 'app' }: FooterProps) {
         <div className="w-full flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
           <div className="flex items-center gap-2.5">
             <img src={tenantConfig.logoUrl} alt={tenantConfig.appName} className="h-5 w-5 object-contain rounded" width="20" height="20" />
-            <span className="font-semibold text-slate-900 dark:text-white">{tenantConfig.appName}</span>
+            <span className="font-brand text-xl font-semibold leading-none text-slate-900 dark:text-white">{tenantConfig.appName}</span>
             <span>·</span>
             <span>© {year} All rights reserved.</span>
           </div>
@@ -54,7 +54,7 @@ export default function Footer({ variant = 'app' }: FooterProps) {
       <div
         aria-hidden
         className="absolute inset-0 -z-20 bg-cover bg-center opacity-70"
-        style={{ backgroundImage: "url('/hero/hero-3.webp')" }}
+        style={{ backgroundImage: "url('/hero/hero-1.webp')" }}
       />
       <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-black via-black/80 to-black/45" />
 
@@ -63,7 +63,7 @@ export default function Footer({ variant = 'app' }: FooterProps) {
           <div>
             <div className="flex items-center gap-3">
               <img src={tenantConfig.logoUrl} alt="" className="h-9 w-9 rounded-xl bg-white object-contain p-1" width="36" height="36" />
-              <span className="text-lg font-bold tracking-tight">{tenantConfig.appName}</span>
+              <span className="font-brand text-3xl font-semibold leading-none tracking-tight">{tenantConfig.appName}</span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-6 text-zinc-400">
               Find a home, or manage your rentals and collect rent on M-Pesa. Built in Kenya.

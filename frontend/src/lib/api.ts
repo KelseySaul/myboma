@@ -196,6 +196,28 @@ export const updateMaintenanceRequestStatus = (id: string, status: 'pending' | '
 
 export const getAvailableProperties = () => publicRequest<Record<string, any>[]>('/api/public/properties/available');
 
+/** Guest enquiry about a listing (no account needed). Emails the visitor and the landlord. */
+export const submitEnquiry = async (body: {
+  propertyId: string;
+  name: string;
+  email: string;
+  phone: string;
+  message?: string;
+  checkIn?: string;
+  checkOut?: string;
+}): Promise<{ok: true}> => {
+  const response = await fetch(`${apiBaseUrl()}/api/public/enquiries`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Could not send your enquiry. Please try again.');
+  }
+  return payload as {ok: true};
+};
+
 export const getLandlordPublicContact = (uid: string) =>
   bffRequest<{uid: string; displayName: string; phone?: string; email: string}>(`/landlords/${uid}/public-contact`);
 

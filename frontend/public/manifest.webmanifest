@@ -1,7 +1,7 @@
 {
-  "name": "MyBoma Property OS",
+  "name": "MyBoma Property Management Software",
   "short_name": "MyBoma",
-  "description": "Rent collection, tenants, maintenance and listings for Kenyan landlords, tenants and house hunters.",
+  "description": "A property management software system for Kenyan rentals, tenants, payments, maintenance and listings.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -9,6 +9,7 @@ import {appBaseUrl, isProduction, nonSecretConfigStatus} from '../http/config.ts
 import {
   asyncHandler,
   getValidatedBody,
+  enquiryLimiter,
   publicLimiter,
   validateBody,
   waitlistLimiter,
@@ -37,6 +38,18 @@ const waitlistUnsubscribeSchema = z
     message: 'Email or unsubscribe token is required',
   });
 
+const publicEnquirySchema = z
+  .object({
+    propertyId: uuidSchema,
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(320),
+    phone: z.string().trim().min(9).max(40),
+    message: z.string().trim().max(1000).optional(),
+    checkIn: z.string().date().optional(),
+    checkOut: z.string().date().optional(),
+  })
+  .strict();
+
 const healthHandler = (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
@@ -44,6 +57,17 @@ const healthHandler = (_req: Request, res: Response) => {
     service: 'MyBoma API Gateway',
     ...(isProduction ? {} : {config: nonSecretConfigStatus()}),
   });
+};
+
+/** Routes stored legacy Render file URLs through the current public API origin. */
+const publicImageUrl = (request: Request, value: string) => {
+  try {
+    const parsed = new URL(value);
+    if (!parsed.pathname.startsWith('/api/files/')) return value;
+    return `${request.protocol}://${request.get('host')}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return value;
+  }
 };
 
 /** Public (unauthenticated) routes and provider webhooks, registered after express.json(). */
@@ -68,6 +92,104 @@ export function registerPublicRoutes(app: Express) {
   );
   app.get('/api/legal', (_req, res) => res.json(LEGAL_DOCUMENTS));
 
+  /**
+   * Lets a visitor ask about an available listing without creating an account.
+   * Recipient and property details are derived server-side so this cannot be used
+   * as an open email relay. The visitor's address is a Reply-To only.
+   */
+  app.post(
+    '/api/public/enquiries',
+    enquiryLimiter,
+    validateBody(publicEnquirySchema),
+    asyncHandler(async (req, res) => {
+      const enquiry = getValidatedBody<z.infer<typeof publicEnquirySchema>>(req);
+      const property = await db.query.properties.findFirst({
+        where: eq(schema.properties.id, enquiry.propertyId),
+        columns: {id: true, landlordId: true, title: true, location: true, type: true, price: true, status: true},
+      });
+      if (!property || property.status !== 'available') {
+        res.status(404).json({error: 'This listing is not available'});
+        return;
+      }
+
+      const landlord = await db.query.users.findFirst({
+        where: eq(schema.users.uid, property.landlordId),
+        columns: {email: true, displayName: true},
+      });
+      if (!landlord?.email) {
+        // Do not reveal whether a particular listing has contact information.
+        res.status(404).json({error: 'This listing is not available'});
+        return;
+      }
+
+      if ((enquiry.checkIn && !enquiry.checkOut) || (!enquiry.checkIn && enquiry.checkOut)) {
+        res.status(400).json({error: 'Please provide both check-in and check-out dates'});
+        return;
+      }
+      if (enquiry.checkIn && enquiry.checkOut && enquiry.checkOut <= enquiry.checkIn) {
+        res.status(400).json({error: 'Check-out must be after check-in'});
+        return;
+      }
+
+      const price = Number(property.price).toLocaleString('en-KE');
+      const dates = enquiry.checkIn && enquiry.checkOut ? `${enquiry.checkIn} to ${enquiry.checkOut}` : null;
+      const listingUrl = `${appBaseUrl}/#homes`;
+      try {
+        await Promise.all([
+          sendEmail({
+            to: landlord.email,
+            replyTo: enquiry.email,
+            subject: `New enquiry: ${property.title}`,
+            template: {
+              preheader: `${enquiry.name} is interested in ${property.title}.`,
+              heading: 'You have a new listing enquiry',
+              paragraphs: [
+                `${enquiry.name} is interested in ${property.title}. Reply to this email to contact them directly.`,
+              ],
+              details: [
+                ['Listing', property.title],
+                ['Location', property.location],
+                ['Price', `KES ${price} per ${property.type === 'bnb' ? 'night' : 'month'}`],
+                ['Name', enquiry.name],
+                ['Email', enquiry.email],
+                ['Phone', enquiry.phone],
+                ...(dates ? [['Requested dates', dates] as [string, string]] : []),
+                ...(enquiry.message ? [['Message', enquiry.message] as [string, string]] : []),
+              ],
+              button: {label: 'View MyBoma', url: listingUrl},
+              footerNote: 'You received this because you manage this listing on MyBoma.',
+            },
+          }),
+          sendEmail({
+            to: enquiry.email,
+            subject: `Your enquiry about ${property.title}`,
+            template: {
+              preheader: `We sent your enquiry about ${property.title}.`,
+              heading: 'Your enquiry is on its way',
+              paragraphs: [
+                `We sent your enquiry about ${property.title} to ${landlord.displayName || 'the landlord or agent'}.`,
+                'They can reply by email or contact you using the details you supplied. An enquiry is not a booking or reservation.',
+              ],
+              details: [
+                ['Listing', property.title],
+                ['Location', property.location],
+                ...(dates ? [['Requested dates', dates] as [string, string]] : []),
+              ],
+              button: {label: 'Browse MyBoma', url: listingUrl},
+              footerNote: 'You received this because you submitted a MyBoma listing enquiry.',
+            },
+          }),
+        ]);
+      } catch (error) {
+        console.error('[Enquiry] Email delivery failed:', error);
+        res.status(503).json({error: 'We could not send your enquiry right now. Please try again shortly.'});
+        return;
+      }
+
+      res.status(201).json({ok: true});
+    }),
+  );
+
   /** Public listings — matches the old "Authenticated users read available properties"
    * RLS policy's `status = 'available'` branch, which was open to anyone (see db/authz.ts
    * canViewProperty). Logged-out hunters browse this same feed. */
@@ -87,7 +209,11 @@ export function registerPublicRoutes(app: Express) {
       offset,
     });
     res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
-    res.json(rows.map((p) => ({...p, price: Number(p.price)})));
+    res.json(rows.map((p) => ({
+      ...p,
+      price: Number(p.price),
+      images: p.images.map((image) => publicImageUrl(req, image)),
+    })));
   }));
 
   /** Public file serving for marketing assets (listing photos, avatars, platform logos).
@@ -103,6 +229,9 @@ export function registerPublicRoutes(app: Express) {
       res.status(404).json({error: 'Not found'});
       return;
     }
+    // Files on this endpoint are intentionally public listing/marketing assets.
+    // Permit a listing photo to render if a native client or a preview uses another origin.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     await streamStoredObject(key, res, 'public, max-age=31536000, immutable');
   }));
 

@@ -276,3 +276,13 @@ export const waitlistLimiter = rateLimit({
   legacyHeaders: false,
   message: {error: 'Too many waitlist requests. Please wait and try again.'},
 });
+
+/** Public enquiries cause two email deliveries, so keep a tighter independent limit. */
+export const enquiryLimiter = rateLimit({
+  store: sharedRateLimitStore('enquiryLimiter'),
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {error: 'Too many enquiries from this connection. Please try again later.'},
+});

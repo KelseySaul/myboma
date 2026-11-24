@@ -1,12 +1,12 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { bearer } from 'better-auth/plugins/bearer';
-import nodemailer from 'nodemailer';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 // Auth is trusted system code: it always uses the owner connection, never a user's
 // RLS-scoped request transaction (provisioning calls signUpEmail inside a request).
 import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
+import {sendEmail} from './services/email.ts';
 
 // Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
 // admin rights are only ever granted by a super admin (provisioning / role endpoint)
@@ -100,21 +100,6 @@ async function applyAdminInvitationAfterVerification(authUser: { id: string; ema
     .where(eq(schema.users.uid, authUser.id));
 }
 
-let mailer: ReturnType<typeof nodemailer.createTransport> | null | undefined;
-const getMailer = () => {
-  if (mailer !== undefined) return mailer;
-  mailer =
-    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-      ? nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT || 587),
-          secure: process.env.SMTP_SECURE === 'true',
-          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        })
-      : null;
-  return mailer;
-};
-
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',
@@ -137,20 +122,17 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      const transport = getMailer();
-      if (!transport) {
-        console.warn(`[auth] SMTP not configured; cannot send verification email to ${user.email}`);
-        return;
-      }
-      await transport.sendMail({
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      await sendEmail({
         to: user.email,
         subject: 'Verify your MyBoma email',
-        text: `Welcome to MyBoma. Confirm your email address by opening this link:
-
-${url}
-
-If you did not sign up, ignore this email.`,
+        template: {
+          preheader: 'Confirm your email address to finish setting up MyBoma.',
+          heading: 'Confirm your email address',
+          paragraphs: ['Welcome to MyBoma. Confirm your email address to finish setting up your account.'],
+          button: {label: 'Verify email address', url},
+          closing: ['If you did not create a MyBoma account, you can safely ignore this email.'],
+          footerNote: 'You received this because an account was created with this email address.',
+        },
       });
     },
     afterEmailVerification: async (user) => {

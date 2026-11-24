@@ -1,9 +1,19 @@
-import {emailTransporter} from '../services/notify.ts';
+import {isEmailConfigured} from '../services/email.ts';
 
 // Render (and most hosts) inject PORT; SERVER_PORT is the local-dev override.
 export const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3002);
 export const isProduction = process.env.NODE_ENV === 'production';
 export const defaultCorsOrigins = 'http://localhost:5173,http://localhost:4173';
+export const officialAppUrl = 'https://myboma.kelseysaul.dev';
+
+// The previous public Render hostname is still safe for API transport, but must not
+// be used in user-facing links or stored file URLs: it is a different browser origin
+// from the official site and causes its image resources to be blocked.
+const isLegacyRenderUrl = (value?: string) => Boolean(value && /(^|\/\/)myboma\.onrender\.com\/?$/i.test(value.trim()));
+export const appBaseUrl =
+  isProduction && (!process.env.APP_BASE_URL || isLegacyRenderUrl(process.env.APP_BASE_URL))
+    ? officialAppUrl
+    : process.env.APP_BASE_URL || `http://localhost:${PORT}`;
 
 export const buildDeploymentOrigins = (): string[] => {
   const origins = new Set<string>();
@@ -20,7 +30,7 @@ export const buildDeploymentOrigins = (): string[] => {
   for (const entry of (process.env.CORS_ORIGINS || defaultCorsOrigins).split(',')) {
     add(entry);
   }
-  add(process.env.APP_BASE_URL || `http://localhost:${PORT}`);
+  add(appBaseUrl);
   add(process.env.VERCEL_URL);
   add(process.env.VERCEL_BRANCH_URL);
   add(process.env.RENDER_EXTERNAL_URL);
@@ -35,7 +45,6 @@ export const buildDeploymentOrigins = (): string[] => {
 };
 
 export const deploymentOrigins = buildDeploymentOrigins();
-export const appBaseUrl = process.env.APP_BASE_URL || deploymentOrigins[0] || `http://localhost:${PORT}`;
 // Payment redirects may only return to real web origins, never the native WebView origins.
 export const NATIVE_ORIGINS = new Set(['capacitor://localhost', 'ionic://localhost', 'https://localhost', 'http://localhost']);
 export const allowedRedirectOrigins = new Set(deploymentOrigins.filter((origin) => !NATIVE_ORIGINS.has(origin)));
@@ -56,6 +65,6 @@ export const nonSecretConfigStatus = () => ({
       process.env.MPESA_PASSKEY &&
       process.env.MPESA_CALLBACK_URL,
   ),
-  smtp: Boolean(emailTransporter),
+  email: isEmailConfigured(),
   sentry: Boolean(process.env.SENTRY_DSN),
 });

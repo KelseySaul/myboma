@@ -212,8 +212,8 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       if (method === 'pesapal') {
         const { checkoutUrl } = await createPesapalRentCheckout({
           rentPaymentId: paymentId,
-          successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=success&provider=pesapal` : `${window.location.origin}/?rent_payment=success&provider=pesapal`,
-          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=cancelled&provider=pesapal` : `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
+          successUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=success&provider=pesapal` : `${window.location.origin}/?rent_payment=success&provider=pesapal`,
+          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=cancelled&provider=pesapal` : `${window.location.origin}/?rent_payment=cancelled&provider=pesapal`,
         });
 
         if (!checkoutUrl) throw new Error('Pesapal did not return a checkout URL.');
@@ -238,8 +238,8 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       if (method === 'stripe') {
         const { checkoutUrl } = await createStripeRentCheckout({
           rentPaymentId: paymentId,
-          successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=success` : `${window.location.origin}/?rent_payment=success`,
-          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?rent_payment=cancelled` : `${window.location.origin}/?rent_payment=cancelled`,
+          successUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=success` : `${window.location.origin}/?rent_payment=success`,
+          cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?rent_payment=cancelled` : `${window.location.origin}/?rent_payment=cancelled`,
         });
 
         if (!checkoutUrl) throw new Error('Stripe did not return a checkout URL.');
