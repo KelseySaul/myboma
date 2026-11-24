@@ -27,7 +27,7 @@ npm run mobile:open:android
 npm run mobile:android
 ```
 
-The Android debug APK builds to `android/app/build/outputs/apk/debug/app-debug.apk`.
+The Android debug APK builds to `frontend/android/app/build/outputs/apk/debug/app-debug.apk`.
 
 iPhone:
 
@@ -36,7 +36,7 @@ npm run mobile:open:ios
 npm run mobile:ios
 ```
 
-iOS builds must be run on macOS with Xcode. The generated iOS project is in `ios/App`.
+iOS builds must be run on macOS with Xcode. The generated iOS project is in `frontend/ios/App`.
 
 Set `VITE_API_BASE_URL` to your deployed HTTPS gateway URL before building Android/iOS so BFF calls can reach `/api/mobile` from a phone.
 
@@ -64,7 +64,7 @@ All public API routes and webhooks are rate limited. BFF routes require a Better
 Before enabling payments in production:
 
 1. Copy `.env.example` to `.env` and fill the server-only keys.
-2. Apply the schema to Neon with `npm run db:push` (Drizzle schema in `db/schema/`). On an existing database run `docs/migrations/05-indexes-and-invoice-dedupe.sql` first so duplicate invoices don't block the new unique index. `supabase-setup.sql` is historical only.
+2. Apply the schema to Neon with `npm run db:push` (Drizzle schema in `backend/db/schema/`). On an existing database run `backend/migrations/05-indexes-and-invoice-dedupe.sql` first so duplicate invoices don't block the new unique index. `backend/supabase-setup.sql` is historical only.
 3. Configure Stripe webhook events for `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 4. Configure Pesapal API 3.0:
    - Website URL: `https://myboma.vercel.app`
