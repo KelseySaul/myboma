@@ -13,21 +13,27 @@ import {
   faUser, 
   faShieldAlt, 
   faSearch, 
-  faArrowRight, 
   faCheckCircle,
   faMobileAlt,
   faEye,
   faEyeSlash,
-  faDownload,
-  faBell,
-  faChartPie,
-  faUsers
 } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LEGAL_DOCUMENTS, PRIVACY_VERSION, TERMS_VERSION } from '../../../shared/legalDocuments';
 import LandlordPricingSection from './LandlordPricingSection';
+import {
+  AudienceTabs,
+  Faq,
+  FeatureGrid,
+  FinalCta,
+  HowItWorks,
+  LandingHero,
+  ListingsSection,
+  ProblemSolution,
+  TrustStrip,
+} from './landing/LandingSections';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import {
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -347,254 +353,107 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
     }
   };
 
+  const openLandlordSignup = (tier?: SubscriptionTier, billing?: BillingPeriod) => {
+    if (tier && billing) setLandlordSignup((prev) => ({ ...prev, tier, billing }));
+    setSelectedRole('landlord');
+    setAuthMode('signup');
+    setIsAuthOpen(true);
+  };
+
+  const openSignIn = () => {
+    setAuthMode('login');
+    setIsAuthOpen(true);
+  };
+
+  const scrollToHomes = () => document.getElementById('homes')?.scrollIntoView({ behavior: 'smooth' });
+
   return (
-    <div className="flex flex-col min-h-screen bg-white transition-colors duration-300 selection:bg-indigo-100 overflow-x-hidden">
-      {/* Sleek Premium Welcome Hero */}
-      {!isNative && (
-        <section className="relative min-h-[85vh] flex items-center pt-20 pb-10 sm:pt-24 sm:pb-16 overflow-hidden bg-cover bg-center" style={{ backgroundImage: "url('/premium_house_bg.png')" }}>
-          {/* Advanced Glassmorphism Overlay */}
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px]" />
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/20 to-indigo-950/60" />
-          
-          {/* Animated Mesh Gradient Blobs */}
-          <div className="absolute top-1/4 -left-20 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
-          <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-indigo-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-
-          <div className="container mx-auto px-4 relative z-10">
-            <div className="max-w-4xl mx-auto text-center py-8 sm:py-12 px-6 rounded-[2.5rem] bg-white/5 border border-white/10 backdrop-blur-md shadow-2xl">
-              <p className="mb-4 text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300 sm:text-xs animate-in fade-in slide-in-from-bottom-2 duration-700">
-                Property management, simplified
-              </p>
-              <h1 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-[-0.05em] text-white leading-[0.95] mb-6 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-                One home for your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 to-purple-300">properties.</span>
-              </h1>
-              <p className="text-base sm:text-xl text-zinc-300 max-w-2xl mx-auto font-medium leading-relaxed mb-10 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
-                Track listings, tenants, rent, and maintenance from a premium workspace built for modern property teams.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <a
-                    href={tenantConfig.appLinks.android}
-                    download="app.apk"
-                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-                  >
-                    <FontAwesomeIcon icon={faDownload} className="text-emerald-500 group-hover:rotate-12 transition-transform" />
-                    Download APK
-                  </a>
-                  <a
-                    href={tenantConfig.appLinks.ios}
-                    download="app.ipa"
-                    className="group relative flex items-center justify-center gap-3 px-6 py-4 bg-white text-zinc-950 rounded-2xl font-black text-sm shadow-[0_20px_40px_rgba(255,255,255,0.15)] hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-                  >
-                    <FontAwesomeIcon icon={faDownload} className="text-zinc-900 group-hover:rotate-12 transition-transform" />
-                    Download iOS App
-                  </a>
-                </div>
-                <button
-                  onClick={() => document.getElementById('product')?.scrollIntoView({behavior: 'smooth'})}
-                  className="group flex items-center gap-3 px-8 py-4 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-400/30 backdrop-blur-sm text-white rounded-2xl font-black text-sm hover:scale-[1.05] active:scale-95 transition-all duration-300 cursor-pointer"
-                >
-                  <FontAwesomeIcon icon={faArrowRight} className="text-indigo-300 group-hover:translate-x-1 transition-transform" />
-                  Explore Features
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-emerald-100">
+      {isNative ? (
+        <section className="container mx-auto px-2 py-4 pt-safe sm:px-4">
+          <HunterDashboard
+            profile={null}
+            onLoginRequired={() => setIsAuthOpen(true)}
+            activeTab={propertyFilter}
+            setActiveTab={setPropertyFilter}
+            variant="embedded"
+          />
         </section>
-      )}
-
-      {/* ── NATIVE MOBILE HERO ───────────────────────────────────── */}
-      {/* Removed per white labeling restructuring. The properties grid is now the absolute top element. */}
-
-      {/* Immediate Property Discovery Grid */}
-      <section className={isNative ? "container mx-auto px-2 sm:px-4 py-4 pt-safe" : "container mx-auto px-2 sm:px-4 pb-14 sm:pb-20 -mt-1"}>
-        <HunterDashboard
-          profile={null}
-          onLoginRequired={() => setIsAuthOpen(true)}
-          activeTab={propertyFilter}
-          setActiveTab={setPropertyFilter}
-          variant="embedded"
-        />
-      </section>
-
-      {!isNative && (
+      ) : (
         <>
-          {/* Social Proof Section */}
-          <section className="bg-zinc-50 border-y border-zinc-200 py-8 overflow-hidden">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-12 md:gap-20">
-             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
-                <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center text-white font-black text-xs shadow-inner">MB</div>
-                <span className="font-bold text-zinc-600 tracking-tight text-sm">Trusted by <span className="text-zinc-900 font-black">50+ Teams</span></span>
-             </div>
-             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faCheckCircle} className="text-emerald-500 text-xl" />
-                </div>
-                <span className="font-bold text-zinc-600 tracking-tight text-sm">Ksh 10M+ <span className="text-zinc-900 font-black">Tracked</span></span>
-             </div>
-             <div className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl shadow-sm border border-zinc-100 hover:shadow-md transition-shadow">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faUsers} className="text-indigo-600 text-xl" />
-                </div>
-                <span className="font-bold text-zinc-600 tracking-tight text-sm">500+ <span className="text-zinc-900 font-black">Tenants</span></span>
-             </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="product" className="relative bg-zinc-50/50 px-4 py-20 sm:py-32 overflow-hidden">
-        {/* Subtle background decorative elements */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-px bg-gradient-to-r from-transparent via-zinc-200 to-transparent" />
-        
-        <div className="mx-auto max-w-7xl relative">
-          <div className="mx-auto max-w-3xl text-center mb-16 sm:mb-24">
-            <h2 className="text-3xl font-black tracking-tight text-zinc-950 sm:text-5xl lg:text-6xl mb-6">
-              The important numbers <span className="text-indigo-600">stay close.</span>
-            </h2>
-            <p className="text-lg font-medium leading-relaxed text-zinc-600">
-              See portfolio health at a glance, keep tenant work organized, and give your team a clear operating view from any device.
-            </p>
-          </div>
-
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-center">
-            {/* Feature Cards Column */}
-            <div className="space-y-4">
-              {[
-                { 
-                  title: 'Portfolio Visibility', 
-                  description: 'Listings, occupancy, collections, and costs in one unified dashboard.',
-                  icon: faChartPie,
-                  color: 'text-indigo-600',
-                  bg: 'bg-indigo-50'
-                },
-                { 
-                  title: 'Tenant Operations', 
-                  description: 'Invite tenants, manage rent records, and track maintenance work in real-time.',
-                  icon: faUsers,
-                  color: 'text-purple-600',
-                  bg: 'bg-purple-50'
-                },
-                { 
-                  title: 'Team Oversight', 
-                  description: 'Give property managers and admins a focused control center with granular permissions.',
-                  icon: faShieldAlt,
-                  color: 'text-blue-600',
-                  bg: 'bg-blue-50'
-                },
-              ].map((feature) => (
-                <article 
-                  key={feature.title} 
-                  className="group p-6 rounded-3xl border border-zinc-200 bg-white hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 cursor-pointer"
-                >
-                  <div className="flex gap-5">
-                    <div className={`shrink-0 w-12 h-12 rounded-2xl ${feature.bg} flex items-center justify-center transition-transform group-hover:scale-110`}>
-                      <FontAwesomeIcon icon={feature.icon} className={`text-xl ${feature.color}`} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-black text-zinc-900 mb-1">{feature.title}</h3>
-                      <p className="text-sm font-medium leading-relaxed text-zinc-500">{feature.description}</p>
-                    </div>
+          <LandingHero onStartLandlord={() => openLandlordSignup()} onFindHome={scrollToHomes} onInstall={handlePwaInstallClick} />
+          <TrustStrip />
+          <ProblemSolution />
+          <AudienceTabs onStartLandlord={() => openLandlordSignup()} onSignIn={openSignIn} onFindHome={scrollToHomes} />
+          <FeatureGrid />
+          <HowItWorks />
+          <ListingsSection>
+            <HunterDashboard
+              profile={null}
+              onLoginRequired={() => setIsAuthOpen(true)}
+              activeTab={propertyFilter}
+              setActiveTab={setPropertyFilter}
+              variant="embedded"
+            />
+          </ListingsSection>
+          <LandlordPricingSection onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => openLandlordSignup(tier, billing)} />
+          <Faq />
+          <FinalCta
+            onStartLandlord={() => openLandlordSignup()}
+            onFindHome={scrollToHomes}
+            updates={
+              waitlistJoined ? (
+                <p className="text-sm font-semibold text-white">You're subscribed. Watch your inbox for {tenantConfig.appName} updates.</p>
+              ) : (
+                <form className="space-y-3" onSubmit={handleWaitlistSubmit}>
+                  <Label htmlFor="waitlist-email" className="text-sm font-semibold text-white">Get product updates</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="waitlist-email"
+                      type="email"
+                      value={waitlistEmail}
+                      onChange={(event) => setWaitlistEmail(event.target.value)}
+                      placeholder="you@example.com"
+                      className="h-11 rounded-xl border-0 bg-white text-slate-900"
+                      required
+                    />
+                    <Button type="submit" className="h-11 rounded-xl bg-slate-950 px-5 font-semibold text-white hover:bg-slate-800" disabled={waitlistLoading}>
+                      {waitlistLoading ? 'Subscribing...' : 'Subscribe'}
+                    </Button>
                   </div>
-                </article>
-              ))}
-            </div>
+                  <p className="text-xs leading-5 text-emerald-50/80">
+                    Occasional product news only. Read our <a className="font-semibold underline underline-offset-2" href="/privacy">Privacy Policy</a>. Every email has an unsubscribe link.
+                  </p>
+                </form>
+              )
+            }
+          />
 
-            {/* Floating App Screenshots Column */}
-            <div className="relative mt-12 lg:mt-0 lg:ml-8 h-[500px] sm:h-[600px] flex items-center justify-center">
-              {/* Main Phone */}
-              <div className="relative z-20 w-[240px] sm:w-[280px] animate-float shadow-2xl rounded-[3rem] border-[8px] border-zinc-950 bg-zinc-950 overflow-hidden">
-                 <img src="/screenshots/mobile-dashboard.webp" alt="Dashboard" className="w-full aspect-[390/844] object-cover" />
+          <section id="unsubscribe" className="scroll-mt-16 border-t border-slate-200 bg-white px-4 py-8 sm:px-6">
+            <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">No longer want our emails?</h2>
+                <p className="mt-1 text-xs text-slate-500">Enter your email and we will unsubscribe it.</p>
               </div>
-              
-              {/* Secondary Phones (Floating) */}
-              <div className="absolute z-10 -left-4 sm:left-0 top-1/2 -translate-y-1/2 w-[200px] sm:w-[240px] animate-float-delayed opacity-40 hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] border-[6px] border-zinc-950 bg-zinc-950 overflow-hidden hidden sm:block">
-                 <img src="/screenshots/mobile-tenants.webp" alt="Tenants" className="w-full aspect-[390/844] object-cover" />
-              </div>
-              
-              <div className="absolute z-10 -right-4 sm:right-0 top-1/2 -translate-y-1/2 w-[200px] sm:w-[240px] animate-float opacity-40 hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] border-[6px] border-zinc-950 bg-zinc-950 overflow-hidden hidden sm:block" style={{ animationDelay: '1s' }}>
-                 <img src="/screenshots/mobile-insights.webp" alt="Insights" className="w-full aspect-[390/844] object-cover" />
-              </div>
-
-              {/* Decorative elements */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-indigo-500/5 rounded-full blur-[100px] -z-10" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="waitlist" className="border-y border-zinc-100 bg-zinc-950 px-4 py-14 text-white sm:py-20">
-        <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_0.9fr] md:items-center">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">Early access</p>
-            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-5xl">Be first to know when {tenantConfig.appName} opens.</h2>
-            <p className="mt-4 max-w-xl text-sm font-medium leading-6 text-zinc-300 sm:text-base">
-              Join the waitlist for launch updates and important product news. No clutter. Unsubscribe in one step whenever you want.
-            </p>
-          </div>
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:p-6">
-            {waitlistJoined ? (
-              <div className="rounded-2xl bg-emerald-400/10 p-4 text-sm font-bold text-emerald-200">
-                You are on the list. Watch your inbox for {tenantConfig.appName} updates.
-              </div>
-            ) : (
-              <form className="space-y-3" onSubmit={handleWaitlistSubmit}>
-                <Label htmlFor="waitlist-email" className="text-xs font-bold text-zinc-200">Email address</Label>
+              <form className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row" onSubmit={handleUnsubscribe}>
                 <Input
-                  id="waitlist-email"
                   type="email"
-                  value={waitlistEmail}
-                  onChange={(event) => setWaitlistEmail(event.target.value)}
+                  aria-label="Email address to unsubscribe"
+                  value={unsubscribeEmail}
+                  onChange={(event) => setUnsubscribeEmail(event.target.value)}
                   placeholder="you@example.com"
-                  className="h-12 rounded-xl border-white/10 bg-white text-zinc-900"
+                  className="h-10 rounded-xl bg-white"
                   required
                 />
-                <Button type="submit" className="h-12 w-full rounded-xl bg-indigo-500 font-black text-white hover:bg-indigo-400" disabled={waitlistLoading}>
-                  {waitlistLoading ? 'Joining...' : 'Join the waitlist'}
+                <Button type="submit" variant="outline" className="h-10 rounded-xl border-slate-300 bg-white px-5 text-xs font-semibold" disabled={unsubscribeLoading}>
+                  {unsubscribeLoading ? 'Removing...' : 'Unsubscribe'}
                 </Button>
               </form>
-            )}
-            <p className="mt-3 text-[11px] font-medium leading-5 text-zinc-400">
-              By joining, you agree to receive launch and product emails. Read our <a className="font-bold text-indigo-300 hover:text-indigo-200" href="/privacy">Privacy Policy</a>. Every email includes an unsubscribe link.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="unsubscribe" className="border-b border-zinc-100 bg-white px-4 py-8">
-        <div className="mx-auto flex max-w-4xl flex-col gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div>
-            <h2 className="text-sm font-black text-zinc-900">No longer want launch emails?</h2>
-            <p className="mt-1 text-xs font-medium text-zinc-500">Enter your email and we will unsubscribe it immediately.</p>
-          </div>
-          <form className="flex w-full flex-col gap-2 sm:max-w-md sm:flex-row" onSubmit={handleUnsubscribe}>
-            <Input
-              type="email"
-              aria-label="Email address to unsubscribe"
-              value={unsubscribeEmail}
-              onChange={(event) => setUnsubscribeEmail(event.target.value)}
-              placeholder="you@example.com"
-              className="h-10 rounded-xl bg-white"
-              required
-            />
-            <Button type="submit" variant="outline" className="h-10 rounded-xl border-zinc-300 bg-white px-5 text-xs font-black" disabled={unsubscribeLoading}>
-              {unsubscribeLoading ? 'Removing...' : 'Unsubscribe'}
-            </Button>
-          </form>
-        </div>
-      </section>
-
-          <LandlordPricingSection
-            onGetStarted={(tier: SubscriptionTier, billing: BillingPeriod) => {
-              setLandlordSignup((prev) => ({ ...prev, tier, billing }));
-              setSelectedRole('landlord');
-              setAuthMode('signup');
-              setIsAuthOpen(true);
-            }}
-          />
+            </div>
+          </section>
         </>
       )}
+
 
       {/* Auth Modal */}
       {isAuthOpen && (

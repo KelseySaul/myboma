@@ -609,9 +609,18 @@ export default function HunterDashboard({
             <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-4">
               <FontAwesomeIcon icon={faSearch} className="h-5 w-5" />
             </div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No Matching Spaces Found</h3>
-            <p className="text-xs text-slate-500 max-w-xs">We couldn't find any active listings matching your current filter parameters.</p>
-            <Button variant="outline" size="sm" className="mt-4 text-xs font-semibold rounded-xl" onClick={() => {setSearchTerm(''); setFilterType('all');}}>Reset Filters</Button>
+            {searchTerm || filterType !== 'all' ? (
+              <>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No Matching Spaces Found</h3>
+                <p className="text-xs text-slate-500 max-w-xs">We couldn't find any active listings matching your current filter parameters.</p>
+                <Button variant="outline" size="sm" className="mt-4 text-xs font-semibold rounded-xl" onClick={() => {setSearchTerm(''); setFilterType('all');}}>Reset Filters</Button>
+              </>
+            ) : (
+              <>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">No listings yet</h3>
+                <p className="text-xs text-slate-500 max-w-xs">New homes and spaces appear here as soon as landlords publish them. Check back soon.</p>
+              </>
+            )}
           </div>
         )}
       </div>

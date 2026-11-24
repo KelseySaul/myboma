@@ -317,15 +317,11 @@ export default function Navbar({ user, profile, activeView, setActiveView, setAc
             <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
           </Button>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Main navigation">
-            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#product">Product</a>
-            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#landlord-plans">Plans</a>
+            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#features">Features</a>
+            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#homes">Find a house</a>
+            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#landlord-plans">Pricing</a>
+            <a className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900" href="/#faq">FAQ</a>
           </nav>
-          <a
-            className="rounded-lg px-3 py-1.5 text-xs font-bold text-indigo-600 transition-colors hover:bg-indigo-50"
-            href="/#waitlist"
-          >
-            Waitlist
-          </a>
           <Button 
             className="bg-slate-900 text-white hover:bg-slate-800 px-4 h-9 rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer"
             onClick={onLoginClick}

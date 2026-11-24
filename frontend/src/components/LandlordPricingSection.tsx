@@ -20,16 +20,16 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
   return (
     <section
       id="landlord-plans"
-      className="relative overflow-hidden border-y border-indigo-100 bg-gradient-to-b from-indigo-50/80 via-white to-white py-14 sm:py-20"
+      className="relative overflow-hidden border-y border-slate-200 bg-white scroll-mt-16 py-20 sm:py-24"
     >
-      <div className="pointer-events-none absolute -right-24 top-0 h-64 w-64 rounded-full bg-purple-200/30 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 top-0 h-64 w-64 rounded-full bg-emerald-200/30 blur-3xl" />
       <div className="container relative mx-auto max-w-6xl px-4">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-indigo-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-700">
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
             <FontAwesomeIcon icon={faBuilding} className="h-3 w-3" />
             Landlords &amp; Property Managers
           </span>
-          <h2 className="mt-4 text-2xl font-black tracking-tight text-zinc-900 sm:text-4xl">
+          <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-950 sm:text-4xl">
             Plans that scale with your portfolio
           </h2>
           <p className="mt-3 text-sm font-medium text-zinc-600 sm:text-base">
@@ -43,7 +43,7 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
                 type="button"
                 onClick={() => setBilling(period.id)}
                 className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-wide transition-all ${
-                  billing === period.id ? 'bg-indigo-600 text-white shadow' : 'text-zinc-500'
+                  billing === period.id ? 'bg-slate-950 text-white shadow' : 'text-zinc-500'
                 }`}
               >
                 {period.label}
@@ -62,20 +62,20 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
             return (
               <article
                 key={tierId}
-                className={`relative flex flex-col rounded-3xl border p-6 shadow-[0_12px_40px_rgba(79,70,229,0.06)] ${
-                  isFeatured ? 'border-indigo-300 bg-white ring-2 ring-indigo-500/15' : 
+                className={`relative flex flex-col rounded-3xl border p-6 shadow-sm ${
+                  isFeatured ? 'border-emerald-300 bg-white ring-2 ring-emerald-500/20' : 
                   isProPlus ? 'border-zinc-900 bg-zinc-900 text-white shadow-xl' : 'border-zinc-100 bg-white'
                 }`}
               >
                 {isFeatured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
                     Most popular
                   </span>
                 )}
                 <p className={`text-[10px] font-black uppercase tracking-[0.2em] ${isProPlus ? 'text-zinc-300' : 'text-zinc-400'}`}>{tier.label}</p>
-                <div className="flex items-baseline gap-1.5 mt-1">
-                  <p className={`text-3xl font-black tabular-nums ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{formatPlanPrice(amount)}</p>
-                  <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md ${isProPlus ? 'text-indigo-200 bg-indigo-900/50' : 'text-indigo-500 bg-indigo-50'}`}>One-time</span>
+                <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1 mt-1">
+                  <p className={`whitespace-nowrap text-3xl font-black tabular-nums ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{formatPlanPrice(amount)}</p>
+                  <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-md ${isProPlus ? 'text-emerald-200 bg-emerald-900/40' : 'text-emerald-700 bg-emerald-50'}`}>One-time</span>
                 </div>
                 <p className={`text-xs font-bold mt-1 ${isProPlus ? 'text-zinc-400' : 'text-zinc-500'}`}>{tier.tagline}</p>
                 <ul className="mt-5 flex-1 space-y-2">
@@ -91,7 +91,7 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
                   onClick={() => onGetStarted?.(tierId, billing)}
                   className={`mt-6 w-full rounded-2xl py-3 text-xs font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
                     isFeatured
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-500'
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 hover:bg-emerald-500'
                       : isProPlus
                       ? 'bg-white text-zinc-900 hover:bg-zinc-100 shadow-lg'
                       : 'bg-zinc-900 text-white hover:bg-zinc-800'
@@ -104,14 +104,14 @@ export default function LandlordPricingSection({ onGetStarted }: LandlordPricing
           })}
         </div>
 
-        <p className="mx-auto mt-7 max-w-2xl rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3 text-center text-[11px] font-medium leading-5 text-indigo-900">
+        <p className="mx-auto mt-7 max-w-2xl rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-[11px] font-medium leading-5 text-slate-600">
           Clear billing: plans are prepaid for the selected coverage period and do not auto-renew. You will not be
           charged again unless you actively authorize a new payment. Stop at any time by not renewing.
         </p>
 
         <div className="mx-auto mt-8 flex max-w-md flex-wrap items-center justify-center gap-4 text-[11px] font-bold text-zinc-500">
           <span className="inline-flex items-center gap-1.5">
-            <FontAwesomeIcon icon={faCreditCard} className="text-indigo-500" />
+            <FontAwesomeIcon icon={faCreditCard} className="text-slate-700" />
             Visa / Mastercard
           </span>
           <span className="inline-flex items-center gap-1.5">
