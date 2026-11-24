@@ -57,8 +57,12 @@ export const escapeHtml = (value: unknown) =>
 export type EmailContent = {
   /** Short line shown by inboxes next to the subject. */
   preheader?: string;
+  /** Small context label above the email title. */
+  eyebrow?: string;
   heading: string;
   paragraphs: string[];
+  /** A prominent one-line fact, used for account roles and other critical context. */
+  callout?: {label: string; value: string};
   /** Label/value rows rendered as a small table (e.g. receipt or enquiry details). */
   details?: Array<[label: string, value: string]>;
   button?: {label: string; url: string};
@@ -72,25 +76,34 @@ const FONT = "Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helveti
 const HEADING_FONT = "Montserrat,Poppins,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 const paragraphHtml = (text: string) =>
-  `<p style="margin:0 0 16px;font-family:${FONT};font-size:15px;line-height:24px;color:#3f3f46;">${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
+  `<p style="margin:0 0 18px;font-family:${FONT};font-size:15px;line-height:24px;color:#52525b;">${escapeHtml(text).replace(/\n/g, '<br>')}</p>`;
 
 export const renderEmail = (content: EmailContent): {html: string; text: string} => {
   const details = content.details?.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;border:1px solid #e4e4e7;border-radius:10px;border-collapse:separate;">
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 28px;border:1px solid #e4e4e7;border-radius:12px;border-collapse:separate;background:#fafafa;">
 ${content.details
   .map(
     ([label, value], index) => `<tr>
-<td style="padding:12px 16px;${index ? 'border-top:1px solid #e4e4e7;' : ''}font-family:${FONT};font-size:13px;color:#71717a;width:38%;vertical-align:top;">${escapeHtml(label)}</td>
-<td style="padding:12px 16px;${index ? 'border-top:1px solid #e4e4e7;' : ''}font-family:${FONT};font-size:14px;color:#09090b;font-weight:600;vertical-align:top;">${escapeHtml(value).replace(/\n/g, '<br>')}</td>
+<td style="padding:13px 16px;${index ? 'border-top:1px solid #e4e4e7;' : ''}font-family:${FONT};font-size:12px;line-height:18px;color:#71717a;width:38%;vertical-align:top;">${escapeHtml(label)}</td>
+<td style="padding:13px 16px;${index ? 'border-top:1px solid #e4e4e7;' : ''}font-family:${FONT};font-size:14px;line-height:20px;color:#18181b;font-weight:600;vertical-align:top;">${escapeHtml(value).replace(/\n/g, '<br>')}</td>
 </tr>`,
   )
   .join('\n')}
 </table>`
     : '';
 
+  const callout = content.callout
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;border:1px solid #d4d4d8;border-radius:12px;border-collapse:separate;background:#f4f4f5;">
+<tr><td style="padding:16px 18px;">
+<div style="margin:0 0 5px;font-family:${FONT};font-size:11px;line-height:16px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">${escapeHtml(content.callout.label)}</div>
+<div style="font-family:${HEADING_FONT};font-size:18px;line-height:24px;font-weight:700;color:#09090b;">${escapeHtml(content.callout.value)}</div>
+</td></tr>
+</table>`
+    : '';
+
   const button = content.button
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;"><tr><td style="border-radius:10px;background:#09090b;">
-<a href="${escapeHtml(content.button.url)}" style="display:inline-block;padding:13px 24px;font-family:${FONT};font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">${escapeHtml(content.button.label)}</a>
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 28px;"><tr><td style="border-radius:12px;background:#18181b;">
+<a href="${escapeHtml(content.button.url)}" style="display:inline-block;padding:14px 24px;font-family:${FONT};font-size:14px;line-height:20px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;">${escapeHtml(content.button.label)}</a>
 </td></tr></table>`
     : '';
 
@@ -103,21 +116,24 @@ ${content.details
 <title>${escapeHtml(content.heading)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;">
-${content.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(content.preheader)}</div>` : ''}
+${content.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(content.preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>` : ''}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;">
-<tr><td align="center" style="padding:32px 16px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
-<tr><td style="background:#09090b;border-radius:14px 14px 0 0;padding:20px 28px;">
-<a href="${SITE_URL}" style="font-family:${HEADING_FONT};font-size:20px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;text-decoration:none;">myboma</a>
+<tr><td align="center" style="padding:36px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
+<tr><td style="background:#18181b;border-radius:18px 18px 0 0;padding:22px 30px;">
+<a href="${SITE_URL}" style="font-family:${HEADING_FONT};font-size:22px;font-weight:800;letter-spacing:-0.7px;color:#ffffff;text-decoration:none;">myboma</a>
+<span style="padding-left:10px;font-family:${FONT};font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#a1a1aa;white-space:nowrap;">Property management</span>
 </td></tr>
-<tr><td style="background:#ffffff;border-radius:0 0 14px 14px;padding:32px 28px 12px;">
-<h1 style="margin:0 0 16px;font-family:${HEADING_FONT};font-size:22px;line-height:30px;font-weight:700;color:#09090b;">${escapeHtml(content.heading)}</h1>
+<tr><td style="background:#ffffff;border-radius:0 0 18px 18px;padding:36px 30px 14px;">
+${content.eyebrow ? `<p style="margin:0 0 10px;font-family:${FONT};font-size:11px;line-height:16px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#71717a;">${escapeHtml(content.eyebrow)}</p>` : ''}
+<h1 style="margin:0 0 18px;font-family:${HEADING_FONT};font-size:26px;line-height:34px;font-weight:700;letter-spacing:-0.35px;color:#09090b;">${escapeHtml(content.heading)}</h1>
 ${content.paragraphs.map(paragraphHtml).join('\n')}
+${callout}
 ${details}
 ${button}
 ${(content.closing ?? []).map(paragraphHtml).join('\n')}
 </td></tr>
-<tr><td style="padding:20px 8px 0;font-family:${FONT};font-size:12px;line-height:19px;color:#71717a;text-align:center;">
+<tr><td style="padding:22px 14px 0;font-family:${FONT};font-size:12px;line-height:19px;color:#71717a;text-align:center;">
 ${content.footerNote ? `${escapeHtml(content.footerNote)}<br>` : ''}
 Questions? Email <a href="mailto:${SUPPORT_EMAIL}" style="color:#09090b;">${SUPPORT_EMAIL}</a><br>
 <a href="${SITE_URL}" style="color:#71717a;">${SITE_URL.replace(/^https?:\/\//, '')}</a>
@@ -131,7 +147,9 @@ Questions? Email <a href="mailto:${SUPPORT_EMAIL}" style="color:#09090b;">${SUPP
   const text = [
     content.heading,
     '',
+    ...(content.eyebrow ? [content.eyebrow, ''] : []),
     ...content.paragraphs.flatMap((p) => [p, '']),
+    ...(content.callout ? [`${content.callout.label}: ${content.callout.value}`, ''] : []),
     ...(content.details?.length ? [...content.details.map(([label, value]) => `${label}: ${value}`), ''] : []),
     ...(content.button ? [`${content.button.label}: ${content.button.url}`, ''] : []),
     ...(content.closing ?? []).flatMap((p) => [p, '']),
@@ -188,28 +206,36 @@ export const sendEmail = async ({to, subject, text, html, template, replyTo}: Se
 /* Invitations ------------------------------------------------------------- */
 
 const ROLE_LABELS: Record<string, string> = {
-  tenant: 'a tenant',
-  landlord: 'a landlord',
-  admin: 'an administrator',
-  hunter: 'a member',
+  tenant: 'Tenant',
+  landlord: 'Landlord',
+  admin: 'Administrator',
+  hunter: 'House hunter',
 };
 
 /** The email sent with a single-use account setup link. */
 export const buildInviteEmail = (input: {to: string; inviterName: string; role: string; url: string; expiresAt: Date}): SendEmailInput => {
   const expires = input.expiresAt.toLocaleDateString('en-KE', {day: 'numeric', month: 'long', year: 'numeric'});
+  const role = ROLE_LABELS[input.role] ?? 'Member';
+  const roleWithArticle = `${role === 'Administrator' ? 'an' : 'a'} ${role}`;
   return {
     to: input.to,
-    subject: `${input.inviterName} invited you to MyBoma`,
+    subject: `${input.inviterName} invited you to MyBoma as ${roleWithArticle}`,
     template: {
-      preheader: `Set up your MyBoma account. This link works once and expires on ${expires}.`,
-      heading: "You've been invited to MyBoma",
+      preheader: `You've been invited as ${roleWithArticle}. Set up your account before ${expires}.`,
+      eyebrow: 'Account invitation',
+      heading: "You're invited to MyBoma",
       paragraphs: [
-        `${input.inviterName} has invited you to join MyBoma as ${ROLE_LABELS[input.role] ?? 'a member'}.`,
-        'Use the button below to choose your password and finish setting up your account.',
+        `${input.inviterName} invited you to join their MyBoma workspace.`,
+        'Set a password to activate your account and get started.',
+      ],
+      callout: {label: 'Your invited role', value: role},
+      details: [
+        ['Invited by', input.inviterName],
+        ['Invitation expires', expires],
       ],
       button: {label: 'Set up your account', url: input.url},
       closing: [
-        `This link is personal to you. It works once and expires on ${expires}. Do not forward it.`,
+        'This personal link works once. Do not forward it.',
         "If you weren't expecting this, ignore this email. No account is created until the link is used.",
       ],
       footerNote: 'You received this because someone invited this email address to MyBoma.',
