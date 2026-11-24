@@ -24,7 +24,7 @@ interface LandlordSignupFieldsProps {
 }
 
 export const defaultLandlordSignupState = (): LandlordSignupFormState => ({
-  tier: 'starter',
+  tier: 'free',
   billing: 'monthly',
   rentPayoutMethod: 'cash',
   mpesaSettlementPhone: '',
@@ -43,6 +43,7 @@ export default function LandlordSignupFields({
   const patch = (partial: Partial<LandlordSignupFormState>) => onChange({ ...value, ...partial });
   const amount = getSubscriptionAmount(value.tier, value.billing);
   const tierMeta = SUBSCRIPTION_TIERS[value.tier];
+  const isFree = value.tier === 'free';
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -81,7 +82,7 @@ export default function LandlordSignupFields({
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-xs font-black ${isProPlus ? 'text-white' : 'text-zinc-900'}`}>{tier.label}</span>
                   <span className={`text-[10px] font-black ${isProPlus ? 'text-amber-400' : 'text-zinc-900'}`}>
-                    {formatPlanPrice(tierAmount)}/{periodLabel}
+                    {tierId === 'free' ? 'Free' : `${formatPlanPrice(tierAmount)}/${periodLabel}`}
                   </span>
                 </div>
                 <p className={`mt-0.5 text-[10px] font-medium ${isProPlus ? 'text-zinc-400' : 'text-zinc-500'}`}>{tier.tagline}</p>
@@ -96,6 +97,10 @@ export default function LandlordSignupFields({
             );
           })}
         </div>
+        {isFree ? (
+          <p className="mt-3 text-center text-sm font-black text-zinc-900">Free forever · no payment needed</p>
+        ) : (
+        <>
         <div className="mt-3 flex gap-2">
           {BILLING_PERIODS.map((period) => (
             <button
@@ -115,6 +120,8 @@ export default function LandlordSignupFields({
         <p className="mt-2 text-center text-sm font-black text-zinc-900">
           Total due: {formatPlanPrice(amount)}
         </p>
+        </>
+        )}
       </div>
 
       {showPayment && paymentSlot}

@@ -21,10 +21,14 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
   const [paying, setPaying] = useState<'pesapal' | null>(null);
 
   const checkout = async () => {
+    // The free plan is activated without checkout (see LandlordSubscriptionGate).
+    const { tier } = payload;
+    if (tier === 'free') return;
     setPaying('pesapal');
     try {
       const result = await startLandlordSubscriptionCheckout({
         ...payload,
+        tier,
         paymentMethod: 'pesapal',
         successUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?subscription_payment=success` : `${window.location.origin}/?subscription_payment=success`,
         cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.vercel.app/?subscription_payment=cancelled` : `${window.location.origin}/?subscription_payment=cancelled`,

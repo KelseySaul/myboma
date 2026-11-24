@@ -1,4 +1,6 @@
-export type SubscriptionTier = 'basic' | 'starter' | 'pro' | 'proplus';
+export type SubscriptionTier = 'free' | 'basic' | 'starter' | 'pro' | 'proplus';
+/** Tiers bought through checkout. 'free' is activated without payment and never expires. */
+export type PaidSubscriptionTier = Exclude<SubscriptionTier, 'free'>;
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
 export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
@@ -20,6 +22,14 @@ export const SUBSCRIPTION_TIERS: Record<
     highlights: string[];
   }
 > = {
+  free: {
+    id: 'free',
+    label: 'Free',
+    tagline: 'One house, no cost',
+    monthlyBaseKes: 0,
+    features: {maxListings: 1, maintenanceHub: false, label: 'Free'},
+    highlights: ['1 house unit', 'Tenant & rent ledger', 'No buildings'],
+  },
   basic: {
     id: 'basic',
     label: 'Basic',
@@ -98,6 +108,10 @@ export const getSubscriptionFeatures = (profile: {
   return SUBSCRIPTION_TIERS[parsed.tier].features;
 };
 
+export const FREE_PLAN = encodeSubscriptionPlan('free', 'monthly');
+
+export const isFreePlan = (plan?: string | null) => parseSubscriptionPlan(plan)?.tier === 'free';
+
 export const PENDING_LANDLORD_SUBSCRIPTION_KEY = 'myboma_pending_landlord_subscription';
 
 export type PendingLandlordSubscription = {
@@ -113,6 +127,7 @@ export type PendingLandlordSubscription = {
 
 export const isLandlordSubscriptionActive = (profile: {
   role?: string;
+  subscriptionPlan?: string | null;
   subscriptionStatus?: string | null;
   subscriptionExpiresAt?: string | null;
 }) => {
@@ -127,6 +142,8 @@ export const isLandlordSubscriptionActive = (profile: {
   
   // For landlords, check status and expiry
   if (profile.subscriptionStatus !== 'active') return false;
+  // The free plan has no expiry date.
+  if (isFreePlan(profile.subscriptionPlan)) return true;
   if (!profile.subscriptionExpiresAt) return false;
   
   const expiry = new Date(profile.subscriptionExpiresAt).getTime();

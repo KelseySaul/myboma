@@ -12,7 +12,9 @@ import {
   encodeSubscriptionPlan,
   getBillingMonths,
   getSubscriptionAmount,
+  FREE_PLAN,
   type BillingPeriod,
+  type RentPayoutMethod,
   type SubscriptionTier,
 } from '../../shared/landlordSubscription.ts';
 
@@ -20,6 +22,53 @@ const tierSchema = z.enum(['basic', 'starter', 'pro', 'proplus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
+
+const rentPayoutFields = {
+  rentPayoutMethod: rentPayoutMethodSchema,
+  mpesaSettlementPhone: z.string().max(20).optional(),
+  bankName: z.string().max(120).optional(),
+  bankAccountNumber: z.string().max(40).optional(),
+  bankAccountName: z.string().max(120).optional(),
+  cashPayoutNotes: z.string().max(280).optional(),
+};
+
+type RentPayoutInput = {
+  rentPayoutMethod: RentPayoutMethod;
+  mpesaSettlementPhone?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  cashPayoutNotes?: string;
+};
+
+const refineRentPayout = (body: RentPayoutInput, ctx: z.RefinementCtx) => {
+  if (body.rentPayoutMethod === 'mpesa' && !body.mpesaSettlementPhone?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'M-Pesa phone is required to receive rent via M-Pesa.',
+      path: ['mpesaSettlementPhone'],
+    });
+  }
+  if (body.rentPayoutMethod === 'bank') {
+    if (!body.bankName?.trim()) {
+      ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Bank name is required.', path: ['bankName']});
+    }
+    if (!body.bankAccountNumber?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Bank account number is required.',
+        path: ['bankAccountNumber'],
+      });
+    }
+    if (!body.bankAccountName?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Account holder name is required.',
+        path: ['bankAccountName'],
+      });
+    }
+  }
+};
 
 export const landlordSubscriptionCheckoutSchema = z
   .object({
@@ -29,41 +78,12 @@ export const landlordSubscriptionCheckoutSchema = z
     phone: z.string().max(20).optional(),
     successUrl: z.string().url().optional(),
     cancelUrl: z.string().url().optional(),
-    rentPayoutMethod: rentPayoutMethodSchema,
-    mpesaSettlementPhone: z.string().max(20).optional(),
-    bankName: z.string().max(120).optional(),
-    bankAccountNumber: z.string().max(40).optional(),
-    bankAccountName: z.string().max(120).optional(),
-    cashPayoutNotes: z.string().max(280).optional(),
+    ...rentPayoutFields,
   })
-  .superRefine((body, ctx) => {
-    if (body.rentPayoutMethod === 'mpesa' && !body.mpesaSettlementPhone?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'M-Pesa phone is required to receive rent via M-Pesa.',
-        path: ['mpesaSettlementPhone'],
-      });
-    }
-    if (body.rentPayoutMethod === 'bank') {
-      if (!body.bankName?.trim()) {
-        ctx.addIssue({code: z.ZodIssueCode.custom, message: 'Bank name is required.', path: ['bankName']});
-      }
-      if (!body.bankAccountNumber?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Bank account number is required.',
-          path: ['bankAccountNumber'],
-        });
-      }
-      if (!body.bankAccountName?.trim()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Account holder name is required.',
-          path: ['bankAccountName'],
-        });
-      }
-    }
-  });
+  .superRefine(refineRentPayout);
+
+/** The free plan only records how the landlord receives rent; there is nothing to pay. */
+export const landlordFreePlanSchema = z.object(rentPayoutFields).superRefine(refineRentPayout);
 
 const buildReceiptNumber = () => {
   const stamp = Date.now().toString(36).toUpperCase();
@@ -235,10 +255,7 @@ export const activateLandlordSubscription = async (
   };
 };
 
-export const saveLandlordPayoutProfile = async (
-  landlordId: string,
-  body: z.infer<typeof landlordSubscriptionCheckoutSchema>,
-) => {
+export const saveLandlordPayoutProfile = async (landlordId: string, body: RentPayoutInput) => {
   await db
     .update(schema.users)
     // Never touches `role` or an already-active subscription: entitlements are granted
@@ -255,6 +272,50 @@ export const saveLandlordPayoutProfile = async (
       bankAccountName: body.rentPayoutMethod === 'bank' ? (body.bankAccountName?.trim() ?? null) : null,
     })
     .where(eq(schema.users.uid, landlordId));
+};
+
+/**
+ * Puts a landlord on the free plan (1 house unit, no buildings, no expiry) without a payment.
+ * Only ever grants 'free': a landlord with an active paid plan keeps it untouched, so this
+ * can never be used to downgrade or to obtain a paid tier. Platform admins keep their role.
+ */
+export const activateFreeLandlordPlan = async (landlordId: string, payout: RentPayoutInput) => {
+  const current = await db.query.users.findFirst({
+    where: eq(schema.users.uid, landlordId),
+    columns: {role: true, isAdmin: true, isSuperAdmin: true, subscriptionPlan: true, subscriptionStatus: true, subscriptionExpiresAt: true},
+  });
+  if (!current) throw new Error('Landlord profile not found');
+
+  const hasActivePaidPlan =
+    current.subscriptionStatus === 'active' &&
+    current.subscriptionPlan !== FREE_PLAN &&
+    (!current.subscriptionExpiresAt || new Date(current.subscriptionExpiresAt).getTime() > Date.now());
+  if (hasActivePaidPlan) return {activated: false as const, reason: 'paid_plan_active' as const};
+
+  // Tenant accounts belong to a landlord's lease; switching them to 'landlord' would strand
+  // their tenancy. They need a separate account to list property.
+  const isPlatformAdminAccount = Boolean(current.isAdmin || current.isSuperAdmin);
+  if (current.role === 'tenant' && !isPlatformAdminAccount) {
+    return {activated: false as const, reason: 'tenant_account' as const};
+  }
+
+  const isPlatformAdmin = Boolean(current.isAdmin || current.isSuperAdmin);
+  await db
+    .update(schema.users)
+    .set({
+      role: isPlatformAdmin ? current.role : 'landlord',
+      subscriptionPlan: FREE_PLAN,
+      subscriptionStatus: 'active',
+      subscriptionExpiresAt: null,
+      rentPayoutMethod: payout.rentPayoutMethod,
+      cashPayoutNotes: payout.cashPayoutNotes?.trim() || null,
+      mpesaSettlementPhone: payout.rentPayoutMethod === 'mpesa' ? (payout.mpesaSettlementPhone?.trim() ?? null) : null,
+      bankName: payout.rentPayoutMethod === 'bank' ? (payout.bankName?.trim() ?? null) : null,
+      bankAccountNumber: payout.rentPayoutMethod === 'bank' ? (payout.bankAccountNumber?.trim() ?? null) : null,
+      bankAccountName: payout.rentPayoutMethod === 'bank' ? (payout.bankAccountName?.trim() ?? null) : null,
+    })
+    .where(eq(schema.users.uid, landlordId));
+  return {activated: true as const};
 };
 
 export const createPendingSubscriptionPayment = async (input: {

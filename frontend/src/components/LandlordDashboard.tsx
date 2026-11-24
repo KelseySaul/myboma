@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
+import { getSubscriptionFeatures, isFreePlan, type PendingLandlordSubscription } from '../../../shared/landlordSubscription';
+import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
+import LandlordSubscriptionPay from './LandlordSubscriptionPay';
 import { authClient } from '../lib/auth-client';
 import {
   provisionUser,
@@ -147,6 +149,9 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     () => getSubscriptionFeatures(profile),
     [profile.subscriptionPlan, profile.role],
   );
+  // Free plan: a single house unit, no buildings (also enforced by the server).
+  const onFreePlan = isFreePlan(profile.subscriptionPlan) && !profile.isAdmin && !profile.isSuperAdmin;
+  const FREE_PLAN_BUILDING_HINT = 'The free plan covers one house unit. Upgrade your plan to add buildings.';
 
   useEffect(() => {
     if (!subscriptionFeatures.maintenanceHub && activeTab === 'maintenance') {
@@ -169,6 +174,16 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const [isCreateTenantOpen, setIsCreateTenantOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isBuildingOpen, setIsBuildingOpen] = useState(false);
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
+  const [upgradeForm, setUpgradeForm] = useState<PendingLandlordSubscription>(() => ({
+    ...defaultLandlordSignupState(),
+    tier: 'starter',
+    rentPayoutMethod: profile.rentPayoutMethod ?? 'cash',
+    mpesaSettlementPhone: profile.phone ?? '',
+    bankName: profile.bankName ?? '',
+    bankAccountNumber: profile.bankAccountNumber ?? '',
+    bankAccountName: profile.bankAccountName ?? '',
+  }));
   const [isUploading, setIsUploading] = useState(false);
   const [isCreatingTenant, setIsCreatingTenant] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -521,6 +536,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     } catch (err: any) {
       toast.error(err.message || "Failed to delete asset");
     }
+  };
+
+  const openBuildingDialog = () => {
+    if (onFreePlan) {
+      toast.info(FREE_PLAN_BUILDING_HINT);
+      return;
+    }
+    setIsBuildingOpen(true);
   };
 
   const canAddListings = (additional = 1) => {
@@ -1015,6 +1038,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     <div className="text-[10px] text-slate-400">List a single property</div>
                   </div>
                 </DropdownMenuItem>
+                {!onFreePlan && (
                 <DropdownMenuItem onClick={() => setIsBulkAddOpen(true)} className="cursor-pointer rounded-xl p-2.5 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <div className="h-7 w-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center shrink-0">
                     <FontAwesomeIcon icon={faTools} className="h-3.5 w-3.5" />
@@ -1024,6 +1048,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     <div className="text-[10px] text-slate-400">Create multiple units</div>
                   </div>
                 </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator className="bg-slate-100 dark:bg-slate-800 my-1" />
                 <DropdownMenuItem onClick={() => setIsCreateTenantOpen(true)} className="cursor-pointer rounded-xl p-2.5 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <div className="h-7 w-7 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center shrink-0">
@@ -1034,15 +1059,21 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                     <div className="text-[10px] text-slate-400">Invite a new tenant</div>
                   </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsBuildingOpen(true)} className="cursor-pointer rounded-xl p-2.5 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <div className="h-7 w-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center shrink-0">
-                    <FontAwesomeIcon icon={faBuilding} className="h-3.5 w-3.5" />
+                {onFreePlan ? (
+                  <div className="px-2.5 py-2 text-[10px] font-medium leading-4 text-slate-500">
+                    {FREE_PLAN_BUILDING_HINT}
                   </div>
-                  <div>
-                    <div className="font-bold text-xs text-slate-900 dark:text-white">Add Building</div>
-                    <div className="text-[10px] text-slate-400">Group units by block</div>
-                  </div>
-                </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={openBuildingDialog} className="cursor-pointer rounded-xl p-2.5 flex items-center gap-2.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <div className="h-7 w-7 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center shrink-0">
+                      <FontAwesomeIcon icon={faBuilding} className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900 dark:text-white">Add Building</div>
+                      <div className="text-[10px] text-slate-400">Group units by block</div>
+                    </div>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1068,10 +1099,20 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                       : 'Active Plan'}
                   </p>
                 </div>
+                {onFreePlan ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsUpgradeOpen(true)}
+                    className="self-start rounded-lg bg-white px-3 py-1.5 text-[11px] font-bold text-slate-900 transition hover:bg-slate-200 dark:bg-slate-900 dark:text-white"
+                  >
+                    Upgrade plan
+                  </button>
+                ) : (
                 <div className="text-[10px] font-semibold flex items-center gap-1 text-emerald-400 dark:text-emerald-600">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 dark:bg-emerald-600"></span>
                   Active Node
                 </div>
+                )}
               </div>
 
               <StatCard
@@ -1237,7 +1278,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                 <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input placeholder="Search units by title, unit # or location..." className="pl-8 h-9 text-xs font-semibold rounded-xl" value={propertySearch} onChange={(e) => { setPropertySearch(e.target.value); setPropertyPage(1); }} />
               </div>
-              <Button size="sm" onClick={() => properties.length === 0 ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-9 font-bold text-xs rounded-xl shrink-0 cursor-pointer">
+              <Button size="sm" onClick={() => properties.length === 0 && !onFreePlan ? setIsBuildingOpen(true) : setIsAddOpen(true)} className="h-9 font-bold text-xs rounded-xl shrink-0 cursor-pointer">
                 <FontAwesomeIcon icon={faPlus} className="mr-1.5 h-3 w-3" />
                 <span className="hidden sm:inline">{properties.length === 0 ? 'Add Property' : 'Add Unit'}</span>
                 <span className="sm:hidden">Add</span>
@@ -1377,16 +1418,20 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
                 <div className="space-y-2">
                   <h3 className="text-lg font-black text-zinc-900">Your portfolio is empty</h3>
                   <p className="text-sm font-medium text-zinc-500 max-w-sm mx-auto">
-                    Start by adding a building to group your units, or list a standalone property to begin collecting rent.
+                    {onFreePlan
+                      ? 'Add your house to start collecting rent. The free plan covers one house unit.'
+                      : 'Start by adding a building to group your units, or list a standalone property to begin collecting rent.'}
                   </p>
                 </div>
                 <div className="flex gap-3">
                   <button className="btn-primary text-xs" onClick={() => setIsAddOpen(true)}>
                     <FontAwesomeIcon icon={faHome} className="mr-2" /> New Asset
                   </button>
-                  <button className="btn-ghost text-xs" onClick={() => setIsBuildingOpen(true)}>
-                    <FontAwesomeIcon icon={faBuilding} className="mr-2" /> Add Building
-                  </button>
+                  {!onFreePlan && (
+                    <button className="btn-ghost text-xs" onClick={openBuildingDialog}>
+                      <FontAwesomeIcon icon={faBuilding} className="mr-2" /> Add Building
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -2019,6 +2064,27 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
              </Select>
           </div>
           <DialogFooter className="flex gap-2"><Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>Cancel</Button><Button onClick={handleAssignTenant} className="bg-blue-600 text-white">Confirm</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isUpgradeOpen} onOpenChange={setIsUpgradeOpen}>
+        <DialogContent className="sm:max-w-[480px] max-h-[90dvh] overflow-y-auto rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Upgrade your plan</DialogTitle>
+            <DialogDescription>Add more units, buildings and the maintenance hub. Pay by card or M-Pesa.</DialogDescription>
+          </DialogHeader>
+          <LandlordSignupFields
+            value={upgradeForm}
+            onChange={setUpgradeForm}
+            showPayment
+            paymentSlot={
+              upgradeForm.tier === 'free' ? (
+                <p className="rounded-xl bg-zinc-50 px-3 py-2 text-center text-xs font-semibold text-zinc-600">You are already on the free plan. Pick a paid plan to upgrade.</p>
+              ) : (
+                <LandlordSubscriptionPay payload={upgradeForm} phone={profile.phone ?? undefined} />
+              )
+            }
+          />
         </DialogContent>
       </Dialog>
 

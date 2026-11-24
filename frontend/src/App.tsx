@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { authClient } from './lib/auth-client';
-import { getSession, completePasswordReset, bffRequest, setImpersonatedUser } from './lib/api';
+import { getSession, completePasswordReset, bffRequest, setImpersonatedUser, activateFreeLandlordPlan } from './lib/api';
 import LandingPage from './components/LandingPage';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -52,7 +52,11 @@ import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
 import OneSignalWeb from 'react-onesignal';
 import OneSignalNative from '@onesignal/capacitor-plugin';
 import { Capacitor } from '@capacitor/core';
-import { isLandlordSubscriptionActive } from '../../shared/landlordSubscription';
+import {
+  isLandlordSubscriptionActive,
+  PENDING_LANDLORD_SUBSCRIPTION_KEY,
+  type PendingLandlordSubscription,
+} from '../../shared/landlordSubscription';
 import { queryClient, clearQueryCache } from './lib/queryClient';
 import { queryKeys, useSessionProfile } from './lib/queries';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
@@ -399,6 +403,47 @@ export default function App() {
     setProfile(normalizeProfile(profileData));
   }, [user?.id]);
 
+  // A landlord who picked the free plan at signup (email or Google) has nothing to pay, so
+  // the plan is activated as soon as their profile exists. Paid choices go through the gate.
+  const freePlanActivationStarted = useRef(false);
+  useEffect(() => {
+    if (!user?.id || !profile || impersonatedProfile || freePlanActivationStarted.current) return;
+    let pending: PendingLandlordSubscription | null = null;
+    try {
+      pending = JSON.parse(localStorage.getItem(PENDING_LANDLORD_SUBSCRIPTION_KEY) || 'null');
+    } catch {
+      pending = null;
+    }
+    if (pending?.tier !== 'free') return;
+    if (profile.role !== 'hunter' && isLandlordSubscriptionActive(profile)) {
+      localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
+      return;
+    }
+
+    freePlanActivationStarted.current = true;
+    const payout = pending;
+    void (async () => {
+      try {
+        const result = await activateFreeLandlordPlan({
+          rentPayoutMethod: payout.rentPayoutMethod,
+          mpesaSettlementPhone: payout.mpesaSettlementPhone,
+          bankName: payout.bankName,
+          bankAccountNumber: payout.bankAccountNumber,
+          bankAccountName: payout.bankAccountName,
+          cashPayoutNotes: payout.cashPayoutNotes,
+        });
+        localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
+        await refreshProfile();
+        if (result.activated && !profile.isAdmin) setActiveView('landlord');
+        if (result.activated) toast.success('Your free landlord plan is active. Add your house to get started.');
+      } catch (err: any) {
+        console.error('App: free plan activation failed', err);
+        // Not retried automatically (the profile poll would repeat the toast); the gate offers a button.
+        toast.error(err.message || 'Could not activate your free plan.');
+      }
+    })();
+  }, [user?.id, profile, impersonatedProfile, refreshProfile]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     let handledPaymentReturn = false;
@@ -493,7 +538,7 @@ export default function App() {
             <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
           )}
         </main>
-        <Footer />
+        <Footer variant="public" />
         <Toaster />
       </div>
     );

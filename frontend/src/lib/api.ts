@@ -316,6 +316,20 @@ export const startLandlordSubscriptionCheckout = (body: {
     body,
   });
 
+/** Activates the free landlord plan (no payment). Leaves an active paid plan untouched. */
+export const activateFreeLandlordPlan = (body: {
+  rentPayoutMethod: 'cash' | 'mpesa' | 'bank';
+  mpesaSettlementPhone?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  cashPayoutNotes?: string;
+}) =>
+  bffRequest<{activated: boolean; reason?: 'paid_plan_active' | 'tenant_account'}>('/landlord/subscription/free', {
+    method: 'POST',
+    body,
+  });
+
 export const getAdminDashboard = (platformId?: string) =>
   bffRequest<{
     users: Record<string, any>[];

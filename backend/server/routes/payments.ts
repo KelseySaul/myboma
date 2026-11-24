@@ -3,7 +3,11 @@ import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
 import {manualRentPaidSchema} from '../adminHandlers.ts';
-import {landlordSubscriptionCheckoutSchema} from '../landlordSubscriptionHandlers.ts';
+import {
+  activateFreeLandlordPlan,
+  landlordFreePlanSchema,
+  landlordSubscriptionCheckoutSchema,
+} from '../landlordSubscriptionHandlers.ts';
 import type {RentPaymentRecord} from '../types.ts';
 import {asyncHandler, getValidatedBody, paymentLimiter, recordAudit, requireAuth, validateBody} from '../http/middleware.ts';
 import {
@@ -44,6 +48,23 @@ export function registerPaymentRoutes(bffRouter: Router) {
     paymentLimiter,
     validateBody(landlordSubscriptionCheckoutSchema),
     initiateLandlordSubscriptionCheckout,
+  );
+
+  /** Free plan: no payment, so it activates immediately. Never touches an active paid plan. */
+  bffRouter.post(
+    '/landlord/subscription/free',
+    requireAuth,
+    paymentLimiter,
+    validateBody(landlordFreePlanSchema),
+    asyncHandler(async (req, res) => {
+      const body = getValidatedBody<z.infer<typeof landlordFreePlanSchema>>(req);
+      const actor = req.profile!;
+      const result = await activateFreeLandlordPlan(actor.uid, body);
+      if (result.activated) {
+        await recordAudit(actor, 'LANDLORD_FREE_PLAN_ACTIVATED', 'user', actor.uid);
+      }
+      res.json(result);
+    }),
   );
 
   bffRouter.post(

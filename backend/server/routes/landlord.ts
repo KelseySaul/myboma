@@ -22,6 +22,8 @@ import {
   recordAudit,
   requireAuth,
   unitLimitFor,
+  isOnFreePlan,
+  FREE_PLAN_BUILDING_ERROR,
   validateBody,
 } from '../http/middleware.ts';
 import {emailSchema} from '../http/schemas.ts';
@@ -233,6 +235,10 @@ export function registerLandlordRoutes(bffRouter: Router) {
         return;
       }
       const {landlordId, platformId} = owner;
+      if (isOnFreePlan(owner.owner)) {
+        res.status(403).json({error: FREE_PLAN_BUILDING_ERROR});
+        return;
+      }
 
       const [building] = await db
         .insert(schema.buildings)
@@ -313,6 +319,10 @@ export function registerLandlordRoutes(bffRouter: Router) {
 
       // Units may only be placed in buildings that belong to the same landlord.
       const buildingIds = [...new Set(body.properties.map((p) => p.buildingId).filter((id): id is string => Boolean(id)))];
+      if (buildingIds.length && isOnFreePlan(owner.owner)) {
+        res.status(403).json({error: FREE_PLAN_BUILDING_ERROR});
+        return;
+      }
       if (buildingIds.length) {
         const owned = await db
           .select({id: schema.buildings.id})

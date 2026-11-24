@@ -45,6 +45,7 @@ interface LandingPageProps {
 export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPageProps) {
   const isNative = Capacitor.isNativePlatform();
   const [propertyFilter, setPropertyFilter] = useState('all');
+  const [listingSearch, setListingSearch] = useState('');
   const [mobileSearchTerm, setMobileSearchTerm] = useState('');
   const [pwaPrompt, setPwaPrompt] = useState<any>(null);
   const [pwaVisible, setPwaVisible] = useState(false);
@@ -296,7 +297,9 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         // No email verification is configured, so signup always returns a live session.
         toast.success(
           selectedRole === 'landlord'
-            ? 'Account created. Complete payment with card or M-Pesa on the next screen.'
+            ? landlordSignup.tier === 'free'
+              ? 'Account created. Setting up your free plan...'
+              : 'Account created. Complete payment with card or M-Pesa on the next screen.'
             : 'Account created successfully!',
         );
       }
@@ -336,17 +339,26 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </section>
       ) : (
         <>
-          <LandingHero onStartLandlord={() => openLandlordSignup()} onFindHome={scrollToHomes} />
-          <ListingsSection>
+          <LandingHero
+            onSearch={(query, type) => {
+              setListingSearch(query);
+              setPropertyFilter(type);
+              scrollToHomes();
+            }}
+            onStartLandlord={() => openLandlordSignup()}
+          />
+          <ListingsSection activeType={propertyFilter} onTypeChange={setPropertyFilter}>
             <HunterDashboard
               profile={null}
               onLoginRequired={() => setIsAuthOpen(true)}
               activeTab={propertyFilter}
               setActiveTab={setPropertyFilter}
+              externalSearchTerm={listingSearch}
+              onExternalSearchChange={setListingSearch}
               variant="embedded"
             />
           </ListingsSection>
-          <LandlordFeatures />
+          <LandlordFeatures onStartLandlord={() => openLandlordSignup()} />
           <GetStarted onStartLandlord={() => openLandlordSignup()} onSignIn={openSignIn} />
         </>
       )}
@@ -513,7 +525,9 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
                     </Button>
                     {authMode === 'signup' && selectedRole === 'landlord' && (
                       <p className="mt-2 text-center text-[10px] font-medium text-zinc-500">
-                        You will pay by card or M-Pesa STK after sign-up — no manual transfers.
+                        {landlordSignup.tier === 'free'
+                          ? 'Free plan: one house unit, no payment needed. Upgrade any time.'
+                          : 'You will pay by card or M-Pesa STK after sign-up — no manual transfers.'}
                       </p>
                     )}
                   </div>

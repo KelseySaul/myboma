@@ -68,6 +68,8 @@ const PROPERTY_FILTERS = [
   { id: 'bnb', label: 'BNB', icon: faHotel },
 ] as const;
 
+const TYPE_LABELS: Record<string, string> = { residential: 'Home', commercial: 'Commercial', bnb: 'Short stay' };
+
 export default function HunterDashboard({
   profile,
   onLoginRequired,
@@ -466,9 +468,9 @@ export default function HunterDashboard({
                     </div>
                   )}
                   <div className="absolute top-2.5 left-2.5">
-                    <Badge variant={property.type === 'bnb' ? 'purple' : property.type === 'commercial' ? 'warning' : 'indigo'}>
-                      {property.type}
-                    </Badge>
+                    <span className="rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-zinc-900 shadow-sm">
+                      {TYPE_LABELS[property.type] ?? property.type}
+                    </span>
                   </div>
                   <div className="absolute top-2.5 right-2.5">
                     <button
@@ -525,7 +527,7 @@ export default function HunterDashboard({
                         <div className="p-6 md:p-8 space-y-5">
                           <DialogHeader>
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge variant={property.type === 'bnb' ? 'purple' : property.type === 'commercial' ? 'warning' : 'indigo'}>{property.type}</Badge>
+                              <Badge variant="secondary">{TYPE_LABELS[property.type] ?? property.type}</Badge>
                               <div className="flex items-center gap-1 text-amber-500">
                                 <FontAwesomeIcon icon={faStar} className="h-3 w-3" />
                                 <span className="text-xs font-bold">4.9</span>

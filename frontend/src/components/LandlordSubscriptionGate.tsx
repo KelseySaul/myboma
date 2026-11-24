@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
+import { activateFreeLandlordPlan } from '../lib/api';
 import {
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
   type PendingLandlordSubscription,
@@ -39,8 +40,32 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
     } catch {
       /* ignore */
     }
-    return { ...defaultLandlordSignupState(), tier: 'starter', mpesaSettlementPhone: phone || '' };
+    return { ...defaultLandlordSignupState(), mpesaSettlementPhone: phone || '' };
   });
+  const [activatingFree, setActivatingFree] = useState(false);
+
+  const handleActivateFree = async () => {
+    setActivatingFree(true);
+    try {
+      const result = await activateFreeLandlordPlan({
+        rentPayoutMethod: form.rentPayoutMethod,
+        mpesaSettlementPhone: form.mpesaSettlementPhone,
+        bankName: form.bankName,
+        bankAccountNumber: form.bankAccountNumber,
+        bankAccountName: form.bankAccountName,
+        cashPayoutNotes: form.cashPayoutNotes,
+      });
+      localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
+      if (result.activated) toast.success('Your free plan is active.');
+      else if (result.reason === 'tenant_account') toast.error('Tenant accounts cannot list property. Sign up with a separate email to become a landlord.');
+      else toast.success('You already have an active plan.');
+      await onActivated();
+    } catch (err: any) {
+      toast.error(err.message || 'Could not activate the free plan.');
+    } finally {
+      setActivatingFree(false);
+    }
+  };
 
   if (isProcessing) {
     return (
@@ -70,8 +95,8 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm">
           <h2 className="text-xl font-black text-zinc-900">Complete your subscription</h2>
           <p className="mt-2 text-sm font-medium text-zinc-600">
-            Signed in as <span className="font-bold text-zinc-900">{email}</span>. Choose a plan and pay with card or
-            M-Pesa to unlock your dashboard.
+            Signed in as <span className="font-bold text-zinc-900">{email}</span>. Start on the free plan, or choose a paid
+            plan and pay with card or M-Pesa to unlock more units.
           </p>
           <button 
             onClick={handleSync}
@@ -88,7 +113,18 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
             onChange={setForm}
             showPayment
             paymentSlot={
-              <LandlordSubscriptionPay payload={form} phone={phone} onSuccess={onActivated} />
+              form.tier === 'free' ? (
+                <button
+                  type="button"
+                  onClick={handleActivateFree}
+                  disabled={activatingFree}
+                  className="h-12 w-full rounded-2xl bg-zinc-950 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+                >
+                  {activatingFree ? 'Activating...' : 'Activate free plan'}
+                </button>
+              ) : (
+                <LandlordSubscriptionPay payload={form} phone={phone} onSuccess={onActivated} />
+              )
             }
           />
         </div>

@@ -11,7 +11,7 @@ import {auth} from '../auth.ts';
 import {db, schema} from '../../db/client.ts';
 import {isSuperAdminEmail} from '../../config/superAdmin.ts';
 import {syncSuperAdminFromEnv} from '../adminHandlers.ts';
-import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
+import {isFreePlan, parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
 import type {AuthenticatedRequest, UserProfileRecord} from '../types.ts';
 
 export type ClientKind = 'web' | 'mobile';
@@ -110,6 +110,12 @@ export const unitLimitFor = (profile: UserProfileRecord): number | null => {
   if (!parsed || !hasActiveSubscription(profile)) return 0;
   return SUBSCRIPTION_TIERS[parsed.tier].features.maxListings;
 };
+
+/** Free-plan landlords get a single house unit and cannot create buildings. Platform admins never are. */
+export const isOnFreePlan = (profile: UserProfileRecord) =>
+  !profile.isSuperAdmin && !profile.isAdmin && isFreePlan(profile.subscriptionPlan);
+
+export const FREE_PLAN_BUILDING_ERROR = 'The free plan covers one house unit without buildings. Upgrade your plan to add buildings.';
 
 export const requireAuth = asyncHandler(async (req, res, next) => {
   // Native clients send `Authorization: Bearer <token>` (resolved by the bearer
