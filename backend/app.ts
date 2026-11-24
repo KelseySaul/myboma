@@ -174,8 +174,9 @@ if (process.env.VERCEL !== '1') {
   });
 }
 
-// Self-hosted/local only: on Vercel the same jobs run via Vercel Cron -> /api/cron/daily.
-if (process.env.VERCEL !== '1') {
+// In-process schedule for always-on hosts. Where the host sleeps (Vercel, Render free tier) the
+// same jobs are triggered externally via /api/cron/daily and EXTERNAL_CRON=true disables this.
+if (process.env.VERCEL !== '1' && process.env.EXTERNAL_CRON !== 'true') {
   cron.schedule(
     '0 8 * * *',
     async () => {

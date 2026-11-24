@@ -1,6 +1,7 @@
 import {emailTransporter} from '../services/notify.ts';
 
-export const PORT = Number(process.env.SERVER_PORT || 3001);
+// Render (and most hosts) inject PORT; SERVER_PORT is the local-dev override.
+export const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3001);
 export const isProduction = process.env.NODE_ENV === 'production';
 export const defaultCorsOrigins = 'http://localhost:5173,http://localhost:4173';
 
@@ -22,6 +23,7 @@ export const buildDeploymentOrigins = (): string[] => {
   add(process.env.APP_BASE_URL || `http://localhost:${PORT}`);
   add(process.env.VERCEL_URL);
   add(process.env.VERCEL_BRANCH_URL);
+  add(process.env.RENDER_EXTERNAL_URL);
 
   // Capacitor WebView origins (iOS uses capacitor://localhost; Android serves from
   // https://localhost). These aren't http(s) URLs with a parseable origin, so add verbatim.
