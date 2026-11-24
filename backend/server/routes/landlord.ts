@@ -27,6 +27,7 @@ import {
   validateBody,
 } from '../http/middleware.ts';
 import {emailSchema} from '../http/schemas.ts';
+import {invalidatePublicListings} from '../http/cache.ts';
 
 /**
  * Resolves the property/building ids a landlord's account can reach: rows they own
@@ -346,6 +347,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
           })),
         )
         .returning();
+      invalidatePublicListings();
       res.status(201).json(inserted);
     }),
   );
@@ -390,6 +392,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         })
         .where(eq(schema.properties.id, req.params.id))
         .returning();
+      invalidatePublicListings();
 
       if (body.tenantId !== undefined || body.status !== undefined) {
         if (updated.status === 'rented' && updated.tenantId) await startLease(updated, updated.tenantId);
@@ -422,6 +425,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         return;
       }
       await db.delete(schema.properties).where(eq(schema.properties.id, req.params.id));
+      invalidatePublicListings();
       await recordAudit(req.profile!, 'PROPERTY_DELETE', 'property', property.id, {title: property.title});
       res.json({deleted: true});
     }),
@@ -481,6 +485,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         .set({tenantId: tenantEmail, status: 'rented'})
         .where(eq(schema.properties.id, body.propertyId))
         .returning();
+      invalidatePublicListings();
       await startLease(updated, tenantEmail);
 
       const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.propertyId, updated.id)});
@@ -512,6 +517,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         .delete(schema.rentPayments)
         .where(and(sql`lower(${schema.rentPayments.tenantId}) = ${email}`, eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
 
+      invalidatePublicListings();
       await endLeasesForTenant(email, undefined, actor.uid);
       res.json({unassigned: true});
     }),
@@ -538,6 +544,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         .delete(schema.rentPayments)
         .where(and(sql`lower(${schema.rentPayments.tenantId}) = ${email}`, eq(schema.rentPayments.landlordId, actor.uid), ne(schema.rentPayments.status, 'paid')));
 
+      invalidatePublicListings();
       await endLeasesForTenant(email, undefined, actor.uid);
       res.json({deleted: true});
     }),

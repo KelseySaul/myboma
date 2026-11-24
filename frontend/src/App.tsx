@@ -9,6 +9,7 @@ import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
 import AboutPage from './components/AboutPage';
+import InvitePage from './components/InvitePage';
 import { tenantConfig } from './config/tenant';
 
 // Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
@@ -530,15 +531,18 @@ export default function App() {
           ? 'privacy'
           : null;
     const isAboutPage = window.location.pathname === '/about';
+    const isInvitePage = window.location.pathname === '/invite';
 
     return (
       <div className="db app-shell min-h-screen bg-[#f8f9fa]">
-        <PublicNavbar onLoginClick={() => setIsAuthOpen(true)} overHero={!legalPageType && !isAboutPage} />
+        <PublicNavbar onLoginClick={() => setIsAuthOpen(true)} overHero={!legalPageType && !isAboutPage && !isInvitePage} />
         <main>
           {legalPageType ? (
             <PublicLegalPage type={legalPageType} />
           ) : isAboutPage ? (
             <AboutPage onSignUp={() => setIsAuthOpen(true)} />
+          ) : isInvitePage ? (
+            <InvitePage />
           ) : (
             <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
           )}

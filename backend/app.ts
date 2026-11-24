@@ -2,6 +2,7 @@
 // process.env at import time, which happens before this file's own top-level code runs.
 import './env.ts';
 import * as Sentry from '@sentry/node';
+import compression from 'compression';
 import cors from 'cors';
 import express, {type ErrorRequestHandler} from 'express';
 import helmet from 'helmet';
@@ -12,8 +13,10 @@ import {auth} from './server/auth.ts';
 import {PORT, deploymentOrigins, isProduction, nonSecretConfigStatus} from './server/http/config.ts';
 import {authLimiter, credentialLimiter, publicLimiter, webhookLimiter} from './server/http/middleware.ts';
 import {runDailyJobs} from './server/services/dailyJobs.ts';
+import {staticCacheControl} from './server/http/cache.ts';
 import {stripeWebhookHandler} from './server/services/payments.ts';
 import {registerPublicRoutes} from './server/routes/public.ts';
+import {registerInviteRoutes} from './server/routes/invites.ts';
 import {registerUserRoutes} from './server/routes/users.ts';
 import {registerTenantRoutes} from './server/routes/tenant.ts';
 import {registerHunterRoutes} from './server/routes/hunter.ts';
@@ -22,6 +25,8 @@ import {registerAdminRoutes} from './server/routes/admin.ts';
 import {registerPaymentRoutes} from './server/routes/payments.ts';
 
 const app = express();
+// gzip/brotli for text responses (HTML, JS, CSS, JSON); images are skipped by its filter.
+app.use(compression());
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
@@ -108,6 +113,7 @@ app.use('/api', publicLimiter);
 
 // health, cron, legal, public listings, public files, waitlist, M-Pesa/Pesapal webhooks
 registerPublicRoutes(app);
+registerInviteRoutes(app);
 
 const bffRouter = express.Router();
 bffRouter.use(authLimiter);
@@ -127,12 +133,22 @@ app.use('/api/mobile', bffRouter);
 
 if (process.env.VERCEL !== '1') {
   const distPath = path.join(process.cwd(), 'frontend', 'dist');
-  app.use(express.static(distPath, {maxAge: isProduction ? '1h' : 0}));
+  app.use(
+    express.static(distPath, {
+      // Cache-Control is set per file below; express's default maxAge would override it.
+      cacheControl: false,
+      setHeaders: (res, filePath) => {
+        res.setHeader('Cache-Control', isProduction ? staticCacheControl(path.relative(distPath, filePath)) : 'no-cache');
+      },
+    }),
+  );
 
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({error: 'API route not found'});
     }
+    // The SPA shell must always revalidate so a new deploy's asset hashes are picked up.
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {

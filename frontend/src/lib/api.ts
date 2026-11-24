@@ -259,7 +259,8 @@ export const initiateMpesaRentPayment = (body: {rentPaymentId: string; phone?: s
 
 export const provisionUser = (body: {
   email: string;
-  password: string;
+  /** Ignored by the server: invitees choose their own password from the emailed link. */
+  password?: string;
   displayName: string;
   phone?: string;
   role: 'tenant' | 'landlord' | 'hunter' | 'admin';
@@ -274,7 +275,7 @@ export const provisionUser = (body: {
   bankAccountNumber?: string;
   bankAccountName?: string;
 }) =>
-  bffRequest<{uid: string; email: string; invitation: any}>('/users/provision', {
+  bffRequest<{uid: string | null; email: string; invitation: any; existing?: boolean; invited?: boolean}>('/users/provision', {
     method: 'POST',
     body,
   });
@@ -385,3 +386,32 @@ export const getPlatformBranding = (platformId: string) =>
   bffRequest<{name: string; brandLogoUrl: string | null; brandPrimaryColor: string | null; brandSecondaryColor: string | null}>(
     `/platforms/${platformId}/branding`,
   );
+
+/** Public details of an invitation link (masked email, role, who sent it). */
+export const getInvite = async (token: string) => {
+  const response = await fetch(`${apiBaseUrl()}/api/public/invites/${encodeURIComponent(token)}`, {credentials: 'include'});
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(typeof payload.error === 'string' ? payload.error : 'This invitation link is not valid.');
+    (error as Error & {status?: number}).status = response.status;
+    throw error;
+  }
+  return payload as {email: string; role: 'tenant' | 'landlord' | 'hunter' | 'admin'; invitedByName: string; displayName: string | null};
+};
+
+/** Creates the invited account and signs it in (the server sets the session cookie). */
+export const acceptInvite = async (body: {token: string; name: string; phone?: string; password: string}) => {
+  const response = await fetch(`${apiBaseUrl()}/api/public/invites/accept`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(typeof payload.error === 'string' ? payload.error : 'Could not set up your account. Please try again.');
+    (error as Error & {status?: number}).status = response.status;
+    throw error;
+  }
+  return payload as {ok: true; role: string};
+};

@@ -12,11 +12,18 @@ type Property = {id: string; landlordId: string; platformId: string | null; pric
 const resolveTenantUserId = async (tenantRef: string) => {
   const ref = tenantRef.trim().toLowerCase();
   if (!ref.includes('@')) return ref; // already a uid
-  const user = await db.query.users.findFirst({
-    where: sql`lower(${schema.users.email}) = ${ref}`,
-    columns: {uid: true},
-  });
-  return user?.uid ?? null;
+  // Link only an account that really belongs to this mailbox: a tenant account (created
+  // through an invitation or provisioning) or one whose email is verified. An unverified
+  // self-signup using someone else's address must not be attached to their tenancy.
+  const rows = await db
+    .select({uid: schema.users.uid, role: schema.users.role, emailVerified: schema.authUser.emailVerified})
+    .from(schema.users)
+    .leftJoin(schema.authUser, eq(schema.authUser.id, schema.users.uid))
+    .where(sql`lower(${schema.users.email}) = ${ref}`)
+    .limit(1);
+  const user = rows[0];
+  if (!user || !(user.role === 'tenant' || user.emailVerified)) return null;
+  return user.uid;
 };
 
 const resolveTenantEmail = async (tenantRef: string) => {

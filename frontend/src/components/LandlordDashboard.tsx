@@ -743,7 +743,6 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     try {
       const result = await provisionUser({
         email: newTenant.email.toLowerCase(),
-        password: newTenant.password,
         displayName: newTenant.displayName,
         phone: newTenant.phone,
         role: 'tenant',
@@ -753,7 +752,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
       });
 
       logAudit('TENANT_INVITE', 'user', newTenant.email.toLowerCase());
-      toast.success("Tenant created!");
+      toast.success(result.existing ? `${result.email} already has an account and was added to your tenants` : `Invitation sent to ${result.email}`);
       
       // Update state immediately from the server result
       if (result.invitation) {
@@ -2212,11 +2211,9 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
               <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Phone</label>
               <Input className="h-12 rounded-xl" value={newTenant.phone} onChange={e => setNewTenant({...newTenant, phone: e.target.value})} placeholder="e.g. 0712345678" />
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Initial Password</label>
-              <Input type="password" className="h-12 rounded-xl" value={newTenant.password} onChange={e => setNewTenant({...newTenant, password: e.target.value})} placeholder="Set a temporary password" />
-              <p className="text-[10px] text-zinc-400 font-bold ml-1">Must be at least 8 characters.</p>
-            </div>
+            <p className="text-xs leading-5 text-zinc-500">
+              We'll email them a private link to set up their account and choose a password. The link works once and expires in 7 days.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsCreateTenantOpen(false)} disabled={isCreatingTenant}>Cancel</Button>

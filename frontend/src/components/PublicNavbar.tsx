@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Menu, X } from 'lucide-react';
+import { Menu, Search, X } from 'lucide-react';
 import { tenantConfig } from '../config/tenant';
+import SiteSearch from './search/SiteSearch';
 
 interface PublicNavbarProps {
   onLoginClick: () => void;
@@ -18,6 +19,7 @@ const LINKS = [
 export default function PublicNavbar({ onLoginClick, overHero = false }: PublicNavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const isNative = Capacitor.isNativePlatform();
 
   useEffect(() => {
@@ -25,6 +27,18 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName);
+      if ((event.key === 'k' && (event.metaKey || event.ctrlKey)) || (event.key === '/' && !typing)) {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const dark = overHero && !scrolled;
@@ -50,6 +64,19 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           </a>
 
           <div className="hidden items-center gap-2 sm:flex">
+          <button
+            type="button"
+            aria-label="Search homes"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setSearchOpen(true);
+            }}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl transition  ${
+              dark ? 'text-white hover:bg-white/15' : 'text-zinc-950 hover:bg-zinc-950/5'
+            }`}
+          >
+            <Search className="h-5 w-5" />
+          </button>
           {LINKS.map((link) => {
             const active = path === link.href;
             return (
@@ -77,6 +104,20 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
             Sign in
           </button>
         </div>
+          <div className="flex items-center gap-1 sm:hidden">
+          <button
+            type="button"
+            aria-label="Search homes"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setSearchOpen(true);
+            }}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl transition  ${
+              dark ? 'text-white hover:bg-white/15' : 'text-zinc-950 hover:bg-zinc-950/5'
+            }`}
+          >
+            <Search className="h-5 w-5" />
+          </button>
           <button
             type="button"
             aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
@@ -88,6 +129,7 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
+          </div>
         </nav>
 
         {mobileMenuOpen && (
@@ -121,6 +163,7 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           </div>
         )}
       </div>
+      <SiteSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

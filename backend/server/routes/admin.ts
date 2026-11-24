@@ -3,6 +3,7 @@ import {withSystemAccess} from '../../db/requestContext.ts';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
+import {invalidatePublicListings} from '../http/cache.ts';
 import {canAdministerBuilding, canWriteUser, isSuperAdmin} from '../../db/authz.ts';
 import {updatePlatformBrandingSchema} from '../adminHandlers.ts';
 import {toActor} from '../types.ts';
@@ -214,6 +215,7 @@ export function registerAdminRoutes(bffRouter: Router) {
         }
         await tx.delete(schema.buildings).where(eq(schema.buildings.id, req.params.id));
       });
+      invalidatePublicListings();
       await recordAudit(req.profile!, 'BUILDING_DELETE', 'building', req.params.id, {units: props.length});
 
       res.json({deleted: true});

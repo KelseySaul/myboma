@@ -9,6 +9,7 @@ import { useAvailableProperties } from '../lib/queries';
 import ListingCard from './listings/ListingCard';
 import ListingDialog from './listings/ListingDialog';
 import type { Listing } from './listings/types';
+import { searchListings } from '../../../shared/listingSearch';
 
 const PROPERTY_FILTERS = [
   { id: 'all', label: 'All', icon: faHome },
@@ -69,19 +70,11 @@ export default function HunterDashboard({
   };
 
 
-  const filteredProperties = properties
-    .filter(p => 
-      (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-       p.location.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (filterType === 'all' || p.type === filterType)
-    )
-    .sort((a, b) => {
-      const aLiked = likedPropertyIds.has(a.id);
-      const bLiked = likedPropertyIds.has(b.id);
-      if (aLiked && !bLiked) return -1;
-      if (!aLiked && bLiked) return 1;
-      return 0; // Already sorted by createdAt DESC from Supabase
-    });
+  // Same matching as the navbar search: areas, titles, amenities, typos, "2br", "under 50k".
+  const ofType = properties.filter((p) => filterType === 'all' || p.type === filterType);
+  const filteredProperties = searchTerm.trim()
+    ? searchListings(ofType, searchTerm).map((result) => result.listing)
+    : [...ofType].sort((a, b) => Number(likedPropertyIds.has(b.id)) - Number(likedPropertyIds.has(a.id)));
 
   const searchInput = (
     <div className="relative group w-full">

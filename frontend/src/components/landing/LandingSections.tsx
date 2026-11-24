@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowRight, Bell, Building2, CheckCircle2, MapPin, Search, Smartphone, Wrench } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowRight, Bell, Building2, CheckCircle2, Smartphone, Wrench } from 'lucide-react';
 import Reveal from './Reveal';
 
 /** Hero backgrounds, pre-blurred and compressed by scripts/build-hero-images.mjs. */
@@ -8,35 +8,21 @@ const SLIDE_MS = 6000;
 
 export type ListingType = 'all' | 'residential' | 'commercial' | 'bnb';
 
-const LISTING_TYPES: { id: ListingType; label: string }[] = [
-  { id: 'all', label: 'All types' },
-  { id: 'residential', label: 'Homes' },
-  { id: 'commercial', label: 'Commercial' },
-  { id: 'bnb', label: 'Short stays' },
-];
-
 /* Hero --------------------------------------------------------------------- */
 
 interface HeroProps {
-  onSearch: (query: string, type: ListingType) => void;
+  onBrowse: () => void;
   onStartLandlord: () => void;
 }
 
-export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
+export function LandingHero({ onBrowse, onStartLandlord }: HeroProps) {
   const [slide, setSlide] = useState(0);
-  const [query, setQuery] = useState('');
-  const [type, setType] = useState<ListingType>('all');
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = setInterval(() => setSlide((current) => (current + 1) % HERO_IMAGES.length), SLIDE_MS);
     return () => clearInterval(timer);
   }, []);
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    onSearch(query.trim(), type);
-  };
 
   return (
     <section className="relative isolate flex min-h-[620px] items-center overflow-hidden bg-zinc-950 py-24 sm:h-[92svh] sm:max-h-[900px]">
@@ -65,55 +51,23 @@ export function LandingHero({ onSearch, onStartLandlord }: HeroProps) {
             <span className="whitespace-nowrap">M-Pesa</span>.
           </p>
 
-          <form
-            onSubmit={submit}
-            className="mx-auto mt-8 flex w-full max-w-2xl flex-col gap-2 rounded-2xl border border-white/30 bg-white/[0.16] p-2.5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:flex-row sm:items-stretch"
-            role="search"
-          >
-            <label className="flex flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left sm:py-0">
-              <MapPin className="h-5 w-5 shrink-0 text-white/75" />
-              <span className="min-w-0 flex-1">
-                <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">Location</span>
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Where do you want to live? e.g. Kilimani"
-                  className="h-6 w-full bg-transparent text-sm text-white placeholder:text-white/65 focus:outline-none"
-                />
-              </span>
-            </label>
-            <div className="hidden w-px bg-white/25 sm:block" />
-            <label className="block px-3 py-1 text-left sm:w-40 sm:py-2">
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/65">Property type</span>
-              <select
-                value={type}
-                onChange={(event) => setType(event.target.value as ListingType)}
-                className="h-6 w-full cursor-pointer bg-transparent text-sm font-medium text-white focus:outline-none"
-              >
-                {LISTING_TYPES.map((option) => (
-                  <option key={option.id} value={option.id} className="text-zinc-950">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <button
-              type="submit"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 active:scale-[0.98]"
+              type="button"
+              onClick={onBrowse}
+              className="inline-flex h-12 items-center justify-center rounded-xl bg-white px-7 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200 active:scale-[0.98]"
             >
-              <Search className="h-4 w-4" />
-              Search
+              Browse homes
             </button>
-          </form>
-
-          <button
-            type="button"
-            onClick={onStartLandlord}
-            className="group mt-5 inline-flex items-center gap-2 text-sm font-semibold text-white"
-          >
-            Own a property? List it for free
-            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-          </button>
+            <button
+              type="button"
+              onClick={onStartLandlord}
+              className="group inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/40 bg-white/10 px-7 text-sm font-semibold text-white backdrop-blur-md transition hover:bg-white/20 active:scale-[0.98]"
+            >
+              List your property free
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </button>
+          </div>
         </div>
       </div>
 

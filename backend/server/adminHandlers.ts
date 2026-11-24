@@ -1,11 +1,10 @@
 import type {Response} from 'express';
-import {addPlatformMembership, membershipRoleFor} from './memberships.ts';
 import {withSystemAccess} from '../db/requestContext.ts';
 import {eq, ne, and, or, sql} from 'drizzle-orm';
 import {z} from 'zod';
-import {APIError} from 'better-auth';
-import {auth} from './auth.ts';
+import {createAndSendInvite} from './inviteService.ts';
 import {db, schema} from '../db/client.ts';
+import {invalidatePublicListings} from './http/cache.ts';
 import type {AuthenticatedRequest, UserProfileRecord} from './types.ts';
 
 const emailSchema = z.string().email().max(320);
@@ -21,7 +20,9 @@ const phoneSchema = z
 export const provisionUserSchema = z
   .object({
     email: emailSchema,
-    password: passwordSchema,
+    // Ignored: invitees choose their own password from the emailed link. Still accepted so
+    // older app versions that send one keep working.
+    password: passwordSchema.optional(),
     displayName: z.string().min(1).max(120),
     phone: phoneSchema,
     role: z.enum(['tenant', 'landlord', 'hunter', 'admin']),
@@ -128,9 +129,7 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
   // Every invitation records who created it, so the creator (and RLS) can see it later.
   const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : (body.landlordId ?? actor.uid);
 
-  // 1. Try to create the auth user. signUpEmail also runs databaseHooks.user.create.after
-  // (server/auth.ts), which seeds a baseline public.users row from these same fields.
-  // Provisioning creates NEW accounts only. Updating an existing user from here let any
+  // Provisioning invites NEW people only. Updating an existing user from here let any
   // landlord rewrite someone else's role, admin flags and rent routing.
   const alreadyRegistered = await db.query.users.findFirst({
     where: sql`lower(${schema.users.email}) = ${email}`,
@@ -140,8 +139,13 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     // A landlord adding an already-registered tenant just records the link; it never
     // touches the user's profile, and never steals another landlord's invitation.
     if (body.role === 'tenant' && (alreadyRegistered.role === 'tenant' || alreadyRegistered.role === 'hunter')) {
-      // hunter -> tenant is the only change allowed: it grants no extra privilege.
-      if (alreadyRegistered.role === 'hunter') {
+      // hunter -> tenant is the only change allowed, and only for an account whose owner has
+      // verified the mailbox; an unverified account gets it if and when it is verified.
+      const authRow = await db.query.authUser.findFirst({
+        where: eq(schema.authUser.id, alreadyRegistered.uid),
+        columns: {emailVerified: true},
+      });
+      if (alreadyRegistered.role === 'hunter' && authRow?.emailVerified) {
         await db.update(schema.users).set({role: 'tenant'}).where(eq(schema.users.uid, alreadyRegistered.uid));
       }
       const [invitation] = await db
@@ -156,106 +160,46 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
     return;
   }
 
-  let uid: string | undefined;
-  try {
-    const signUpResult = await auth.api.signUpEmail({
-      body: {
-        email,
-        password: body.password,
-        name: body.displayName,
-        phone: body.phone,
-        intended_role: body.role,
-        must_change_password: body.mustChangePassword ?? true,
-      } as Parameters<typeof auth.api.signUpEmail>[0]['body'],
-    });
-    uid = signUpResult.user.id;
-  } catch (err) {
-    const isDuplicate = err instanceof APIError && err.status === 'UNPROCESSABLE_ENTITY';
-    if (isDuplicate) {
-      res.status(409).json({error: 'An account with this email already exists.'});
-      return;
-    }
-    console.error('[Provisioning] signUpEmail failed:', err);
-    res.status(400).json({error: 'Failed to create user'});
-    return;
-  }
-
-  if (!uid) {
-    res.status(500).json({error: 'Failed to resolve user ID'});
-    return;
-  }
-
-  // 2. Upsert the profile with admin-provisioning-specific fields the signup hook
-  // doesn't set (payout routing, managed-landlord subscription defaults, etc).
+  // 1. No account is created now. The invitee gets a single-use link and creates the
+  // account themselves (choosing their own password) — see server/inviteService.ts. The
+  // provisioning-specific profile fields travel with the invite and are applied on accept.
   const isManagedLandlord = body.role === 'landlord';
-  const rentRecipientId = isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null;
-  const managedByAdminId = isManagedLandlord ? actor.uid : null;
-
-  const profileValues = {
-    uid,
-    email,
-    displayName: body.displayName,
-    role: body.role,
-    platformId,
-    phone: body.phone ?? null,
-    isAdmin: body.role === 'admin',
-    isSuperAdmin: false,
-    mustChangePassword: body.mustChangePassword ?? true,
-    rentRecipientId,
-    managedByAdminId,
-    rentPayoutMethod: body.rentRouting === 'direct' ? (body.rentPayoutMethod ?? null) : null,
-    mpesaSettlementPhone: body.rentRouting === 'direct' ? (body.mpesaSettlementPhone ?? null) : null,
-    mpesaSettlementShortCode: body.rentRouting === 'direct' ? (body.mpesaSettlementShortCode ?? null) : null,
-    bankName: body.rentRouting === 'direct' ? (body.bankName ?? null) : null,
-    bankAccountNumber: body.rentRouting === 'direct' ? (body.bankAccountNumber ?? null) : null,
-    bankAccountName: body.rentRouting === 'direct' ? (body.bankAccountName ?? null) : null,
+  const direct = body.rentRouting === 'direct';
+  const profile = {
+    rentRecipientId: isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null,
+    managedByAdminId: isManagedLandlord ? actor.uid : null,
+    rentPayoutMethod: direct ? (body.rentPayoutMethod ?? null) : null,
+    mpesaSettlementPhone: direct ? (body.mpesaSettlementPhone || null) : null,
+    mpesaSettlementShortCode: direct ? (body.mpesaSettlementShortCode ?? null) : null,
+    bankName: direct ? (body.bankName ?? null) : null,
+    bankAccountNumber: direct ? (body.bankAccountNumber ?? null) : null,
+    bankAccountName: direct ? (body.bankAccountName ?? null) : null,
     ...(isManagedLandlord
-      ? {
-          // Landlords managed by a platform admin are covered by the platform; landlords
-          // managed by a Pro Plus agency inherit the agency's plan (and are extended when
-          // the agency renews — see activateLandlordSubscription).
-          ...(actor.isAdmin || actor.isSuperAdmin
-            ? {
-                subscriptionPlan: 'proplus:yearly',
-                subscriptionStatus: 'active' as const,
-                subscriptionExpiresAt: new Date('2099-12-31T23:59:59Z'),
-              }
-            : {
-                subscriptionPlan: actor.subscriptionPlan ?? null,
-                subscriptionStatus: (actor.subscriptionStatus ?? 'none') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
-                subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt) : null,
-              }),
-        }
+      ? // Landlords managed by a platform admin are covered by the platform; landlords
+        // managed by a Pro Plus agency inherit the agency's plan (and are extended when
+        // the agency renews — see activateLandlordSubscription).
+        actor.isAdmin || actor.isSuperAdmin
+        ? {subscriptionPlan: 'proplus:yearly', subscriptionStatus: 'active' as const, subscriptionExpiresAt: '2099-12-31T23:59:59Z'}
+        : {
+            subscriptionPlan: actor.subscriptionPlan ?? null,
+            subscriptionStatus: (actor.subscriptionStatus ?? 'none') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
+            subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt).toISOString() : null,
+          }
       : {}),
   };
 
-  await db
-    .insert(schema.users)
-    .values(profileValues)
-    .onConflictDoUpdate({target: schema.users.uid, set: profileValues});
-
-  // 3. Ensure the invitation exists for the landlord's tenant list. We NO LONGER
-  // delete it here, as the LandlordDashboard relies on the invitations table
-  // to show the registry of tenants linked to that landlord.
+  // 2. The invitation row keeps the inviter's registry (LandlordDashboard lists it) and is
+  // what Google sign-in / email verification fall back to.
   const invitationValues = {
     email,
     displayName: body.displayName,
-    phone: body.phone ?? null,
+    phone: body.phone || null,
     role: body.role,
     platformId,
     landlordId: landlordId ?? null,
   };
-
-  // System access: the caller (landlord/agency) is authorized above but isn't a platform
-  // admin, so the membership policy would refuse their insert.
-  await withSystemAccess(() =>
-    addPlatformMembership(platformId, uid!, body.role === 'admin' ? 'admin' : membershipRoleFor({role: body.role})),
-  );
-
-  // Stale invitation rows for a brand-new account are replaced; there is no user yet
-  // whose relationships could be hijacked.
-  // System access: a stale invitation for this brand-new account may belong to someone
-  // else (invisible to the caller under RLS) and must still be replaced.
+  // System access: a stale invitation for this email may belong to someone else
+  // (invisible to the caller under RLS) and must still be replaced.
   const [invitation] = await withSystemAccess(() =>
     db
       .insert(schema.invitations)
@@ -264,8 +208,26 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
       .returning(),
   );
 
-  console.log(`[Provisioning] Provisioned ${body.role} ${uid} (landlord: ${landlordId ?? 'none'})`);
-  res.status(201).json({uid, email, invitation});
+  try {
+    await createAndSendInvite({
+      email,
+      role: body.role,
+      platformId,
+      landlordId: landlordId ?? null,
+      invitedBy: actor.uid,
+      invitedByName: actor.displayName || 'MyBoma',
+      displayName: body.displayName,
+      phone: body.phone || null,
+      profile,
+    });
+  } catch (err) {
+    console.error('[Provisioning] Invite email failed:', err);
+    res.status(502).json({error: 'The invitation was saved but the email could not be sent. Try again shortly.'});
+    return;
+  }
+
+  console.log(`[Provisioning] Invited ${body.role} ${email} (by ${actor.uid})`);
+  res.status(201).json({uid: null, email, invitation, invited: true});
 };
 
 export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response) => {
@@ -396,6 +358,7 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
           ),
         );
     }));
+    invalidatePublicListings();
 
     res.json({deleted: true});
   } catch (err: any) {

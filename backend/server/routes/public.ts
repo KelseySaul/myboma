@@ -16,6 +16,7 @@ import {
   webhookLimiter,
 } from '../http/middleware.ts';
 import {uuidSchema} from '../http/schemas.ts';
+import {publicListingsCache, weakEtag} from '../http/cache.ts';
 import {runDailyJobs} from '../services/dailyJobs.ts';
 import {streamStoredObject} from '../services/files.ts';
 import {sendEmail} from '../services/notify.ts';
@@ -71,6 +72,20 @@ const publicImageUrl = (request: Request, value: string) => {
 };
 
 /** Public (unauthenticated) routes and provider webhooks, registered after express.json(). */
+/** Public feed: never expose tenant references or internal fields. */
+const loadAvailableListings = (limit: number, offset: number) =>
+  db.query.properties.findMany({
+    where: eq(schema.properties.status, 'available'),
+    orderBy: desc(schema.properties.createdAt),
+    columns: {
+      id: true, landlordId: true, platformId: true, buildingId: true, unitNumber: true, title: true,
+      description: true, type: true, price: true, location: true, images: true, status: true,
+      amenities: true, createdAt: true,
+    },
+    limit,
+    offset,
+  });
+
 export function registerPublicRoutes(app: Express) {
   app.get('/api/health', healthHandler);
 
@@ -196,24 +211,27 @@ export function registerPublicRoutes(app: Express) {
   app.get('/api/public/properties/available', publicLimiter, asyncHandler(async (req, res) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 500);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
-    const rows = await db.query.properties.findMany({
-      where: eq(schema.properties.status, 'available'),
-      orderBy: desc(schema.properties.createdAt),
-      // Public feed: never expose tenant references or internal fields.
-      columns: {
-        id: true, landlordId: true, platformId: true, buildingId: true, unitNumber: true, title: true,
-        description: true, type: true, price: true, location: true, images: true, status: true,
-        amenities: true, createdAt: true,
-      },
-      limit,
-      offset,
-    });
-    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
-    res.json(rows.map((p) => ({
+    const cacheKey = `${limit}:${offset}`;
+    type ListingRow = Awaited<ReturnType<typeof loadAvailableListings>>[number];
+    let rows = publicListingsCache.get(cacheKey) as ListingRow[] | undefined;
+    if (!rows) {
+      rows = await loadAvailableListings(limit, offset);
+      publicListingsCache.set(cacheKey, rows);
+    }
+    // Image URLs depend on the request host, so they are built per request, not cached.
+    const body = JSON.stringify(rows.map((p) => ({
       ...p,
       price: Number(p.price),
       images: p.images.map((image) => publicImageUrl(req, image)),
     })));
+    const etag = weakEtag(body);
+    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=300');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) {
+      res.status(304).end();
+      return;
+    }
+    res.type('application/json').send(body);
   }));
 
   /** Public file serving for marketing assets (listing photos, avatars, platform logos).

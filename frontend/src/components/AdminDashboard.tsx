@@ -349,7 +349,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       
       const result = await provisionUser({
         email: inviteForm.email.toLowerCase(),
-        password: inviteForm.password,
         displayName: inviteForm.displayName,
         role: inviteForm.role,
         platformId: targetPlatformId,
@@ -370,7 +369,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         });
       }
 
-      toast.success("User created and invited successfully!");
+      toast.success(`Invitation sent to ${result.email}`);
       setIsInviteUserOpen(false);
       setInviteForm({ email: '', displayName: '', password: '', role: 'landlord', rentRouting: 'admin', rentPayoutMethod: 'mpesa', mpesaSettlementPhone: '' });
     } catch (err: any) {
@@ -635,12 +634,8 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   };
 
   const handleAddPlatform = async () => {
-    if (!newPlatform.name || !newPlatform.slug || !newPlatform.ownerEmail || !newPlatform.ownerPassword) {
+    if (!newPlatform.name || !newPlatform.slug || !newPlatform.ownerEmail) {
       toast.error("Please fill in all required fields.");
-      return;
-    }
-    if (newPlatform.ownerPassword.length < 8) {
-      toast.error("Temporary password must be at least 8 characters long.");
       return;
     }
     try {
@@ -654,7 +649,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       try {
         await provisionUser({
           email: newPlatform.ownerEmail.toLowerCase(),
-          password: newPlatform.ownerPassword,
           displayName: `${newPlatform.name} Owner`,
           role: 'admin',
           platformId: createdPlat.id,
@@ -665,7 +659,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         toast.error(`Auth creation failed: ${signUpError.message}`);
       }
 
-      toast.success("Platform provisioned successfully! Master Admin account created.");
+      toast.success(`Platform created. Invitation sent to ${newPlatform.ownerEmail.toLowerCase()}`);
 
       // Update local state synchronously to react instantly
       setPlatforms(prev => [...prev, createdPlat]);
@@ -1028,32 +1022,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                             />
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                              Temporary Password <span className="text-rose-500">*</span>
-                            </label>
-                            <div className="relative">
-                              <Input
-                                className="h-10 pr-10"
-                                type={showPlatformPassword ? 'text' : 'password'}
-                                value={newPlatform.ownerPassword}
-                                onChange={e => setNewPlatform({...newPlatform, ownerPassword: e.target.value})}
-                                placeholder="Set secure initial password"
-                                required
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowPlatformPassword(!showPlatformPassword)}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                                tabIndex={-1}
-                              >
-                                <FontAwesomeIcon icon={showPlatformPassword ? faEye : faEye} className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                            <p className="text-[11px] text-slate-400">
-                              The administrator will be prompted to reset this temporary password on their first login.
-                            </p>
-                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            The owner gets an email with a private link to set up their account. It works once and expires in 7 days.
+                          </p>
                         </div>
                       </div>
 
@@ -1087,7 +1058,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                             setIsProvisioning(false);
                           }
                         }}
-                        disabled={isProvisioning || !newPlatform.name || !newPlatform.slug || !newPlatform.ownerEmail || !newPlatform.ownerPassword}
+                        disabled={isProvisioning || !newPlatform.name || !newPlatform.slug || !newPlatform.ownerEmail}
                       >
                         {isProvisioning ? (
                           <>
@@ -1406,10 +1377,6 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Email Address</label>
                             <Input className="h-10" type="email" value={inviteForm.email} onChange={e => setInviteForm({...inviteForm, email: e.target.value})} placeholder="e.g. jane@example.com" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Temporary Password</label>
-                            <Input className="h-10" type="password" value={inviteForm.password} onChange={e => setInviteForm({...inviteForm, password: e.target.value})} placeholder="Temporary password" />
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Role</label>

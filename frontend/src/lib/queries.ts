@@ -9,7 +9,7 @@ import {
   getTenantDashboard,
   getUnreadNotificationCount,
 } from './api';
-import { DASHBOARD_POLL_MS, PROFILE_POLL_MS, UNREAD_POLL_MS } from './polling';
+import { DASHBOARD_POLL_MS, LISTINGS_POLL_MS, PROFILE_POLL_MS, UNREAD_POLL_MS } from './polling';
 
 /**
  * Query-key factories. Every user-scoped key carries the uid the request is served as
@@ -43,6 +43,7 @@ export const useSessionProfile = (userId: string | null | undefined) =>
     queryFn: getSession,
     enabled: Boolean(userId),
     refetchInterval: PROFILE_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const useLandlordDashboard = (uid: string, options: EnabledOption = {}) =>
@@ -51,6 +52,7 @@ export const useLandlordDashboard = (uid: string, options: EnabledOption = {}) =
     queryFn: getLandlordDashboard,
     enabled: Boolean(uid) && (options.enabled ?? true),
     refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const useTenantDashboard = (uid: string) =>
@@ -59,6 +61,7 @@ export const useTenantDashboard = (uid: string) =>
     queryFn: getTenantDashboard,
     enabled: Boolean(uid),
     refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const useAdminDashboard = (params: AdminDashboardParams) =>
@@ -67,6 +70,7 @@ export const useAdminDashboard = (params: AdminDashboardParams) =>
     queryFn: () => getAdminDashboard(params.platformId),
     enabled: Boolean(params.uid),
     refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
 export const useAuditLogs = (params: { uid: string; userId: string }, enabled: boolean) =>
@@ -75,13 +79,49 @@ export const useAuditLogs = (params: { uid: string; userId: string }, enabled: b
     queryFn: () => getAuditLogs(params.userId),
     enabled: enabled && Boolean(params.uid),
     refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
   });
+
+/**
+ * Public listings are the same for every visitor, so the last response is kept in
+ * localStorage: returning visitors see homes instantly while a fresh copy loads.
+ */
+const LISTINGS_STORAGE_KEY = 'myboma_listings_v1';
+const LISTINGS_STORAGE_MAX_AGE_MS = 10 * 60_000;
+
+type StoredListings = { savedAt: number; data: Awaited<ReturnType<typeof getAvailableProperties>> };
+
+const readStoredListings = (): StoredListings | undefined => {
+  try {
+    const raw = localStorage.getItem(LISTINGS_STORAGE_KEY);
+    if (!raw) return undefined;
+    const stored = JSON.parse(raw) as StoredListings;
+    if (!Array.isArray(stored?.data) || Date.now() - stored.savedAt > LISTINGS_STORAGE_MAX_AGE_MS) return undefined;
+    return stored;
+  } catch {
+    return undefined;
+  }
+};
+
+const fetchAndStoreListings = async () => {
+  const data = await getAvailableProperties();
+  try {
+    localStorage.setItem(LISTINGS_STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), data } satisfies StoredListings));
+  } catch {
+    // Storage full or blocked (private mode): caching is optional.
+  }
+  return data;
+};
 
 export const useAvailableProperties = () =>
   useQuery({
     queryKey: queryKeys.availableProperties(),
-    queryFn: getAvailableProperties,
-    refetchInterval: DASHBOARD_POLL_MS,
+    queryFn: fetchAndStoreListings,
+    initialData: () => readStoredListings()?.data,
+    // Marks stored data with its real age, so anything older than staleTime refetches on mount.
+    initialDataUpdatedAt: () => readStoredListings()?.savedAt,
+    staleTime: 60_000,
+    refetchInterval: LISTINGS_POLL_MS,
   });
 
 /** Unread notification count for the signed-in user — or, while impersonating, for the
@@ -93,6 +133,7 @@ export const useUnreadCount = (email: string | null | undefined) => {
     queryFn: getUnreadNotificationCount,
     enabled: Boolean(email),
     refetchInterval: UNREAD_POLL_MS,
+    refetchOnWindowFocus: true,
     select: (data) => data.count,
   });
 };

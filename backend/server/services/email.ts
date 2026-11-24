@@ -184,3 +184,35 @@ export const sendEmail = async ({to, subject, text, html, template, replyTo}: Se
   }
   await smtpTransport!.sendMail(message);
 };
+
+/* Invitations ------------------------------------------------------------- */
+
+const ROLE_LABELS: Record<string, string> = {
+  tenant: 'a tenant',
+  landlord: 'a landlord',
+  admin: 'an administrator',
+  hunter: 'a member',
+};
+
+/** The email sent with a single-use account setup link. */
+export const buildInviteEmail = (input: {to: string; inviterName: string; role: string; url: string; expiresAt: Date}): SendEmailInput => {
+  const expires = input.expiresAt.toLocaleDateString('en-KE', {day: 'numeric', month: 'long', year: 'numeric'});
+  return {
+    to: input.to,
+    subject: `${input.inviterName} invited you to MyBoma`,
+    template: {
+      preheader: `Set up your MyBoma account. This link works once and expires on ${expires}.`,
+      heading: "You've been invited to MyBoma",
+      paragraphs: [
+        `${input.inviterName} has invited you to join MyBoma as ${ROLE_LABELS[input.role] ?? 'a member'}.`,
+        'Use the button below to choose your password and finish setting up your account.',
+      ],
+      button: {label: 'Set up your account', url: input.url},
+      closing: [
+        `This link is personal to you. It works once and expires on ${expires}. Do not forward it.`,
+        "If you weren't expecting this, ignore this email. No account is created until the link is used.",
+      ],
+      footerNote: 'You received this because someone invited this email address to MyBoma.',
+    },
+  };
+};

@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { LEGAL_DOCUMENTS, PRIVACY_VERSION, TERMS_VERSION } from '../../../shared/legalDocuments';
 import { GetStarted, LandingHero, LandlordFeatures, ListingsSection } from './landing/LandingSections';
+import { SEARCH_EVENT } from './search/SiteSearch';
 import LandlordSignupFields, { defaultLandlordSignupState } from './LandlordSignupFields';
 import {
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -325,6 +326,25 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
 
   const scrollToHomes = () => document.getElementById('homes')?.scrollIntoView({ behavior: 'smooth' });
 
+  // Navbar search: "Show all results" filters the listings here (or arrives as ?q= from another page).
+  useEffect(() => {
+    const show = (query: string) => {
+      setListingSearch(query);
+      setPropertyFilter('all');
+      requestAnimationFrame(() => scrollToHomes());
+    };
+    const initial = new URLSearchParams(window.location.search).get('q');
+    if (initial) {
+      show(initial);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('q');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+    const onSearch = (event: Event) => show(String((event as CustomEvent<string>).detail ?? ''));
+    window.addEventListener(SEARCH_EVENT, onSearch);
+    return () => window.removeEventListener(SEARCH_EVENT, onSearch);
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-zinc-200">
       {isNative ? (
@@ -339,14 +359,7 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
         </section>
       ) : (
         <>
-          <LandingHero
-            onSearch={(query, type) => {
-              setListingSearch(query);
-              setPropertyFilter(type);
-              scrollToHomes();
-            }}
-            onStartLandlord={() => openLandlordSignup()}
-          />
+          <LandingHero onBrowse={scrollToHomes} onStartLandlord={() => openLandlordSignup()} />
           <ListingsSection activeType={propertyFilter} onTypeChange={setPropertyFilter}>
             <HunterDashboard
               profile={null}

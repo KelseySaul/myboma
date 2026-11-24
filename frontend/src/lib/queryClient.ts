@@ -7,8 +7,12 @@ import { QueryClient } from '@tanstack/react-query';
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: true,
+      // Data is treated as fresh for a minute and kept in memory for ten after its last
+      // observer unmounts, so navigating between screens does not refetch.
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      // Only money/notification views opt back in to refetch-on-focus (src/lib/queries.ts).
+      refetchOnWindowFocus: false,
       refetchIntervalInBackground: false,
       retry: 1,
     },

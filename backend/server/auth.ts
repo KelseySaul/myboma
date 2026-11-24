@@ -7,18 +7,14 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 import {sendEmail} from './services/email.ts';
+import {deploymentOrigins} from './http/config.ts';
+import {resolveSignupProfile} from './invitePolicy.ts';
 
 // Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
 // admin rights are only ever granted by a super admin (provisioning / role endpoint)
 // or by an admin invitation once the invitee has proven ownership of the mailbox.
 const SELF_SIGNUP_ROLES = ['landlord', 'tenant', 'hunter'] as const;
 type Role = (typeof SELF_SIGNUP_ROLES)[number] | 'admin';
-
-function resolveRole(candidate: unknown): Role {
-  return typeof candidate === 'string' && (SELF_SIGNUP_ROLES as readonly string[]).includes(candidate)
-    ? (candidate as Role)
-    : 'hunter';
-}
 
 /**
  * Ports supabase-setup.sql's handle_new_user() trigger: on every new auth user
@@ -39,12 +35,23 @@ async function seedProfileForNewAuthUser(
     where: eq(schema.invitations.email, normalizedEmail),
   });
 
-  // An admin invitation is honoured only for a mailbox that is already verified (e.g.
-  // Google OAuth). Email/password signups get it later via afterEmailVerification.
-  const resolvedRole: Role =
-    invited?.role === 'admin' && authUser.emailVerified ? 'admin' : resolveRole(invited?.role ?? requestBody?.intended_role);
-  const displayName = (requestBody?.full_name as string | undefined) || invited?.displayName || authUser.name || 'User';
-  const phone = (requestBody?.phone as string | undefined) || invited?.phone || null;
+  // An invitation (tenant, managed landlord, admin) and any tenancy waiting for this email
+  // are honoured only for a mailbox the person has proven they own (Google sign-in here;
+  // email/password signups get them via afterEmailVerification or the invite link).
+  // Otherwise anyone could register an invited address first and take what was meant for
+  // its owner.
+  const resolved = resolveSignupProfile({
+    invitation: invited ?? null,
+    emailVerified: Boolean(authUser.emailVerified),
+    requestedRole: requestBody?.intended_role,
+    requestedName: requestBody?.full_name as string | undefined,
+    requestedPhone: requestBody?.phone as string | undefined,
+    authName: authUser.name,
+  });
+  const resolvedRole: Role = resolved.role;
+  const displayName = resolved.displayName;
+  const phone = resolved.phone;
+  const invitedPlatformId = resolved.platformId;
   const mustChangePassword = Boolean(requestBody?.must_change_password);
   const termsAcceptedAt = (requestBody?.terms_accepted_at as string | undefined) ?? null;
   const termsVersion = (requestBody?.terms_version as string | undefined) ?? null;
@@ -56,7 +63,7 @@ async function seedProfileForNewAuthUser(
     await db
       .update(schema.users)
       .set({
-        platformId: existing.platformId ?? invited?.platformId ?? null,
+        platformId: existing.platformId ?? invitedPlatformId,
         displayName: existing.displayName || displayName,
         phone: existing.phone || phone,
         mustChangePassword: existing.mustChangePassword || mustChangePassword,
@@ -67,7 +74,7 @@ async function seedProfileForNewAuthUser(
 
   await db.insert(schema.users).values({
     uid: authUser.id,
-    platformId: invited?.platformId ?? null,
+    platformId: invitedPlatformId,
     email: normalizedEmail,
     displayName,
     role: resolvedRole,
@@ -80,6 +87,7 @@ async function seedProfileForNewAuthUser(
     privacyVersion,
   });
 
+  if (!resolved.linkLeases) return;
   // Tenancies created by email invitation now point at the real account (uid).
   await db
     .update(schema.leases)
@@ -87,17 +95,39 @@ async function seedProfileForNewAuthUser(
     .where(and(sql`lower(${schema.leases.tenantEmail}) = ${normalizedEmail}`, isNull(schema.leases.tenantUserId)));
 }
 
-/** Applies a pending admin invitation once the invitee has proven they own the mailbox. */
-async function applyAdminInvitationAfterVerification(authUser: { id: string; email?: string | null }) {
+/**
+ * Applies a pending invitation and links waiting tenancies once the person has proven they
+ * own the mailbox (email/password signups are unverified at creation; see seedProfile).
+ */
+async function applyInvitationAfterVerification(authUser: { id: string; email?: string | null }) {
   if (!authUser.email) return;
-  const invited = await db.query.invitations.findFirst({
-    where: eq(schema.invitations.email, authUser.email.trim().toLowerCase()),
+  const email = authUser.email.trim().toLowerCase();
+  const invited = await db.query.invitations.findFirst({ where: eq(schema.invitations.email, email) });
+  const profile = await db.query.users.findFirst({
+    where: eq(schema.users.uid, authUser.id),
+    columns: { role: true, platformId: true },
   });
-  if (invited?.role !== 'admin') return;
+
+  if (invited && profile) {
+    if (invited.role === 'admin') {
+      await db
+        .update(schema.users)
+        .set({ role: 'admin', isAdmin: true, platformId: invited.platformId ?? null })
+        .where(eq(schema.users.uid, authUser.id));
+    } else if (profile.role === 'hunter' && (invited.role === 'tenant' || invited.role === 'landlord')) {
+      // Only a plain account is upgraded; a role the person already earned (e.g. a paid
+      // landlord) is never replaced by an invitation.
+      await db
+        .update(schema.users)
+        .set({ role: invited.role, platformId: profile.platformId ?? invited.platformId ?? null })
+        .where(eq(schema.users.uid, authUser.id));
+    }
+  }
+
   await db
-    .update(schema.users)
-    .set({ role: 'admin', isAdmin: true, platformId: invited.platformId ?? null })
-    .where(eq(schema.users.uid, authUser.id));
+    .update(schema.leases)
+    .set({ tenantUserId: authUser.id })
+    .where(and(sql`lower(${schema.leases.tenantEmail}) = ${email}`, isNull(schema.leases.tenantUserId)));
 }
 
 export const auth = betterAuth({
@@ -112,6 +142,8 @@ export const auth = betterAuth({
   }),
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL,
+  // The official domain and the Render URL (plus the native app WebViews) can all sign in.
+  trustedOrigins: deploymentOrigins,
   emailAndPassword: {
     enabled: true,
     // Off by default so existing (unverified) accounts are not locked out. Turn on with
@@ -136,7 +168,7 @@ export const auth = betterAuth({
       });
     },
     afterEmailVerification: async (user) => {
-      await applyAdminInvitationAfterVerification(user);
+      await applyInvitationAfterVerification(user);
     },
   },
   session: {
