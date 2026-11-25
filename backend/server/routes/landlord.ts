@@ -10,6 +10,7 @@ import {
   canUpdateCaretakerReport,
   canUpdateMaintenanceRequest,
   isAdminInPlatform,
+  isAgencyManagerOfLandlord,
   isSuperAdmin,
 } from '../../db/authz.ts';
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
@@ -21,6 +22,7 @@ import type {UserProfileRecord} from '../types.ts';
 import {toActor} from '../types.ts';
 import {
   asyncHandler,
+  buildingLimitFor,
   getValidatedBody,
   hasActiveSubscription,
   inviteSendLimiter,
@@ -241,6 +243,16 @@ export function registerLandlordRoutes(bffRouter: Router) {
             caretakerReports: [],
           });
           return;
+        }
+      }
+
+      if (!superMultiScoped && isAgencyAdmin(req.profile!)) {
+        const managedLandlords = await db
+          .select({uid: schema.users.uid, email: schema.users.email})
+          .from(schema.users)
+          .where(eq(schema.users.managedByAdminId, actor.id));
+        if (managedLandlords.length > 0) {
+          targetIds = [...new Set([...targetIds, ...managedLandlords.map((l) => l.uid)])];
         }
       }
 
@@ -525,9 +537,18 @@ export function registerLandlordRoutes(bffRouter: Router) {
         return;
       }
       const {landlordId, platformId} = owner;
-      if (isOnFreePlan(owner.owner)) {
-        res.status(403).json({error: FREE_PLAN_BUILDING_ERROR});
-        return;
+      const bLimit = buildingLimitFor(owner.owner);
+      if (bLimit !== null) {
+        const [{count}] = await db
+          .select({count: sql<number>`count(*)::int`})
+          .from(schema.buildings)
+          .where(eq(schema.buildings.landlordId, landlordId));
+        if (count >= bLimit) {
+          res.status(402).json({
+            error: `Your plan allows up to ${bLimit} ${bLimit === 1 ? 'building' : 'buildings'}. Upgrade to add more.`,
+          });
+          return;
+        }
       }
 
       const [building] = await db
@@ -556,7 +577,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         res.status(404).json({error: 'Not found'});
         return;
       }
-      if (!canAdministerBuilding(actor, building)) {
+      if (!canAdministerBuilding(actor, building) && !(await isAgencyManagerOfLandlord(actor, building.landlordId))) {
         res.status(403).json({error: 'Forbidden'});
         return;
       }
@@ -582,7 +603,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         res.status(404).json({error: 'Not found'});
         return;
       }
-      if (!canAdministerBuilding(actor, building)) {
+      if (!canAdministerBuilding(actor, building) && !(await isAgencyManagerOfLandlord(actor, building.landlordId))) {
         res.status(403).json({error: 'Forbidden'});
         return;
       }
@@ -622,10 +643,6 @@ export function registerLandlordRoutes(bffRouter: Router) {
 
       // Units may only be placed in buildings that belong to the same landlord.
       const buildingIds = [...new Set(body.properties.map((p) => p.buildingId).filter((id): id is string => Boolean(id)))];
-      if (buildingIds.length && isOnFreePlan(owner.owner)) {
-        res.status(403).json({error: FREE_PLAN_BUILDING_ERROR});
-        return;
-      }
       if (buildingIds.length) {
         const owned = await db
           .select({id: schema.buildings.id})

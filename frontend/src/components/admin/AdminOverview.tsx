@@ -215,43 +215,43 @@ function OverviewContent({
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
       {/* Executive Greeting Strip */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-[-0.02em] text-[#1C2B33] sm:text-2xl dark:text-white">
+          <h2 className="text-lg font-semibold tracking-[-0.02em] text-[#1C2B33] sm:text-2xl dark:text-white">
             {greeting()}, {firstName}
           </h2>
-          <p className="mt-0.5 text-sm text-[#5F6C7B] dark:text-slate-400">Today: {summary.join(' · ')}.</p>
+          <p className="mt-0.5 text-xs text-[#5F6C7B] sm:text-sm dark:text-slate-400">Today: {summary.join(' · ')}.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-tour="admin-quick-actions" className="flex items-center gap-2">
           <QuickAction icon={Plus} label="Add property" onClick={onAddProperty} />
-          <QuickAction icon={UserPlus} label="Invite user" onClick={onInviteUser} primary />
+          <QuickAction icon={UserPlus} label={isSuperAdmin ? 'Invite user' : 'Invite landlord'} onClick={onInviteUser} primary />
         </div>
       </div>
 
-      {/* 4-Card Meta KPI Strip */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+      {/* 4-Card Compact Mobile / Meta KPI Strip */}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 lg:grid-cols-4">
         {stats.map(({ label, value, hint, icon: Icon, iconTone, tab, highlight, delta }) => (
           <button
             key={label}
             type="button"
             onClick={() => onNavigate(tab)}
-            className={`group rounded-xl border p-4 text-left transition sm:p-5 ${
+            className={`group rounded-xl border p-3 text-left transition sm:p-5 ${
               highlight ? 'finance-highlight' : 'stat-tint'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-[#5F6C7B] sm:text-[13px] dark:text-slate-400">{label}</span>
-              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${iconTone}`}>
-                <Icon className="h-4 w-4" strokeWidth={1.85} />
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="truncate text-[11px] font-medium text-[#5F6C7B] sm:text-[13px] dark:text-slate-400">{label}</span>
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8 ${iconTone}`}>
+                <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={1.85} />
               </span>
             </div>
-            <div className="mt-3 flex items-baseline gap-2">
-              <p className="text-2xl font-semibold tabular-nums tracking-[-0.03em] text-[#1C2B33] sm:text-[28px] dark:text-white">
+            <div className="mt-2 flex items-baseline gap-1.5 sm:mt-3 sm:gap-2">
+              <p className="whitespace-nowrap text-xl font-semibold tabular-nums tracking-[-0.03em] text-[#1C2B33] sm:text-[28px] dark:text-white">
                 {value}
               </p>
               {delta !== null && (
                 <span
-                  className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums sm:px-2 sm:text-[11px] ${
                     delta >= 0
                       ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300'
                       : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
@@ -262,7 +262,7 @@ function OverviewContent({
                 </span>
               )}
             </div>
-            <p className="mt-1.5 truncate text-xs text-[#5F6C7B] dark:text-slate-400">{hint}</p>
+            <p className="mt-1 truncate text-[11px] text-[#5F6C7B] sm:mt-1.5 sm:text-xs dark:text-slate-400">{hint}</p>
           </button>
         ))}
       </div>
@@ -397,8 +397,8 @@ function QuickAction({
       onClick={onClick}
       className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold transition active:scale-[0.985] ${
         primary
-          ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20 hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700'
-          : 'border border-[#D5D2E3] bg-white text-[#161426] shadow-2xs hover:border-violet-300 hover:bg-[#F8F7FC] dark:border-white/12 dark:bg-[#181922] dark:text-slate-100 dark:hover:bg-white/5'
+          ? 'bg-[#5B21B6] text-white hover:bg-[#4C1D95]'
+          : 'border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-white/12 dark:bg-[#181922] dark:text-slate-100 dark:hover:bg-white/5'
       }`}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2} />

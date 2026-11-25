@@ -116,9 +116,9 @@ export default function LandlordDashboard({
   const shouldSyncOwnInvoices = !isSuperAdminScoped || selectedAccountIds.includes(profile.uid);
   const features = useMemo(() => getSubscriptionFeatures(profile), [profile.subscriptionPlan, profile.role]);
   const isPlatformAdmin = Boolean(profile.isAdmin || profile.isSuperAdmin);
-  // Free plan: a single house unit, no buildings (also enforced by the server).
+  // Free plan allows up to 2 units and 1 building; paid plans scale up to unlimited.
   const onFreePlan = isFreePlan(profile.subscriptionPlan) && !isPlatformAdmin;
-  const allowBuildings = !onFreePlan;
+  const allowBuildings = features.maxBuildings === null || features.maxBuildings > 0;
   const { run, isBusy } = useBusy();
 
   // Catch-up invoice generation once per visit (the daily job is the main path); the

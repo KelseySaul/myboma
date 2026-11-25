@@ -53,7 +53,9 @@ export default function PropertiesTab(props: PropertiesTabProps) {
           <p className="text-sm text-zinc-500">{count('rented')} occupied · {count('available')} vacant</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <ActionButton icon={<Plus className="h-4 w-4" />} onClick={props.onAdd}>Add property</ActionButton>
+          <div data-tour="landlord-add-property">
+            <ActionButton icon={<Plus className="h-4 w-4" />} onClick={props.onAdd}>Add property</ActionButton>
+          </div>
           {props.allowBuildings && (
             <>
               <ActionButton variant="secondary" icon={<Building2 className="h-4 w-4" />} onClick={props.onAddBuilding}>Add building</ActionButton>
@@ -64,8 +66,8 @@ export default function PropertiesTab(props: PropertiesTabProps) {
       </div>
 
       {props.onFreePlan && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 sm:flex-row sm:items-center sm:justify-between dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">The free plan covers one house. Upgrade to add more units and group them into buildings.</p>
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 sm:flex-row sm:items-center sm:justify-between sm:p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300">Your Free plan includes up to 2 units (1 building). Upgrade anytime for more units, buildings, reminders, and caretakers.</p>
           <ActionButton size="sm" onClick={props.onUpgrade}>Upgrade plan</ActionButton>
         </div>
       )}

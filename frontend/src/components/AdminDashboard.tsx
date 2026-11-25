@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { formatPlanPrice, getSubscriptionFeatures, SUBSCRIPTION_TIERS, type SubscriptionTier } from '../../../shared/landlordSubscription';
+import { formatPlanPrice, getSubscriptionFeatures, SUBSCRIPTION_TIERS, VISIBLE_PLAN_ORDER, type SubscriptionTier } from '../../../shared/landlordSubscription';
 import { resolveMediaUrl } from '../lib/fileUrl';
 import {
   provisionUser,
@@ -1001,19 +1001,19 @@ export default function AdminDashboard({
 
   return (
     <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
-      {/* ── Workspace Top Bar (Meta Business Suite style) ── */}
-      <div className="sticky top-0 z-30 border-b border-[#1C2B33]/[0.08] bg-white/95 px-4 py-3.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#1A1D21]/95 sm:px-6 md:px-8">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center sm:gap-4">
+      {/* ── Workspace Top Bar ── */}
+      <div className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/95 px-3.5 py-2.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#1A1D21]/95 sm:px-6 sm:py-3.5 md:px-8">
+        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center sm:gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#1C2B33] sm:text-xl dark:text-white">
+            <h1 className="truncate text-base font-semibold tracking-[-0.02em] text-zinc-950 sm:text-xl dark:text-white">
               {TAB_TITLES[activeTab || 'dashboard']?.title ?? 'Overview'}
             </h1>
-            <p className="mt-0.5 truncate text-xs text-[#5F6C7B] dark:text-slate-400">
+            <p className="mt-0.5 truncate text-[11px] text-zinc-500 sm:text-xs dark:text-slate-400">
               {TAB_TITLES[activeTab || 'dashboard']?.description ?? ''}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {profile.isSuperAdmin && (
               <>
                 <div className="relative flex items-center">
@@ -1234,7 +1234,7 @@ export default function AdminDashboard({
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 text-[#5F6C7B] hover:text-[#1C2B33]"
+              className="hidden gap-1.5 text-zinc-500 hover:text-zinc-950 sm:inline-flex"
               onClick={() => setIsProfileOpen(true)}
             >
               <User className="h-3.5 w-3.5" />
@@ -1246,7 +1246,7 @@ export default function AdminDashboard({
 
       {/* ── Overview (real numbers from /admin/overview) ── */}
       {(activeTab === 'dashboard' || !activeTab) && (
-        <div className="px-4 pt-6 sm:px-6 md:px-8">
+        <div className="px-3 pt-3.5 sm:px-6 sm:pt-6 md:px-8">
           {isSuperAdminScoped && (
             <SuperAdminAccountFilterBar
               profile={profile}
@@ -1282,7 +1282,7 @@ export default function AdminDashboard({
       )}
 
       {/* Tab Panels */}
-      <div className="mt-5 px-4 sm:px-6 md:px-8">
+      <div className="mt-3.5 px-3 sm:mt-5 sm:px-6 md:px-8">
         {/* ── USERS TAB ── */}
         {activeTab === 'registered' && (
           <Card className="overflow-hidden py-0 gap-0">
@@ -1321,9 +1321,9 @@ export default function AdminDashboard({
                   <div className="flex items-center gap-2">
                     <Dialog open={isInviteUserOpen} onOpenChange={setIsInviteUserOpen}>
                       <DialogTrigger render={
-                        <Button size="sm" className="rounded-xl font-bold text-xs gap-1.5 cursor-pointer">
+                        <Button data-tour="admin-invite-btn" size="sm" className="rounded-xl font-bold text-xs gap-1.5 cursor-pointer">
                           <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
-                          Invite User
+                          {profile.isSuperAdmin ? 'Invite User' : 'Invite Landlord / User'}
                         </Button>
                       } />
                       <DialogContent className="sm:max-w-md p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
@@ -1379,9 +1379,9 @@ export default function AdminDashboard({
                                     value={inviteForm.subscriptionTier || 'pro'}
                                     onChange={(e) => setInviteForm({ ...inviteForm, subscriptionTier: e.target.value as SubscriptionTier })}
                                   >
-                                    {(['free', 'basic', 'starter', 'pro', 'proplus'] as SubscriptionTier[]).map((tierId) => {
+                                    {VISIBLE_PLAN_ORDER.map((tierId) => {
                                       const info = SUBSCRIPTION_TIERS[tierId];
-                                      const priceLabel = info.monthlyBaseKes === 0 ? 'Free (1 unit)' : `${formatPlanPrice(info.monthlyBaseKes)}/mo`;
+                                      const priceLabel = info.monthlyBaseKes === 0 ? 'KES 0 (Up to 2 units · 1 building)' : `${formatPlanPrice(info.monthlyBaseKes)}/mo`;
                                       return (
                                         <option key={tierId} value={tierId}>
                                           {info.label} — {priceLabel}
@@ -1411,7 +1411,7 @@ export default function AdminDashboard({
                             </div>
                           )}
 
-                          {inviteForm.role === 'landlord' && profile.isAdmin && (
+                          {inviteForm.role === 'landlord' && (profile.isAdmin || profile.role === 'admin') && (
                             <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 space-y-3 bg-slate-50 dark:bg-slate-800/40">
                               <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Rent Payment Routing</h4>
                               <div className="space-y-1.5">

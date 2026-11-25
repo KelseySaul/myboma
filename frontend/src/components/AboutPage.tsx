@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, Building2, Check, KeyRound, Search, ShieldCheck, Smartphone, Users } from 'lucide-react';
-import { SUBSCRIPTION_TIERS, formatPlanPrice, type SubscriptionTier } from '../../../shared/landlordSubscription';
+import { SUBSCRIPTION_TIERS, VISIBLE_PLAN_ORDER, formatPlanPrice } from '../../../shared/landlordSubscription';
 import { tenantConfig } from '../config/tenant';
 import Reveal from './landing/Reveal';
 
@@ -23,7 +23,7 @@ const GUIDES: Record<GuideId, Guide> = {
     steps: [
       {
         title: 'Create your account',
-        body: 'Sign up with email, Google, or Phone SMS OTP and choose "Landlord / Owner". The Free plan covers one house unit at KES 0. Paid plans unlock more units, buildings, repairs, and team caretakers.',
+        body: 'Sign up with email, Google, or Phone SMS OTP as a Landlord or Property Manager / Agency. The Free plan covers up to 2 units (1 building) at KES 0, with prepaid paid tiers as you grow.',
       },
       {
         title: 'Choose how you receive rent',
@@ -104,8 +104,6 @@ const GUIDES: Record<GuideId, Guide> = {
   },
 };
 
-const PLAN_ORDER: SubscriptionTier[] = ['free', 'basic', 'starter', 'pro', 'proplus'];
-
 export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
   const [guide, setGuide] = useState<GuideId>('landlords');
   const current = GUIDES[guide];
@@ -141,7 +139,7 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
             {[
               { icon: Smartphone, stat: 'M-Pesa native', label: 'Automatic invoice matching & receipts' },
               { icon: ShieldCheck, stat: 'Connected roles', label: 'Landlords, caretakers, tenants & hunters' },
-              { icon: Building2, stat: 'Free to start', label: 'Manage your first unit at KES 0 forever' },
+              { icon: Building2, stat: 'Free to start', label: 'Up to 2 units (1 building) at KES 0 forever' },
             ].map(({ icon: Icon, stat, label }) => (
               <div key={stat} className="flex items-center gap-3 rounded-2xl border border-white/12 bg-black/35 p-4 backdrop-blur-sm">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white">
@@ -263,10 +261,16 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
             </p>
           </Reveal>
 
-          <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            {PLAN_ORDER.map((id) => {
+          <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {VISIBLE_PLAN_ORDER.map((id) => {
               const tier = SUBSCRIPTION_TIERS[id];
               const featured = id === 'pro';
+              const yearlyNote =
+                id === 'starter'
+                  ? 'or KES 7,500/yr'
+                  : id === 'pro'
+                    ? 'or KES 20,000/yr'
+                    : null;
               return (
                 <div
                   key={id}
@@ -279,26 +283,32 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
                   <div>
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-base font-bold">{tier.label}</h3>
-                      {featured && (
+                      {tier.badge && (
                         <span className="rounded-full bg-violet-500/20 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-300">
-                          Popular
+                          {tier.badge}
                         </span>
                       )}
                     </div>
                     <p className="mt-3 text-2xl font-extrabold tabular-nums">
-                      {tier.monthlyBaseKes === 0 ? 'Free' : formatPlanPrice(tier.monthlyBaseKes)}
+                      {tier.monthlyBaseKes === 0 ? 'KES 0' : formatPlanPrice(tier.monthlyBaseKes)}
                       {tier.monthlyBaseKes > 0 && (
-                        <span className={`text-xs font-medium ${featured ? 'text-zinc-400' : 'text-zinc-500'}`}>/mo</span>
+                        <span className={`text-xs font-medium ${featured ? 'text-zinc-400' : 'text-zinc-500'}`}> / mo</span>
                       )}
+                    </p>
+                    <p className={`mt-1 text-xs font-medium ${featured ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                      {yearlyNote ? `${yearlyNote} · ` : ''}{tier.limitSummary}
                     </p>
                     <ul className="mt-4 space-y-2 border-t border-current/10 pt-4 text-xs leading-5">
                       {tier.highlights.map((item) => (
-                        <li key={item} className={`flex items-start gap-2 ${featured ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                        <li key={item} className={`flex items-start gap-2 ${featured ? 'text-zinc-200' : 'text-zinc-600'}`}>
                           <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${featured ? 'text-violet-300' : 'text-violet-700'}`} />
                           <span>{item}</span>
                         </li>
                       ))}
                     </ul>
+                    <p className={`mt-4 border-t border-current/10 pt-3 text-[11px] leading-5 ${featured ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                      {tier.audience}
+                    </p>
                   </div>
 
                   <button
@@ -306,7 +316,7 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
                     onClick={onSignUp}
                     className={`mt-6 inline-flex h-10 w-full items-center justify-center rounded-xl text-xs font-semibold transition ${
                       featured
-                        ? 'bg-gradient-to-r from-[#5B21B6] to-[#6D28D9] text-white hover:brightness-110'
+                        ? 'bg-[#5B21B6] text-white hover:bg-[#4C1D95]'
                         : 'border border-zinc-200 bg-zinc-50 text-zinc-900 hover:bg-zinc-100'
                     }`}
                   >

@@ -383,7 +383,7 @@ export default function CaretakerDashboard({ profile, activeTab, setActiveTab }:
       )}
 
       {tab === 'repairs' && (
-        <div className="space-y-5">
+        <div data-tour="caretaker-repairs" className="space-y-4 sm:space-y-5">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Repairs &amp; house issues</h1>
             <p className="text-sm text-zinc-500">Respond to tenant issues, record your repair notes, and mark work complete.</p>
@@ -496,9 +496,11 @@ export default function CaretakerDashboard({ profile, activeTab, setActiveTab }:
               <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">Reports to landlord</h1>
               <p className="text-sm text-zinc-500">File inspections, utility issues, security notes or incident reports with photos.</p>
             </div>
-            <ActionButton icon={<Plus className="h-4 w-4" />} onClick={() => setReportDialogOpen(true)}>
-              New report
-            </ActionButton>
+            <div data-tour="caretaker-new-report">
+              <ActionButton icon={<Plus className="h-4 w-4" />} onClick={() => setReportDialogOpen(true)}>
+                New report
+              </ActionButton>
+            </div>
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

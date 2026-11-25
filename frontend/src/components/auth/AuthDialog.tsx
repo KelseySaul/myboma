@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ConfirmationResult } from 'firebase/auth';
-import { ArrowLeft, Home, KeyRound, Mail, MailCheck, Phone, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Building2, Home, KeyRound, Mail, MailCheck, Phone, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { authClient, getAuthPersistence, setAuthPersistence } from '../../lib/auth-client';
@@ -55,6 +55,7 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
   const [view, setView] = useState<View>(intent.mode);
   const [method, setMethod] = useState<AuthMethod>('email');
   const [role, setRole] = useState<SignupRole>(intent.role ?? 'hunter');
+  const [accountTrack, setAccountTrack] = useState<'landlord' | 'agency' | 'hunter'>(intent.role === 'landlord' ? 'landlord' : 'hunter');
   const [landlord, setLandlord] = useState<PendingLandlordSubscription>(defaultLandlordSignupState);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -80,7 +81,10 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
       return;
     }
     setView(intent.mode);
-    if (intent.role) setRole(intent.role);
+    if (intent.role) {
+      setRole(intent.role);
+      setAccountTrack(intent.role === 'landlord' ? 'landlord' : 'hunter');
+    }
     setErrors({});
   }, [open, intent.mode, intent.role]);
 
@@ -404,31 +408,50 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
 
               {isSignup && (
                 <div className="mt-5">
-                  <p className="text-sm font-medium text-zinc-800">I am</p>
-                  <div role="radiogroup" aria-label="Account type" className="mt-2 grid grid-cols-2 gap-2">
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">I am signing up as</p>
+                  <div role="radiogroup" aria-label="Account type" className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     {([
-                      { id: 'landlord', title: 'A landlord or agent', body: 'List and manage property', icon: KeyRound },
-                      { id: 'hunter', title: 'Looking for a home', body: 'Browse and enquire', icon: Home },
+                      { id: 'landlord', title: 'Landlord', body: 'Own & manage units', icon: KeyRound },
+                      { id: 'agency', title: 'Property manager', body: 'Invite & manage landlords', icon: Building2 },
+                      { id: 'hunter', title: 'House hunter', body: 'Browse, like & enquire', icon: Home },
                     ] as const).map(({ id, title, body, icon: Icon }) => {
-                      const selected = role === id;
+                      const selected = accountTrack === id;
                       return (
                         <button
                           key={id}
                           type="button"
                           role="radio"
                           aria-checked={selected}
-                          onClick={() => setRole(id)}
+                          onClick={() => {
+                            setAccountTrack(id);
+                            if (id === 'hunter') {
+                              setRole('hunter');
+                            } else {
+                              setRole('landlord');
+                              setLandlord((prev) => ({
+                                ...prev,
+                                tier: id === 'agency' ? 'proplus' : prev.tier === 'proplus' ? 'free' : prev.tier,
+                              }));
+                            }
+                          }}
                           className={`rounded-xl border p-3 text-left transition ${
-                            selected ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950' : 'border-zinc-200 hover:border-zinc-400'
+                            selected
+                              ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950'
+                              : 'border-zinc-200 hover:border-zinc-400 dark:border-zinc-700'
                           }`}
                         >
                           <Icon className="h-4 w-4" />
-                          <span className="mt-2 block text-sm font-semibold leading-snug">{title}</span>
-                          <span className={`block text-xs ${selected ? 'text-white/70 dark:text-zinc-600' : 'text-zinc-500'}`}>{body}</span>
+                          <span className="mt-2 block text-xs font-semibold leading-snug sm:text-sm">{title}</span>
+                          <span className={`block text-[11px] leading-4 ${selected ? 'text-white/75 dark:text-zinc-600' : 'text-zinc-500'}`}>{body}</span>
                         </button>
                       );
                     })}
                   </div>
+                  {accountTrack === 'agency' && (
+                    <p className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] leading-4 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                      Property Manager accounts use the <strong>Agency / Enterprise</strong> plan so you can invite &amp; manage landlords, configure rent routing, and manage unlimited units.
+                    </p>
+                  )}
                 </div>
               )}
 

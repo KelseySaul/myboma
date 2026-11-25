@@ -42,3 +42,21 @@ services:
         sync: false
       - key: R2_BUCKET
         value: my-boma
+      - key: FIREBASE_PROJECT_ID
+        value: myboma-c1c8b
+      - key: VITE_FIREBASE_API_KEY
+        value: AIzaSyDEQPcMzTbkWTy90bAmP-Qe6MaduziBTps
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        value: myboma-c1c8b.firebaseapp.com
+      - key: VITE_FIREBASE_PROJECT_ID
+        value: myboma-c1c8b
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        value: myboma-c1c8b.firebasestorage.app
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        value: "215421256507"
+      - key: VITE_FIREBASE_APP_ID
+        value: 1:215421256507:web:edab12e625a5893c59ad1e
+      - key: VITE_FIREBASE_MEASUREMENT_ID
+        value: G-QP7T3HCSPF
+      - key: ONESIGNAL_REST_API_KEY
+        sync: false

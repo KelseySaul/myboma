@@ -110,11 +110,19 @@ export const unitLimitFor = (profile: UserProfileRecord): number | null => {
   return SUBSCRIPTION_TIERS[parsed.tier].features.maxListings;
 };
 
-/** Free-plan landlords get a single house unit and cannot create buildings. Platform admins never are. */
+/** Building limit for the caller's plan; null = unlimited. Platform admins are unlimited. */
+export const buildingLimitFor = (profile: UserProfileRecord): number | null => {
+  if (profile.isSuperAdmin || profile.isAdmin) return null;
+  const parsed = parseSubscriptionPlan(profile.subscriptionPlan);
+  if (!parsed || !hasActiveSubscription(profile)) return 0;
+  return SUBSCRIPTION_TIERS[parsed.tier].features.maxBuildings;
+};
+
+/** Free-plan landlords get up to 2 units and 1 building. Platform admins never are. */
 export const isOnFreePlan = (profile: UserProfileRecord) =>
   !profile.isSuperAdmin && !profile.isAdmin && isFreePlan(profile.subscriptionPlan);
 
-export const FREE_PLAN_BUILDING_ERROR = 'The free plan covers one house unit without buildings. Upgrade your plan to add buildings.';
+export const FREE_PLAN_BUILDING_ERROR = 'Your current plan building limit has been reached. Upgrade your plan to add more buildings.';
 
 export const requireAuth = asyncHandler(async (req, res, next) => {
   // Native clients send `Authorization: Bearer <token>` (resolved by the bearer

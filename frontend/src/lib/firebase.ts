@@ -1,17 +1,19 @@
 import type { ConfirmationResult, RecaptchaVerifier } from 'firebase/auth';
 
+// Public Firebase Web App config for project myboma-c1c8b (env vars override defaults).
 const firebaseConfig = {
-  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY || '').trim(),
+  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDEQPcMzTbkWTy90bAmP-Qe6MaduziBTps').trim(),
   authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'myboma-c1c8b.firebaseapp.com').trim(),
   projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID || 'myboma-c1c8b').trim(),
   storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'myboma-c1c8b.firebasestorage.app').trim(),
-  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '').trim(),
-  appId: (import.meta.env.VITE_FIREBASE_APP_ID || '').trim(),
+  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '215421256507').trim(),
+  appId: (import.meta.env.VITE_FIREBASE_APP_ID || '1:215421256507:web:edab12e625a5893c59ad1e').trim(),
+  measurementId: (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-QP7T3HCSPF').trim(),
 };
 
 export const FIREBASE_PROJECT_ID = firebaseConfig.projectId;
 
-/** True once Firebase Web App credentials (API key + App ID) are configured in frontend/.env. */
+/** True when Firebase Web App credentials are available. */
 export const isFirebasePhoneConfigured = () =>
   Boolean(firebaseConfig.apiKey && firebaseConfig.appId && firebaseConfig.projectId);
 

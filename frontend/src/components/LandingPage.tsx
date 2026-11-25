@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { GetStarted, LandingHero, LandlordFeatures, ListingsSection } from './landing/LandingSections';
 import { SEARCH_EVENT } from './search/SiteSearch';
+import { SHOW_SAVED_EVENT } from './PublicNavbar';
 import AuthDialog, { type AuthIntent } from './auth/AuthDialog';
 import {unsubscribeFromWaitlist} from '../lib/waitlist';
 import { Capacitor } from '@capacitor/core';
@@ -129,16 +130,33 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
       setPropertyFilter('all');
       requestAnimationFrame(() => scrollToHomes());
     };
-    const initial = new URLSearchParams(window.location.search).get('q');
+    const params = new URLSearchParams(window.location.search);
+    const initial = params.get('q');
+    const openSaved = params.get('saved');
     if (initial) {
       show(initial);
       const url = new URL(window.location.href);
       url.searchParams.delete('q');
       window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    } else if (openSaved) {
+      setPropertyFilter('saved');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('saved');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      requestAnimationFrame(() => scrollToHomes());
     }
     const onSearch = (event: Event) => show(String((event as CustomEvent<string>).detail ?? ''));
+    const onShowSaved = () => {
+      setPropertyFilter('saved');
+      setListingSearch('');
+      requestAnimationFrame(() => scrollToHomes());
+    };
     window.addEventListener(SEARCH_EVENT, onSearch);
-    return () => window.removeEventListener(SEARCH_EVENT, onSearch);
+    window.addEventListener(SHOW_SAVED_EVENT, onShowSaved);
+    return () => {
+      window.removeEventListener(SEARCH_EVENT, onSearch);
+      window.removeEventListener(SHOW_SAVED_EVENT, onShowSaved);
+    };
   }, []);
 
   return (

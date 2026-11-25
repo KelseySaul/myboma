@@ -190,6 +190,7 @@ export default function Sidebar({
     return (
       <button
         type="button"
+        data-tour={`nav-${id}`}
         onClick={() => handleNavClick(id)}
         title={collapsed ? label : undefined}
         className={`group relative flex w-full items-center rounded-lg py-2 text-left transition-colors duration-150 ${
@@ -203,25 +204,25 @@ export default function Sidebar({
         {isActive && !collapsed && (
           <span
             aria-hidden
-            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-gradient-to-b from-violet-600 via-purple-600 to-fuchsia-500 dark:from-violet-400 dark:to-fuchsia-400"
+            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-[#5B21B6] dark:bg-violet-400"
           />
         )}
         <span
           className={`relative flex h-6 w-6 shrink-0 items-center justify-center ${
             isActive
-              ? 'text-violet-700 dark:text-violet-400'
+              ? 'text-[#5B21B6] dark:text-violet-400'
               : 'text-[#6B6785] group-hover:text-[#161426] dark:text-slate-400 dark:group-hover:text-slate-200'
           }`}
         >
           <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.75} />
           {hasUnread && collapsed && (
-            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fuchsia-600 ring-2 ring-white dark:ring-[#181922]" />
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[#5B21B6] ring-2 ring-white dark:ring-[#181922]" />
           )}
         </span>
         <span className={collapsed ? 'sr-only' : 'flex-1 truncate text-[13.5px] leading-tight'}>{label}</span>
         {hasUnread && !collapsed && (
           <span
-            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-violet-700 to-fuchsia-600 px-1.5 text-[10px] font-semibold tabular-nums text-white"
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#5B21B6] px-1.5 text-[10px] font-semibold tabular-nums text-white"
             aria-label={`${unreadCount} unread`}
           >
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -352,7 +353,7 @@ export default function Sidebar({
                 collapsed ? 'justify-center p-1' : 'gap-2.5 px-2 py-1.5'
               }`}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-xs font-semibold text-white shadow-2xs">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
                 {profile.avatarUrl ? (
                   <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (

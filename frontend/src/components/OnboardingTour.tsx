@@ -1,48 +1,294 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { UserRole } from '../App';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { ArrowLeft, ArrowRight, Compass, X } from 'lucide-react';
+import type { UserRole } from '../App';
 
-interface Step {
+export type TourPersona = 'superadmin' | 'agency' | 'landlord' | 'caretaker' | 'tenant' | 'hunter';
+
+interface TourStep {
   title: string;
   description: string;
-  /** data-tour attribute value of the element to spotlight */
-  spotlight?: string;
+  /** Tab ID to navigate to automatically when entering this step. */
+  tab?: string;
+  /** Friendly page/section chip shown in the coachmark header. */
+  sectionLabel?: string;
+  /** Ordered list of `data-tour` values; first visible element in the viewport wins. */
+  targets?: string[];
+  /** Action tip telling the user what to try next. */
+  actionTip?: string;
 }
 
-const STEPS: Record<UserRole, Step[]> = {
+const PERSONA_LABELS: Record<TourPersona, string> = {
+  superadmin: 'Super Admin Tour',
+  agency: 'Property Manager Tour',
+  landlord: 'Landlord Tour',
+  caretaker: 'Caretaker Tour',
+  tenant: 'Tenant Tour',
+  hunter: 'House Hunter Tour',
+};
+
+const STEPS_BY_PERSONA: Record<TourPersona, TourStep[]> = {
+  superadmin: [
+    {
+      title: 'Welcome to Super Admin',
+      description: 'Let’s take a quick interactive walk through your controls. We’ll jump to each page and highlight the exact buttons as we go.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+    },
+    {
+      title: 'Scope data by account',
+      description: 'Use the Account Filter to inspect a specific landlord, multiple accounts together, or your own account. Gated pages stay clean until you pick a scope.',
+      tab: 'dashboard',
+      sectionLabel: 'Account Filter',
+      targets: ['superadmin-filter'],
+      actionTip: 'Try toggling “My account” or selecting any landlord from the dropdown.',
+    },
+    {
+      title: 'Users & landlord plans',
+      description: 'Invite landlords (and choose their subscription tier & duration), caretakers, tenants, or platform admins from one screen.',
+      tab: 'registered',
+      sectionLabel: 'Users',
+      targets: ['admin-invite-btn', 'nav-registered'],
+      actionTip: 'Tap Invite User to send a secure 7-day setup link.',
+    },
+    {
+      title: 'Track pending invites',
+      description: 'Every invite awaiting sign-up appears here so you can resend links or cancel unused invitations.',
+      tab: 'pending',
+      sectionLabel: 'Pending Invites',
+      targets: ['nav-pending'],
+    },
+    {
+      title: 'Properties & buildings',
+      description: 'Manage units and buildings across accounts, snap photos with camera capture, or use quick description presets.',
+      tab: 'properties',
+      sectionLabel: 'Properties',
+      targets: ['admin-add-property-btn', 'nav-properties'],
+    },
+    {
+      title: 'Platforms & activity log',
+      description: 'Provision separate agency workspaces under Platforms and audit every sensitive action in the Activity Log.',
+      tab: 'platforms',
+      sectionLabel: 'Platforms',
+      targets: ['nav-platforms', 'nav-audit'],
+    },
+  ],
+  agency: [
+    {
+      title: 'Welcome, Property Manager',
+      description: 'Your Agency workspace lets you onboard landlords, manage their buildings and units, collect rent, and coordinate repairs end-to-end.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+    },
+    {
+      title: 'Quick agency actions',
+      description: 'Add a property for any managed landlord or invite a new landlord right from your overview.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+      targets: ['admin-quick-actions'],
+    },
+    {
+      title: 'Invite & manage landlords',
+      description: 'Invite landlords under your agency and choose whether rent is collected by you (the property manager) or paid directly to the landlord.',
+      tab: 'registered',
+      sectionLabel: 'Users & Landlords',
+      targets: ['admin-invite-btn', 'nav-registered'],
+      actionTip: 'Select “Landlord” in Invite User to configure rent routing.',
+    },
+    {
+      title: 'Pending invitations',
+      description: 'See which landlords, caretakers, or tenants haven’t accepted yet and resend their links in one tap.',
+      tab: 'pending',
+      sectionLabel: 'Pending Invites',
+      targets: ['nav-pending'],
+    },
+    {
+      title: 'Buildings & units',
+      description: 'Create buildings and assign units to your managed landlords — all photos, presets, and map pins live here.',
+      tab: 'properties',
+      sectionLabel: 'Properties',
+      targets: ['admin-add-property-btn', 'nav-properties'],
+    },
+    {
+      title: 'Rent collection & reminders',
+      description: 'See which units across your managed landlords have paid, who is overdue, and send push + email reminders instantly.',
+      tab: 'finances',
+      sectionLabel: 'Rent & Payments',
+      targets: ['nav-finances'],
+    },
+    {
+      title: 'Repairs & maintenance',
+      description: 'Track tenant maintenance tickets across every managed property from report to resolution.',
+      tab: 'maintenance',
+      sectionLabel: 'Maintenance',
+      targets: ['nav-maintenance'],
+    },
+  ],
   landlord: [
-    { title: 'Welcome to MyBoma', description: "Here's a quick look at where everything is. It takes under a minute, and you can skip it." },
-    { title: 'Your properties', description: 'Add each house or unit here with its rent and photos. Mark a unit as available to show it on the public listings.', spotlight: 'tab-properties' },
-    { title: 'Tenants', description: 'Invite a tenant by email. They get a secure link to set up their account, and their lease and invoices appear automatically.', spotlight: 'tab-tenants' },
-    { title: 'Rent and money', description: 'See who has paid, record cash payments and expenses, and download your records.', spotlight: 'tab-finances' },
-    { title: 'Repairs', description: 'Repair requests from tenants appear here. Update the status so tenants know what is happening.', spotlight: 'tab-maintenance' },
-    { title: 'Reminders', description: 'Rent reminders go out automatically from three days before the due date. Adjust them here.', spotlight: 'tab-automations' },
-  ],
-  tenant: [
-    { title: 'Welcome to MyBoma', description: 'This is where you see your rent, pay it and report repairs.' },
-    { title: 'Rent', description: 'Check what you owe and when it is due. Pay by M-Pesa or card, and every payment gets a receipt.', spotlight: 'tab-rent' },
-    { title: 'Repairs', description: 'Report a problem in your house and follow it until it is fixed. Your landlord is notified straight away.', spotlight: 'tab-maintenance' },
-    { title: 'Notifications', description: 'Reminders, receipts and messages from your landlord appear here.', spotlight: 'tab-notifications' },
-  ],
-  hunter: [
-    { title: 'Welcome to MyBoma', description: 'Browse homes, offices and short stays across Kenya, and contact landlords directly.' },
-    { title: 'Search', description: 'Search by area or building name, and filter by type. Tap any listing to see photos and details.' },
-    { title: 'Send an enquiry', description: 'On a listing, enter your details and send an enquiry. The landlord gets your contact details and gets back to you about availability.' },
-    { title: 'Stay safe', description: 'View a house in person before paying anything, and never pay a deposit to someone you have not met.' },
-  ],
-  admin: [
-    { title: 'Welcome', description: 'You can manage users, properties and platform settings from here.' },
-    { title: 'Users', description: 'Find any account, change roles, invite people and suspend accounts. You can also view the app as a user to help them.', spotlight: 'tab-users' },
-    { title: 'Overview', description: 'Key numbers for the platform: users, properties, leases and rent collected.', spotlight: 'tab-analytics' },
-    { title: 'Activity log', description: 'Every admin action is recorded. Use it to see who changed what and when.', spotlight: 'tab-activity' },
+    {
+      title: 'Welcome to MyBoma',
+      description: 'Let’s walk through your live landlord workspace. Each step opens the actual section and highlights where to click.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+    },
+    {
+      title: 'Rent status & quick actions',
+      description: 'See paid, due-soon, and overdue units at a glance, add a property, or invite a tenant right from your home screen.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+      targets: ['landlord-quick-actions', 'nav-dashboard'],
+    },
+    {
+      title: 'Add properties & buildings',
+      description: 'Add houses or units with one-tap description presets and direct camera capture. Available units appear automatically on MyBoma listings.',
+      tab: 'properties',
+      sectionLabel: 'Properties',
+      targets: ['landlord-add-property', 'nav-properties'],
+      actionTip: 'Tap Add property to try presets and camera photo upload.',
+    },
+    {
+      title: 'Rent, receipts & push reminders',
+      description: 'Check every unit’s payment status, log cash or M-Pesa payments, and send push + email reminders with a single tap.',
+      tab: 'finances',
+      sectionLabel: 'Rent & Payments',
+      targets: ['nav-finances'],
+    },
+    {
+      title: 'Tenants & pending invites',
+      description: 'Invite tenants by email so their leases and monthly invoices start automatically, and track anyone still awaiting sign-up.',
+      tab: 'tenants',
+      sectionLabel: 'Tenants',
+      targets: ['nav-tenants', 'nav-pending'],
+    },
+    {
+      title: 'Caretakers & field reports',
+      description: 'Add caretakers under your account to respond to tenant house issues and send on-site photo reports straight to you.',
+      tab: 'caretakers',
+      sectionLabel: 'Caretakers & Reports',
+      targets: ['nav-caretakers'],
+    },
   ],
   caretaker: [
-    { title: 'Welcome to MyBoma', description: 'Respond to tenant repair tickets and file field reports straight to your landlord.' },
-    { title: 'Repairs & issues', description: 'Review every repair request, add progress notes, and mark work fixed so tenants and your landlord stay updated.' },
-    { title: 'Reports to landlord', description: 'Snap photos on site and send security, utility, or inspection reports to your landlord anytime.' },
+    {
+      title: 'Welcome to your Caretaker workspace',
+      description: 'Everything you need to fix tenant house issues and keep your landlord updated from the field.',
+      tab: 'dashboard',
+      sectionLabel: 'Overview',
+    },
+    {
+      title: 'Respond to repairs & house issues',
+      description: 'Review every open repair request, update status to In Progress or Resolved, and leave notes for the tenant and landlord.',
+      tab: 'repairs',
+      sectionLabel: 'Repairs & Issues',
+      targets: ['caretaker-repairs', 'nav-repairs'],
+    },
+    {
+      title: 'File reports to your landlord',
+      description: 'Snap photos with your phone camera and submit security, utility, cleanliness, or inspection reports straight to your landlord.',
+      tab: 'reports',
+      sectionLabel: 'Field Reports',
+      targets: ['caretaker-new-report', 'nav-reports'],
+      actionTip: 'Tap New report to attach photos directly from your camera.',
+    },
+    {
+      title: 'Real-time alerts',
+      description: 'New tenant maintenance tickets and landlord replies appear here and trigger push notifications.',
+      tab: 'automations',
+      sectionLabel: 'Notifications',
+      targets: ['nav-automations'],
+    },
+  ],
+  tenant: [
+    {
+      title: 'Welcome to your Home',
+      description: 'See your rent balance, pay safely by M-Pesa or card, report repairs, and read landlord notices all in one place.',
+      tab: 'dashboard',
+      sectionLabel: 'Home',
+    },
+    {
+      title: 'Your next rent & M-Pesa payment',
+      description: 'Check how much is due and when, then tap Pay with M-Pesa or card to get an instant digital receipt.',
+      tab: 'dashboard',
+      sectionLabel: 'Next Rent',
+      targets: ['tenant-rent-card'],
+    },
+    {
+      title: 'Payment history & receipts',
+      description: 'Every invoice and confirmed rent payment is saved here so you can download receipts anytime.',
+      tab: 'finances',
+      sectionLabel: 'Payments',
+      targets: ['nav-finances'],
+    },
+    {
+      title: 'Report repairs',
+      description: 'Need something fixed in your house? Report it here so your landlord and caretaker are notified immediately.',
+      tab: 'maintenance',
+      sectionLabel: 'Repairs',
+      targets: ['tenant-report-repair', 'nav-maintenance'],
+    },
+    {
+      title: 'Notices & reminders',
+      description: 'Rent due reminders, payment confirmations, and landlord messages stay organized here.',
+      tab: 'notices',
+      sectionLabel: 'Notices',
+      targets: ['nav-notices'],
+    },
+  ],
+  hunter: [
+    {
+      title: 'Welcome to MyBoma',
+      description: 'Browse verified homes, offices, and short stays directly from landlords and property managers across Kenya.',
+      tab: 'all',
+      sectionLabel: 'Explore',
+    },
+    {
+      title: 'Smart search',
+      description: 'Search by neighborhood, bedrooms, or budget (like “Kilimani 2br” or “under 45k”).',
+      tab: 'all',
+      sectionLabel: 'Search',
+      targets: ['hunter-search'],
+    },
+    {
+      title: 'Filter, like & save for later',
+      description: 'Filter by Homes, Commercial, Short stays, or view your Liked and Saved listings anytime.',
+      tab: 'all',
+      sectionLabel: 'Filters',
+      targets: ['hunter-filters'],
+    },
+    {
+      title: 'Tap any listing to enquire',
+      description: 'Inspect photos, check amenities, and send an enquiry directly to the landlord. Always view in person before paying.',
+      tab: 'all',
+      sectionLabel: 'Listings',
+      targets: ['hunter-grid'],
+    },
   ],
 };
 
-const STORAGE_KEY = (role: UserRole) => `myboma_onboarding_done_v2_${role}`;
+const STORAGE_KEY = (persona: TourPersona) => `myboma_onboarding_done_v3_${persona}`;
+
+export function resolveTourPersona(role: UserRole, opts?: { isSuperAdmin?: boolean; isAdmin?: boolean }): TourPersona {
+  if (opts?.isSuperAdmin) return 'superadmin';
+  if (role === 'admin' || opts?.isAdmin) return 'agency';
+  if (role === 'landlord') return 'landlord';
+  if (role === 'caretaker') return 'caretaker';
+  if (role === 'tenant') return 'tenant';
+  return 'hunter';
+}
+
+function findVisibleTourElement(targets?: string[]): HTMLElement | null {
+  if (!targets?.length) return null;
+  for (const key of targets) {
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${key}"]`));
+    for (const el of candidates) {
+      const rect = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      if (rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none') {
+        return el;
+      }
+    }
+  }
+  return null;
+}
 
 interface SpotlightRect {
   top: number;
@@ -53,88 +299,132 @@ interface SpotlightRect {
 
 interface Props {
   role: UserRole;
+  isSuperAdmin?: boolean;
+  isAdmin?: boolean;
+  activeTab?: string;
+  onNavigateTab?: (tab: string) => void;
   onComplete: () => void;
 }
 
-export default function OnboardingTour({ role, onComplete }: Props) {
+export default function OnboardingTour({
+  role,
+  isSuperAdmin,
+  isAdmin,
+  activeTab,
+  onNavigateTab,
+  onComplete,
+}: Props) {
+  const persona = useMemo(
+    () => resolveTourPersona(role, { isSuperAdmin, isAdmin }),
+    [role, isSuperAdmin, isAdmin],
+  );
+  const steps = STEPS_BY_PERSONA[persona];
   const [step, setStep] = useState(0);
-  const [animating, setAnimating] = useState(false);
   const [exiting, setExiting] = useState(false);
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
-  const [cardPos, setCardPos] = useState<'top' | 'bottom'>('bottom');
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({
+    w: typeof window !== 'undefined' ? window.innerWidth : 375,
+    h: typeof window !== 'undefined' ? window.innerHeight : 812,
+  });
 
-  const steps = STEPS[role] ?? STEPS.hunter;
-  const current = steps[step];
+  const current = steps[Math.min(step, steps.length - 1)];
   const isLast = step === steps.length - 1;
-  const PAD = 10; // spotlight padding around target
+  const PAD = 6;
 
-  // Measure and position spotlight when step changes
-  const measureSpotlight = useCallback(() => {
-    const s = steps[step];
-    if (!s.spotlight) {
+  // Auto-navigate to the step's real page/tab whenever the step changes.
+  useEffect(() => {
+    if (current.tab && onNavigateTab && current.tab !== activeTab) {
+      onNavigateTab(current.tab);
+    }
+  }, [step, current.tab, activeTab, onNavigateTab]);
+
+  // Locate, scroll into view, and track the target element (retrying briefly while lazy tabs mount).
+  const measureTarget = useCallback(() => {
+    setViewport({ w: window.innerWidth, h: window.innerHeight });
+    const el = findVisibleTourElement(current.targets);
+    if (!el) {
+      setSpotlightRect(null);
+      return false;
+    }
+    const rect = el.getBoundingClientRect();
+    setSpotlightRect({
+      top: Math.max(4, rect.top - PAD),
+      left: Math.max(4, rect.left - PAD),
+      width: Math.min(window.innerWidth - 8, rect.width + PAD * 2),
+      height: rect.height + PAD * 2,
+    });
+    return true;
+  }, [current.targets]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    let scrolledOnce = false;
+
+    const locate = () => {
+      if (cancelled) return;
+      const el = findVisibleTourElement(current.targets);
+      if (el) {
+        if (!scrolledOnce) {
+          scrolledOnce = true;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+        setTimeout(() => {
+          if (!cancelled) measureTarget();
+        }, 220);
+        return;
+      }
+      if (attempts < 12) {
+        attempts += 1;
+        setTimeout(locate, 90);
+      } else {
+        setSpotlightRect(null);
+      }
+    };
+
+    if (!current.targets?.length) {
       setSpotlightRect(null);
       return;
     }
-    const el = document.querySelector(`[data-tour="${s.spotlight}"]`) as HTMLElement | null;
-    if (!el) { setSpotlightRect(null); return; }
 
-    // Scroll element into view smoothly
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-
-    // Small delay to let scroll settle
-    setTimeout(() => {
-      const rect = el.getBoundingClientRect();
-      const r = {
-        top: rect.top - PAD,
-        left: rect.left - PAD,
-        width: rect.width + PAD * 2,
-        height: rect.height + PAD * 2,
-      };
-      setSpotlightRect(r);
-
-      // Position card above or below based on space
-      const spaceBelow = window.innerHeight - rect.bottom;
-      setCardPos(spaceBelow > 220 ? 'bottom' : 'top');
-    }, 200);
-  }, [step, steps]);
-
-  useEffect(() => {
-    measureSpotlight();
-    window.addEventListener('resize', measureSpotlight);
-    return () => window.removeEventListener('resize', measureSpotlight);
-  }, [measureSpotlight]);
+    const startTimer = setTimeout(locate, 80);
+    window.addEventListener('resize', measureTarget);
+    window.addEventListener('scroll', measureTarget, true);
+    return () => {
+      cancelled = true;
+      clearTimeout(startTimer);
+      window.removeEventListener('resize', measureTarget);
+      window.removeEventListener('scroll', measureTarget, true);
+    };
+  }, [step, current.targets, measureTarget]);
 
   const finish = useCallback(() => {
     setExiting(true);
     setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY(role), 'true');
+      try {
+        localStorage.setItem(STORAGE_KEY(persona), 'true');
+      } catch {
+        /* ignore */
+      }
       onComplete();
-    }, 350);
-  }, [role, onComplete]);
-
-  const goTo = useCallback((target: number) => {
-    if (animating) return;
-    setAnimating(true);
-    setTimeout(() => {
-      setStep(target);
-      setAnimating(false);
-    }, 180);
-  }, [animating]);
+    }, 240);
+  }, [persona, onComplete]);
 
   const next = useCallback(() => {
-    if (isLast) { finish(); return; }
-    goTo(step + 1);
-  }, [isLast, finish, goTo, step]);
+    if (isLast) {
+      finish();
+      return;
+    }
+    setStep((prev) => Math.min(prev + 1, steps.length - 1));
+  }, [isLast, finish, steps.length]);
 
   const prev = useCallback(() => {
-    if (step === 0) return;
-    goTo(step - 1);
-  }, [step, goTo]);
+    setStep((p) => Math.max(0, p - 1));
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' || e.key === 'Enter') next();
+      if (e.key === 'ArrowRight') next();
       else if (e.key === 'ArrowLeft') prev();
       else if (e.key === 'Escape') finish();
     };
@@ -142,114 +432,143 @@ export default function OnboardingTour({ role, onComplete }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [next, prev, finish]);
 
-  // SVG cutout dimensions
-  const W = typeof window !== 'undefined' ? window.innerWidth : 375;
-  const H = typeof window !== 'undefined' ? window.innerHeight : 812;
-
-  const clipPath = spotlightRect
-    ? `M0,0 H${W} V${H} H0 Z M${spotlightRect.left},${spotlightRect.top} h${spotlightRect.width} v${spotlightRect.height} h-${spotlightRect.width} Z`
+  const holePath = spotlightRect
+    ? `M0,0 H${viewport.w} V${viewport.h} H0 Z M${spotlightRect.left},${spotlightRect.top} h${spotlightRect.width} v${spotlightRect.height} h-${spotlightRect.width} Z`
     : null;
 
   return (
     <div
-      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-50 pointer-events-none sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[360px]"
+      className="fixed inset-0 z-[70] pointer-events-none"
       role="dialog"
-      aria-label="Onboarding tour"
-      style={{ animation: exiting ? 'tourFadeOut 0.35s ease forwards' : 'tourFadeIn 0.3s ease both' }}
+      aria-label={PERSONA_LABELS[persona]}
+      style={{ opacity: exiting ? 0 : 1, transition: 'opacity 220ms ease' }}
     >
-      {/* Glowing border around spotlight */}
+      {/* Subtle dimmed overlay with clean cutout over the highlighted live button/section */}
+      {holePath ? (
+        <svg
+          className="fixed inset-0 h-full w-full pointer-events-none transition-opacity duration-200"
+          width={viewport.w}
+          height={viewport.h}
+          aria-hidden
+        >
+          <path d={holePath} fill="rgba(15, 16, 24, 0.42)" fillRule="evenodd" />
+        </svg>
+      ) : (
+        <div className="fixed inset-0 bg-zinc-950/25 pointer-events-none transition-opacity duration-200" aria-hidden />
+      )}
+
+      {/* Animated subtle-violet highlight ring on the exact target */}
       {spotlightRect && (
         <div
-          className="fixed pointer-events-none rounded-xl z-[49]"
+          className="fixed pointer-events-none rounded-xl transition-all duration-300 ease-out"
           style={{
             top: spotlightRect.top,
             left: spotlightRect.left,
             width: spotlightRect.width,
             height: spotlightRect.height,
-            boxShadow: '0 0 0 2px rgba(9,9,11,0.9), 0 0 20px 4px rgba(9,9,11,0.12)',
-            animation: 'tourPulseRing 1.8s ease-in-out infinite',
+            boxShadow: '0 0 0 2px #6D28D9, 0 0 0 6px rgba(109, 40, 217, 0.18)',
           }}
         />
       )}
 
-      {/* Tour card — Floating at bottom right */}
-      <div
-        ref={cardRef}
-        className="w-full pointer-events-auto"
-        style={{
-          animation: animating
-            ? 'tourFadeOut 0.15s ease forwards'
-            : exiting
-              ? 'tourFadeOut 0.3s ease forwards'
-              : 'tourCardInBottom 0.35s cubic-bezier(0.34,1.4,0.64,1) both',
-        }}
-      >
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-[0_24px_64px_-12px_rgba(9,9,11,0.3)] dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between px-5 pt-5">
-            <div className="flex items-center gap-1.5" aria-label={`Step ${step + 1} of ${steps.length}`}>
-              {steps.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={(e) => { e.stopPropagation(); if (i <= step) goTo(i); }}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-5 bg-zinc-950 dark:bg-white' : i < step ? 'w-1.5 bg-zinc-400' : 'w-1.5 bg-zinc-200 dark:bg-zinc-700'}`}
-                  aria-label={`Go to step ${i + 1}`}
-                />
-              ))}
+      {/* Coachmark Card — stays clear of the mobile bottom nav */}
+      <div className="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] pointer-events-auto sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[370px]">
+        <div className="overflow-hidden rounded-2xl border border-zinc-200/90 bg-white shadow-[0_20px_50px_-12px_rgba(15,16,24,0.32)] dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                <Compass className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                {current.sectionLabel || PERSONA_LABELS[persona]}
+              </span>
             </div>
             <button
-              onClick={(e) => { e.stopPropagation(); finish(); }}
-              className="rounded-lg px-2 py-1 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 dark:hover:bg-zinc-800 dark:hover:text-white"
+              type="button"
+              onClick={finish}
+              aria-label="Close tour"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
             >
-              Skip
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="px-5 pb-5 pt-4">
-            <h2 key={`t${step}`} className="text-lg font-semibold tracking-tight text-zinc-950 dark:text-white" style={{ animation: 'tourContentIn 0.25s ease both' }}>
+          <div className="px-4 pb-4 pt-3.5">
+            <h2 className="text-base font-bold tracking-tight text-zinc-950 dark:text-white">
               {current.title}
             </h2>
-            <p key={`d${step}`} className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300" style={{ animation: 'tourContentIn 0.3s 0.04s ease both' }}>
+            <p className="mt-1 text-[13px] leading-5 text-zinc-600 dark:text-zinc-300">
               {current.description}
             </p>
 
-            <div className="mt-5 flex items-center justify-between gap-3">
+            {current.actionTip && (
+              <p className="mt-2.5 rounded-lg bg-violet-50/70 px-2.5 py-1.5 text-[11px] font-medium text-violet-800 dark:bg-violet-500/15 dark:text-violet-200">
+                Tip: {current.actionTip}
+              </p>
+            )}
+
+            {/* Step dots */}
+            <div className="mt-4 flex items-center gap-1.5" aria-label={`Step ${step + 1} of ${steps.length}`}>
+              {steps.map((s, i) => (
+                <button
+                  key={s.title}
+                  type="button"
+                  onClick={() => setStep(i)}
+                  className={`h-1.5 rounded-full transition-all duration-200 ${
+                    i === step
+                      ? 'w-5 bg-[#5B21B6] dark:bg-violet-400'
+                      : i < step
+                        ? 'w-1.5 bg-violet-300 dark:bg-violet-500/60'
+                        : 'w-1.5 bg-zinc-200 dark:bg-zinc-700'
+                  }`}
+                  aria-label={`Go to step ${i + 1}: ${s.title}`}
+                />
+              ))}
+              <span className="ml-auto text-[11px] font-medium tabular-nums text-zinc-400">
+                {step + 1} / {steps.length}
+              </span>
+            </div>
+
+            <div className="mt-3.5 flex items-center justify-between gap-2">
               <button
-                onClick={(e) => { e.stopPropagation(); prev(); }}
+                type="button"
+                onClick={prev}
                 disabled={step === 0}
-                className="h-10 rounded-xl px-3 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:invisible dark:text-zinc-300 dark:hover:bg-zinc-800"
+                className="inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 disabled:invisible dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
+                <ArrowLeft className="h-3.5 w-3.5" />
                 Back
               </button>
-              <span className="text-xs tabular-nums text-zinc-400">{step + 1} of {steps.length}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); next(); }}
-                className="h-10 rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-white transition hover:bg-zinc-800 active:scale-[0.98] dark:bg-white dark:text-zinc-950"
-              >
-                {isLast ? 'Done' : 'Next'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={finish}
+                  className="h-9 rounded-lg px-3 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800"
+                >
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={next}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#5B21B6] px-4 text-xs font-semibold text-white transition hover:bg-[#4C1D95] active:scale-[0.98]"
+                >
+                  {isLast ? 'Finish' : 'Next'}
+                  {!isLast && <ArrowRight className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes tourFadeIn  { from { opacity:0 } to { opacity:1 } }
-        @keyframes tourFadeOut { from { opacity:1 } to { opacity:0 } }
-        @keyframes tourCardInBottom { from { opacity:0; transform:translateY(20px) scale(0.96) } to { opacity:1; transform:translateY(0) scale(1) } }
-        @keyframes tourContentIn { from { opacity:0; transform:translateY(5px) } to { opacity:1; transform:translateY(0) } }
-        @keyframes tourPulseRing {
-          0%,100% { box-shadow: 0 0 0 2px rgba(9,9,11,0.9), 0 0 12px 2px rgba(9,9,11,0.10); }
-          50%      { box-shadow: 0 0 0 3px rgba(9,9,11,0.9),   0 0 24px 6px rgba(9,9,11,0.06); }
-        }
-      `}</style>
     </div>
   );
 }
 
-/** Call this to check whether the onboarding tour should show for a given role */
-export function shouldShowOnboarding(role: UserRole): boolean {
+/** Call this to check whether the onboarding tour should show automatically for a given persona. */
+export function shouldShowOnboarding(role: UserRole, opts?: { isSuperAdmin?: boolean; isAdmin?: boolean }): boolean {
   try {
-    return localStorage.getItem(STORAGE_KEY(role)) !== 'true';
+    const persona = resolveTourPersona(role, opts);
+    return localStorage.getItem(STORAGE_KEY(persona)) !== 'true';
   } catch {
     return false;
   }

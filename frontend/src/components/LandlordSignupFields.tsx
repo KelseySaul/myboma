@@ -1,12 +1,12 @@
 import { Banknote, Building, Check, Smartphone } from 'lucide-react';
 import {
   SUBSCRIPTION_TIERS,
+  VISIBLE_PLAN_ORDER,
   BILLING_PERIODS,
   getSubscriptionAmount,
   formatPlanPrice,
   type PendingLandlordSubscription,
   type RentPayoutMethod,
-  type SubscriptionTier,
   type BillingPeriod,
 } from '../../../shared/landlordSubscription';
 import { Field, inputClass } from './auth/fields';
@@ -44,7 +44,7 @@ const PAYOUT_METHODS: { id: RentPayoutMethod; label: string; icon: typeof Bankno
 export default function LandlordSignupFields({ value, onChange, showPayment = false, paymentSlot }: LandlordSignupFieldsProps) {
   const patch = (partial: Partial<LandlordSignupFormState>) => onChange({ ...value, ...partial });
   const isFree = value.tier === 'free';
-  const tiers = (Object.keys(SUBSCRIPTION_TIERS) as SubscriptionTier[]).filter((id) => id !== 'basic');
+  const tiers = VISIBLE_PLAN_ORDER;
 
   return (
     <div className="space-y-6">
@@ -77,13 +77,21 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-3">
-                    <span className="text-sm font-semibold text-zinc-950 dark:text-white">{tier.label}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-950 dark:text-white">{tier.label}</span>
+                      {tier.badge && (
+                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-600/15 dark:bg-violet-500/15 dark:text-violet-300">
+                          {tier.badge}
+                        </span>
+                      )}
+                    </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
                       {price}
                       {tierId !== 'free' && <span className="font-normal text-zinc-500"> / {PERIOD_SHORT[value.billing]}</span>}
                     </span>
                   </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{tier.highlights.join(' · ')}</span>
+                  <span className="mt-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300">{tier.limitSummary}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{tier.highlights.slice(0, 3).join(' · ')}</span>
                 </span>
               </button>
             );
@@ -91,7 +99,7 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
         </div>
 
         {isFree ? (
-          <p className="mt-3 text-xs text-zinc-500">No payment needed. One house unit, free for as long as you use it.</p>
+          <p className="mt-3 text-xs text-zinc-500">No payment needed. Up to 2 units (1 building), free for as long as you use it.</p>
         ) : (
           <div className="mt-3">
             <div role="radiogroup" aria-label="Billing period" className="grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">

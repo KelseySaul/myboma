@@ -93,8 +93,8 @@ export default function LandlordSubscriptionGate({ email, phone, onActivated }: 
       <div className="mx-auto max-w-xl">
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">Choose a plan to start</h1>
         <p className="mt-2 text-sm leading-6 text-zinc-500">
-          Signed in as <span className="font-medium text-zinc-950">{email}</span>. Start free with one house, or pick a paid plan
-          for more units. Paid plans are prepaid and don't renew automatically.
+          Signed in as <span className="font-medium text-zinc-950">{email}</span>. Start free with up to 2 units (1 building), or pick a paid plan
+          for more units, buildings, or agency landlord management. Paid plans are prepaid and don&apos;t renew automatically.
         </p>
 
         <div className="mt-8 rounded-3xl border border-zinc-200 bg-white p-5 sm:p-7">

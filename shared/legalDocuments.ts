@@ -36,7 +36,7 @@ export const TERMS_OF_USE = {
     },
     {
       title: '8. Landlord plans and billing',
-      body: 'Landlords can use the Free plan, which covers one house unit, or a paid plan (Basic, Starter, Pro or Pro Plus). Paid plans are prepaid for the monthly, quarterly or yearly period you choose and do not renew automatically. You will only be charged when you approve a new payment. The price is shown in Kenyan shillings before you pay. When a paid period ends, your account keeps its data but the paid features stop until you renew. We may change plan prices for future periods; a change never affects a period you have already paid for.',
+      body: 'Landlords can use the Free plan (up to 2 units and 1 building) or a paid plan (Starter, Pro, or Agency / Enterprise). Paid plans are prepaid for the monthly, quarterly or yearly period you choose and do not renew automatically. You will only be charged when you approve a new payment. The price is shown in Kenyan shillings before you pay. When a paid period ends, your account keeps its data but the paid features stop until you renew. We may change plan prices for future periods; a change never affects a period you have already paid for.',
     },
     {
       title: '9. Refunds',

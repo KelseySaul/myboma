@@ -36,11 +36,35 @@ const landlord = (overrides: Partial<UserProfileRecord> = {}) =>
   }) as unknown as UserProfileRecord;
 
 describe('free plan definition', () => {
-  it('costs nothing and allows a single unit without the maintenance hub', () => {
+  it('costs nothing and allows up to 2 units and 1 building without the maintenance hub', () => {
     assert.equal(getSubscriptionAmount('free', 'monthly'), 0);
     const features = getSubscriptionFeatures({subscriptionPlan: FREE_PLAN, role: 'landlord'});
-    assert.equal(features.maxListings, 1);
+    assert.equal(features.maxListings, 2);
+    assert.equal(features.maxBuildings, 1);
     assert.equal(features.maintenanceHub, false);
+  });
+
+  it('matches the updated Starter, Pro, and Agency / Enterprise pricing and limits', () => {
+    assert.equal(getSubscriptionAmount('starter', 'monthly'), 750);
+    assert.equal(getSubscriptionAmount('starter', 'yearly'), 7500);
+    const starter = getSubscriptionFeatures({subscriptionPlan: encodeSubscriptionPlan('starter', 'monthly'), role: 'landlord'});
+    assert.equal(starter.maxListings, 10);
+    assert.equal(starter.maxBuildings, 2);
+    assert.equal(starter.maintenanceHub, true);
+
+    assert.equal(getSubscriptionAmount('pro', 'monthly'), 2000);
+    assert.equal(getSubscriptionAmount('pro', 'yearly'), 20000);
+    const pro = getSubscriptionFeatures({subscriptionPlan: encodeSubscriptionPlan('pro', 'monthly'), role: 'landlord'});
+    assert.equal(pro.maxListings, 20);
+    assert.equal(pro.maxBuildings, 5);
+    assert.equal(pro.caretakerAccess, true);
+
+    assert.equal(getSubscriptionAmount('proplus', 'monthly'), 10000);
+    assert.equal(getSubscriptionAmount('proplus', 'yearly'), 100000);
+    const agency = getSubscriptionFeatures({subscriptionPlan: encodeSubscriptionPlan('proplus', 'monthly'), role: 'admin'});
+    assert.equal(agency.maxListings, null);
+    assert.equal(agency.maxBuildings, null);
+    assert.equal(agency.agencyAccess, true);
   });
 
   it('is recognised only for the free tier', () => {
@@ -70,9 +94,10 @@ describe('free plan activity', () => {
     );
   });
 
-  it('is active on the server and limited to one unit', () => {
+  it('is active on the server and limited to 2 units and 1 building', () => {
     assert.equal(middleware.hasActiveSubscription(landlord()), true);
-    assert.equal(middleware.unitLimitFor(landlord()), 1);
+    assert.equal(middleware.unitLimitFor(landlord()), 2);
+    assert.equal(middleware.buildingLimitFor(landlord()), 1);
   });
 });
 

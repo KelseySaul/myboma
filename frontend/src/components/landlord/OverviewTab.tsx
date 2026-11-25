@@ -144,7 +144,7 @@ export default function OverviewTab(props: OverviewTabProps) {
             Here is how your rentals are doing in {now.toLocaleDateString('en-KE', { month: 'long', year: 'numeric' })}.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div data-tour="landlord-quick-actions" className="flex flex-wrap gap-2">
           {(props.pendingInvitesCount ?? 0) > 0 && (
             <ActionButton size="sm" variant="secondary" icon={<Mail className="h-4 w-4" />} onClick={() => props.onOpenTab('pending')}>
               {props.pendingInvitesCount} pending {props.pendingInvitesCount === 1 ? 'invite' : 'invites'}
@@ -156,7 +156,7 @@ export default function OverviewTab(props: OverviewTabProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-3.5">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4 lg:gap-3.5">
         {stats.map(({ label, value, note, tab, icon: Icon }) => {
           const isRevenue = label === 'Collected this month';
           return (
@@ -164,15 +164,15 @@ export default function OverviewTab(props: OverviewTabProps) {
               key={label}
               type="button"
               onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
-              className={`group rounded-xl border p-3.5 text-left transition sm:p-5 ${isRevenue ? 'finance-highlight' : 'stat-tint'}`}
+              className={`group rounded-xl border p-3 text-left transition sm:p-5 ${isRevenue ? 'finance-highlight' : 'stat-tint'}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[11px] font-medium text-[#5D5A73] sm:text-[13px] dark:text-slate-400">{label}</span>
                 <span
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8 ${
                     isRevenue
-                      ? 'bg-gradient-to-br from-violet-600/15 to-fuchsia-600/15 text-violet-700 dark:from-violet-500/25 dark:to-fuchsia-500/20 dark:text-violet-300'
-                      : 'bg-[#F4F3F8] text-[#5D5A73] dark:bg-white/8 dark:text-slate-300'
+                      ? 'bg-violet-50 text-[#5B21B6] dark:bg-violet-500/20 dark:text-violet-300'
+                      : 'bg-zinc-100 text-zinc-600 dark:bg-white/8 dark:text-slate-300'
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={1.85} />

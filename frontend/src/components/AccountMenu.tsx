@@ -25,6 +25,7 @@ const VIEW_AS: { role: UserRole; label: string; icon: typeof Users }[] = [
 export const roleLabel = (profile: UserProfile | null, activeView?: UserRole | null) => {
   if (profile?.isSuperAdmin) return 'Super admin';
   const role = activeView || profile?.role || 'hunter';
+  if (role === 'admin' && !profile?.isAdmin && !profile?.isSuperAdmin) return 'Property manager';
   return VIEW_AS.find((item) => item.role === role)?.label ?? 'House hunter';
 };
 

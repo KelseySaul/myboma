@@ -819,300 +819,442 @@ export default function App() {
       {currentRole === 'admin' && (
         <>
           {/* Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
-            <div className="flex items-center justify-around h-15 px-1">
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#181922]/95">
+            <div className="flex h-15 items-center justify-around px-1">
               {[
-                { id: 'dashboard',   label: 'Home',      icon: faChartPie },
-                { id: 'registered',  label: 'Users',     icon: faUsers },
-                { id: 'pending',     label: 'Pending',   icon: faLink },
+                { id: 'dashboard',   label: 'Home',       icon: faChartPie },
+                { id: 'registered',  label: 'Users',      icon: faUsers },
+                { id: 'pending',     label: 'Pending',    icon: faLink },
                 { id: 'properties',  label: 'Properties', icon: faBuilding },
               ].map(t => {
                 const isActive = (activeTab || 'dashboard') === t.id;
                 return (
                 <button
                   key={t.id}
+                  type="button"
+                  data-tour={`nav-${t.id}`}
                   onClick={() => {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                  className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
                     isActive
-                      ? 'text-violet-700 dark:text-violet-300 font-bold'
-                      : 'text-[#8A86A1] hover:text-[#161426]'
+                      ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                      : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
+                  <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                    isActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
+                    <FontAwesomeIcon icon={t.icon} className="text-xs" />
                   </div>
-                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                  }`}>{t.label}</span>
+                  <span className="text-[10px] leading-none">{t.label}</span>
                 </button>
               );})}
               {(() => {
                 const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'platforms', 'audit', 'settings'].includes(activeTab);
                 return (
                   <button
+                    type="button"
                     onClick={() => setIsMobileMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                    className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
                       isAdminMenuTabActive
-                        ? 'text-violet-700 dark:text-violet-300 font-bold'
-                        : 'text-[#8A86A1] hover:text-[#161426]'
+                        ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                        : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                     }`}
                   >
-                    <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                      isAdminMenuTabActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
+                    <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                      isAdminMenuTabActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
                     }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isAdminMenuTabActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
+                      <FontAwesomeIcon icon={faBars} className="text-xs" />
                     </div>
-                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                      isAdminMenuTabActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                    }`}>Menu</span>
+                    <span className="text-[10px] leading-none">Menu</span>
                   </button>
                 );
               })()}
             </div>
           </nav>
 
-          {/* Mobile Drawer Slide-out Menu (Right to Left) */}
+          {/* Modern Mobile Slide-out Menu */}
           {isMobileMenuOpen && (
-            <div 
-              className="fixed inset-0 bg-[#120926]/45 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
+            <div
+              className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150 sm:hidden"
               onClick={() => setIsMobileMenuOpen(false)}
             />
           )}
-          
-          <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-[#181922] shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-[#221844]/[0.08] dark:border-white/[0.08] ${
+
+          <aside
+            aria-label="Mobile navigation menu"
+            className={`fixed inset-y-0 right-0 z-50 flex w-[82vw] max-w-[300px] flex-col border-l border-zinc-200/80 bg-white shadow-2xl transition-transform duration-200 ease-out dark:border-white/[0.08] dark:bg-[#181922] sm:hidden ${
               isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-[#221844]/[0.07] dark:border-white/[0.07] pb-3 mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#161426] dark:text-white">Operations Menu</span>
-              <button 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="h-8 w-8 rounded-lg bg-[#F4F3F8] dark:bg-white/10 flex items-center justify-center hover:bg-violet-100 text-[#5D5A73] cursor-pointer"
-              >
-                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            
-            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
-              {[
-                { id: 'maintenance', label: 'Repairs',       icon: faTools },
-                { id: 'finances',    label: 'Payments',      icon: faWallet },
-                { id: 'tenants',     label: 'Tenants',       icon: faUsers },
-                { id: 'automations', label: 'Notifications', icon: faBell },
-                ...(profile?.isSuperAdmin ? [
-                  { id: 'platforms', label: 'Platforms', icon: faGlobe },
-                  { id: 'audit',     label: 'Activity log',      icon: faClipboardList },
-                ] : []),
-                { id: 'settings',    label: 'Settings',          icon: faCog }
-              ].map(item => {
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white font-semibold shadow-sm'
-                        : 'text-[#5D5A73] dark:text-slate-300 hover:bg-[#F4F3F8] dark:hover:bg-white/[0.06] font-medium'
-                    }`}
-                  >
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-[#F4F3F8] dark:bg-white/8 text-[#5D5A73]'
-                    }`}>
-                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
-                    </div>
-                    <span className="text-xs tracking-tight">
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </>
-      )}
-
-      {currentRole === 'landlord' && (
-        <>
-          {/* Landlord Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
-            <div className="flex items-center justify-around h-15 px-1">
-              {[
-                { id: 'dashboard',   label: 'Home',     icon: faChartPie },
-                { id: 'properties',  label: 'Properties', icon: faHome },
-                { id: 'finances',    label: 'Payments', icon: faWallet },
-                { id: 'tenants',     label: 'Tenants',  icon: faUsers },
-              ].map(t => {
-                const isActive = (activeTab || 'dashboard') === t.id;
-                return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setActiveTab(t.id);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
-                    isActive
-                      ? 'text-violet-700 dark:text-violet-300 font-bold'
-                      : 'text-[#8A86A1] hover:text-[#161426]'
-                  }`}
-                >
-                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
-                  }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
-                  </div>
-                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                  }`}>{t.label}</span>
-                </button>
-              );})}
-              {(() => {
-                const isMenuTabActive = ['caretakers', 'pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
-                return (
-                  <button
-                    onClick={() => setIsMobileMenuOpen(true)}
-                    className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
-                      isMenuTabActive
-                        ? 'text-violet-700 dark:text-violet-300 font-bold'
-                        : 'text-[#8A86A1] hover:text-[#161426]'
-                    }`}
-                  >
-                    <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                      isMenuTabActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
-                    }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isMenuTabActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
-                    </div>
-                    <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                      isMenuTabActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                    }`}>Menu</span>
-                  </button>
-                );
-              })()}
-            </div>
-          </nav>
-
-          {/* Mobile Drawer Slide-out Menu (Right to Left) */}
-          {isMobileMenuOpen && (
-            <div 
-              className="fixed inset-0 bg-[#120926]/45 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
-              onClick={() => setIsMobileMenuOpen(false)}
-            />
-          )}
-          
-          <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-[#181922] shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-[#221844]/[0.08] dark:border-white/[0.08] ${
-              isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-[#221844]/[0.07] dark:border-white/[0.07] pb-3 mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-[#161426] dark:text-white">More Options</span>
-              <button 
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="h-8 w-8 rounded-lg bg-[#F4F3F8] dark:bg-white/10 flex items-center justify-center hover:bg-violet-100 text-[#5D5A73] cursor-pointer"
-              >
-                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            
-            <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
-              {[
-                { id: 'caretakers',  label: 'Caretakers & reports', icon: faUsers },
-                { id: 'pending',     label: 'Pending invites', icon: faLink },
-                { id: 'maintenance', label: 'Repairs', icon: faTools },
-                { id: 'automations', label: 'Notifications', icon: faBell },
-                { id: 'settings',    label: 'Settings',          icon: faCog }
-              ].map(item => {
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white font-semibold shadow-sm'
-                        : 'text-[#5D5A73] dark:text-slate-300 hover:bg-[#F4F3F8] dark:hover:bg-white/[0.06] font-medium'
-                    }`}
-                  >
-                    <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-[#F4F3F8] dark:bg-white/8 text-[#5D5A73]'
-                    }`}>
-                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
-                    </div>
-                    <span className="text-xs tracking-tight">
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-
-              <div className="my-2 border-t border-slate-100 dark:border-slate-800" />
-              
+            {/* Profile Header */}
+            <div className="flex items-center justify-between gap-2.5 border-b border-zinc-100 px-4 py-3.5 dark:border-white/[0.07]">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
+                  {profile?.avatarUrl ? (
+                    <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    profile?.displayName?.charAt(0).toUpperCase() || 'A'
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{profile?.displayName || 'Account'}</p>
+                  <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {profile?.isSuperAdmin ? 'Super admin' : profile?.isAdmin ? 'Platform admin' : 'Property manager'}
+                  </p>
+                </div>
+              </div>
               <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-300 cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3.5">
+              <div>
+                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Day to day</p>
+                <div className="space-y-0.5">
+                  {[
+                    { id: 'maintenance', label: 'Repairs & maintenance', icon: faTools },
+                    { id: 'finances',    label: 'Rent & payments',       icon: faWallet },
+                    { id: 'tenants',     label: 'Tenants',               icon: faUsers },
+                    { id: 'automations', label: 'Notifications',         icon: faBell },
+                  ].map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                            : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
+                          <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {profile?.isSuperAdmin && (
+                <div>
+                  <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Administration</p>
+                  <div className="space-y-0.5">
+                    {[
+                      { id: 'platforms', label: 'Platforms',    icon: faGlobe },
+                      { id: 'audit',     label: 'Activity log', icon: faClipboardList },
+                    ].map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setIsMobileMenuOpen(false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                              : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                          }`}
+                        >
+                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
+                            <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                          </span>
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </nav>
+
+            {/* Anchored Footer Actions */}
+            <div className="border-t border-zinc-100 bg-zinc-50/70 p-3 space-y-1 dark:border-white/[0.07] dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setShowOnboarding(true);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06] cursor-pointer"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[#5B21B6] shadow-2xs dark:bg-white/10 dark:text-violet-300">
+                  <FontAwesomeIcon icon={faChartPie} className="h-3 w-3" />
+                </span>
+                <span>Show me around</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('settings');
+                  setIsMobileMenuOpen(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] transition-colors cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                    : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-600 shadow-2xs dark:bg-white/10 dark:text-zinc-300">
+                  <FontAwesomeIcon icon={faCog} className="h-3 w-3" />
+                </span>
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   setIsMobileMenuOpen(false);
                   await authClient.signOut({});
                   clearQueryCache();
                   toast.success('Signed out');
                 }}
-                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/25 cursor-pointer"
               >
-                <div className="h-7 w-7 rounded-lg bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
-                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3 text-rose-600" />
-                </div>
-                <span className="text-xs font-semibold">Sign Out</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/40">
+                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3" />
+                </span>
+                <span>Sign out</span>
               </button>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {currentRole === 'landlord' && (
+        <>
+          {/* Landlord Mobile Bottom Navigation Bar */}
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#181922]/95">
+            <div className="flex h-15 items-center justify-around px-1">
+              {[
+                { id: 'dashboard',   label: 'Home',       icon: faChartPie },
+                { id: 'properties',  label: 'Properties', icon: faHome },
+                { id: 'finances',    label: 'Payments',   icon: faWallet },
+                { id: 'tenants',     label: 'Tenants',    icon: faUsers },
+              ].map(t => {
+                const isActive = (activeTab || 'dashboard') === t.id;
+                return (
+                <button
+                  key={t.id}
+                  type="button"
+                  data-tour={`nav-${t.id}`}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
+                    isActive
+                      ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                      : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                  }`}
+                >
+                  <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                    isActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
+                  }`}>
+                    <FontAwesomeIcon icon={t.icon} className="text-xs" />
+                  </div>
+                  <span className="text-[10px] leading-none">{t.label}</span>
+                </button>
+              );})}
+              {(() => {
+                const isMenuTabActive = ['caretakers', 'pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
+                      isMenuTabActive
+                        ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                        : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                      isMenuTabActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
+                    }`}>
+                      <FontAwesomeIcon icon={faBars} className="text-xs" />
+                    </div>
+                    <span className="text-[10px] leading-none">Menu</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </nav>
+
+          {/* Modern Mobile Slide-out Menu */}
+          {isMobileMenuOpen && (
+            <div
+              className="fixed inset-0 z-50 bg-zinc-950/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150 sm:hidden"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
+
+          <aside
+            aria-label="Mobile navigation menu"
+            className={`fixed inset-y-0 right-0 z-50 flex w-[82vw] max-w-[300px] flex-col border-l border-zinc-200/80 bg-white shadow-2xl transition-transform duration-200 ease-out dark:border-white/[0.08] dark:bg-[#181922] sm:hidden ${
+              isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2.5 border-b border-zinc-100 px-4 py-3.5 dark:border-white/[0.07]">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900 text-xs font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
+                  {profile?.avatarUrl ? (
+                    <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    profile?.displayName?.charAt(0).toUpperCase() || 'L'
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{profile?.displayName || 'Landlord'}</p>
+                  <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">{profile?.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200 dark:bg-white/10 dark:text-zinc-300 cursor-pointer"
+              >
+                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3.5">
+              <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Workspace</p>
+              {[
+                { id: 'caretakers',  label: 'Caretakers & reports', icon: faUsers },
+                { id: 'pending',     label: 'Pending invites',      icon: faLink },
+                { id: 'maintenance', label: 'Repairs',              icon: faTools },
+                { id: 'automations', label: 'Notifications',        icon: faBell },
+              ].map((item) => {
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.id);
+                      setIsMobileMenuOpen(false);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                        : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
+                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
             </nav>
-          </div>
+
+            <div className="border-t border-zinc-100 bg-zinc-50/70 p-3 space-y-1 dark:border-white/[0.07] dark:bg-white/[0.02]">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setShowOnboarding(true);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06] cursor-pointer"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-[#5B21B6] shadow-2xs dark:bg-white/10 dark:text-violet-300">
+                  <FontAwesomeIcon icon={faChartPie} className="h-3 w-3" />
+                </span>
+                <span>Show me around</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('settings');
+                  setIsMobileMenuOpen(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] transition-colors cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                    : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-600 shadow-2xs dark:bg-white/10 dark:text-zinc-300">
+                  <FontAwesomeIcon icon={faCog} className="h-3 w-3" />
+                </span>
+                <span>Settings</span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsMobileMenuOpen(false);
+                  await authClient.signOut({});
+                  clearQueryCache();
+                  toast.success('Signed out');
+                }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[13px] font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/25 cursor-pointer"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/40">
+                  <FontAwesomeIcon icon={faSignOutAlt} className="h-3 w-3" />
+                </span>
+                <span>Sign out</span>
+              </button>
+            </div>
+          </aside>
         </>
       )}
 
       {currentRole === 'tenant' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
-          <div className="flex items-center justify-around h-15 px-1">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#181922]/95">
+          <div className="flex h-15 items-center justify-around px-1">
             {[
-              { id: 'dashboard',   label: 'Home', icon: faChartPie },
+              { id: 'dashboard',   label: 'Home',     icon: faChartPie },
               { id: 'finances',    label: 'Payments', icon: faWallet },
-              { id: 'maintenance', label: 'Repairs', icon: faTools },
-              { id: 'notices',     label: 'Notices', icon: faBell },
+              { id: 'maintenance', label: 'Repairs',  icon: faTools },
+              { id: 'notices',     label: 'Notices',  icon: faBell },
               { id: 'settings',    label: 'Settings', icon: faCog },
             ].map(t => {
               const isActive = (activeTab || 'dashboard') === t.id;
               return (
                 <button
                   key={t.id}
+                  type="button"
+                  data-tour={`nav-${t.id}`}
                   onClick={() => {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                  className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
                     isActive
-                      ? 'text-violet-700 dark:text-violet-300 font-bold'
-                      : 'text-[#8A86A1] hover:text-[#161426]'
+                      ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                      : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
+                  <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                    isActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
+                    <FontAwesomeIcon icon={t.icon} className="text-xs" />
                   </div>
-                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                  }`}>{t.label}</span>
+                  <span className="text-[10px] leading-none">{t.label}</span>
                 </button>
               );
             })}
@@ -1121,8 +1263,8 @@ export default function App() {
       )}
 
       {currentRole === 'caretaker' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
-          <div className="flex items-center justify-around h-15 px-1">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 border-t border-zinc-200/80 bg-white/95 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#181922]/95">
+          <div className="flex h-15 items-center justify-around px-1">
             {[
               { id: 'dashboard',   label: 'Home',     icon: faChartPie },
               { id: 'repairs',     label: 'Repairs',  icon: faTools },
@@ -1134,24 +1276,24 @@ export default function App() {
               return (
                 <button
                   key={t.id}
+                  type="button"
+                  data-tour={`nav-${t.id}`}
                   onClick={() => {
                     setActiveTab(t.id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                  className={`flex h-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors cursor-pointer ${
                     isActive
-                      ? 'text-violet-700 dark:text-violet-300 font-bold'
-                      : 'text-[#8A86A1] hover:text-[#161426]'
+                      ? 'font-semibold text-[#5B21B6] dark:text-violet-300'
+                      : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
-                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
+                  <div className={`flex h-7 w-9 items-center justify-center rounded-lg transition-colors ${
+                    isActive ? 'bg-violet-600/10 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
+                    <FontAwesomeIcon icon={t.icon} className="text-xs" />
                   </div>
-                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
-                  }`}>{t.label}</span>
+                  <span className="text-[10px] leading-none">{t.label}</span>
                 </button>
               );
             })}
@@ -1159,19 +1301,18 @@ export default function App() {
         </nav>
       )}
 
-      {profile && (
-        <div className="fixed bottom-20 right-4 z-40 sm:hidden">
-          <AccountMenu profile={profile} activeView={activeView}
-            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
-            setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30 ring-2 ring-white dark:ring-[#181922]">{profile.avatarUrl ? <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
-        </div>
-      )}
       <Toaster />
       {showOnboarding && !impersonatedProfile && profile && (
         <Suspense fallback={null}>
           <OnboardingTour
-            role={profile.role}
+            role={currentRole}
+            isSuperAdmin={Boolean(profile.isSuperAdmin)}
+            isAdmin={Boolean(profile.isAdmin)}
+            activeTab={activeTab || 'dashboard'}
+            onNavigateTab={(tab) => {
+              setIsMobileMenuOpen(false);
+              setActiveTab(tab);
+            }}
             onComplete={() => setShowOnboarding(false)}
           />
         </Suspense>

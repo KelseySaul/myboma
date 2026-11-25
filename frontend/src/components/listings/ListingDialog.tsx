@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type TouchEvent } from 'react';
+import { useState, type FormEvent, type MouseEvent, type TouchEvent } from 'react';
 import { format, differenceInCalendarDays, parseISO } from 'date-fns';
-import { CheckCircle2, ChevronLeft, ChevronRight, Home, Loader2, MapPin, X } from 'lucide-react';
+import { Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Home, Loader2, MapPin, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { submitEnquiry } from '../../lib/api';
@@ -16,17 +16,39 @@ interface Prefill {
 interface ListingDialogProps {
   listing: Listing | null;
   prefill?: Prefill;
+  liked?: boolean;
+  saved?: boolean;
+  onToggleLike?: (event: MouseEvent, id: string) => void;
+  onToggleSave?: (event: MouseEvent, id: string) => void;
   onClose: () => void;
 }
 
-export default function ListingDialog({ listing, prefill, onClose }: ListingDialogProps) {
+export default function ListingDialog({
+  listing,
+  prefill,
+  liked = false,
+  saved = false,
+  onToggleLike,
+  onToggleSave,
+  onClose,
+}: ListingDialogProps) {
   return (
     <Dialog open={Boolean(listing)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
         className="bottom-0 left-0 top-auto max-h-[92dvh] w-full max-w-full translate-x-0 translate-y-0 gap-0 overflow-y-auto overscroll-contain rounded-b-none rounded-t-3xl border-0 p-0 data-open:slide-in-from-bottom-10 data-open:zoom-in-100 sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:max-h-[90vh] sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:border sm:data-open:slide-in-from-bottom-0 sm:data-open:zoom-in-95"
       >
-        {listing && <ListingDetail key={listing.id} listing={listing} prefill={prefill} />}
+        {listing && (
+          <ListingDetail
+            key={listing.id}
+            listing={listing}
+            prefill={prefill}
+            liked={liked}
+            saved={saved}
+            onToggleLike={onToggleLike}
+            onToggleSave={onToggleSave}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -102,7 +124,21 @@ type FieldErrors = Partial<Record<'name' | 'email' | 'phone' | 'dates', string>>
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function ListingDetail({ listing, prefill }: { listing: Listing; prefill?: Prefill }) {
+function ListingDetail({
+  listing,
+  prefill,
+  liked,
+  saved,
+  onToggleLike,
+  onToggleSave,
+}: {
+  listing: Listing;
+  prefill?: Prefill;
+  liked: boolean;
+  saved: boolean;
+  onToggleLike?: (event: MouseEvent, id: string) => void;
+  onToggleSave?: (event: MouseEvent, id: string) => void;
+}) {
   const isBnb = listing.type === 'bnb';
   const today = format(new Date(), 'yyyy-MM-dd');
   const [name, setName] = useState(prefill?.name ?? '');
@@ -182,10 +218,44 @@ function ListingDetail({ listing, prefill }: { listing: Listing; prefill?: Prefi
             <MapPin className="h-4 w-4 shrink-0" />
             {listing.location}
           </DialogDescription>
-          <p className="mt-4 text-2xl font-bold tabular-nums text-zinc-950 dark:text-white">
-            {formatKes(listing.price)}
-            <span className="ml-1.5 text-sm font-normal text-zinc-500">per {priceUnit(listing.type)}</span>
-          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-2xl font-bold tabular-nums text-zinc-950 dark:text-white">
+              {formatKes(listing.price)}
+              <span className="ml-1.5 text-sm font-normal text-zinc-500">per {priceUnit(listing.type)}</span>
+            </p>
+            {(onToggleSave || onToggleLike) && (
+              <div className="flex items-center gap-2">
+                {onToggleSave && (
+                  <button
+                    type="button"
+                    onClick={(event) => onToggleSave(event, listing.id)}
+                    className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
+                      saved
+                        ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-500/40 dark:bg-violet-500/15 dark:text-violet-200'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
+                    }`}
+                  >
+                    <Bookmark className="h-3.5 w-3.5" fill={saved ? 'currentColor' : 'none'} />
+                    {saved ? 'Saved for later' : 'Save for later'}
+                  </button>
+                )}
+                {onToggleLike && (
+                  <button
+                    type="button"
+                    onClick={(event) => onToggleLike(event, listing.id)}
+                    className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
+                      liked
+                        ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-200'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
+                    }`}
+                  >
+                    <Heart className="h-3.5 w-3.5" fill={liked ? 'currentColor' : 'none'} />
+                    {liked ? 'Liked' : 'Like'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {listing.description && <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{listing.description}</p>}

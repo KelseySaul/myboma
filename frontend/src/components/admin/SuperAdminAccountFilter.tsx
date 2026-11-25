@@ -97,7 +97,7 @@ export function SuperAdminAccountFilterBar({
   };
 
   return (
-    <div className="mb-5 rounded-xl border border-[#1C2B33]/[0.09] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(28,43,51,0.05)] dark:border-white/[0.08] dark:bg-[#1A1D21]">
+    <div data-tour="superadmin-filter" className="mb-3.5 rounded-xl border border-[#1C2B33]/[0.09] bg-white px-3 py-2.5 shadow-none sm:mb-5 sm:px-4 sm:py-3 sm:shadow-[0_1px_2px_rgba(28,43,51,0.04)] dark:border-white/[0.08] dark:bg-[#1A1D21]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5D5A73] dark:text-slate-400">
@@ -110,10 +110,10 @@ export function SuperAdminAccountFilterBar({
           <button
             type="button"
             onClick={toggleMyAccount}
-            className={`inline-flex h-8.5 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
               includesMe
-                ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20 hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700'
-                : 'border border-[#D5D2E3] bg-white text-[#161426] hover:border-violet-300 hover:bg-[#F8F7FC] dark:border-white/12 dark:bg-[#181922] dark:text-slate-200 dark:hover:bg-white/5'
+                ? 'bg-[#5B21B6] text-white hover:bg-[#4C1D95]'
+                : 'border border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-white/12 dark:bg-[#181922] dark:text-slate-200 dark:hover:bg-white/5'
             }`}
           >
             <UserCheck className="h-3.5 w-3.5" />
@@ -323,7 +323,7 @@ export function SuperAdminAccountGate({ profile, pageLabel, onSelectIds }: Super
         <button
           type="button"
           onClick={() => onSelectIds([profile.uid])}
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 px-5 text-xs font-semibold text-white shadow-sm shadow-violet-700/25 transition hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700"
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#5B21B6] px-5 text-xs font-semibold text-white transition hover:bg-[#4C1D95]"
         >
           <UserCheck className="h-4 w-4" />
           View my own account

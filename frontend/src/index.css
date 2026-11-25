@@ -954,19 +954,19 @@ aside[class*="sticky"] {
    Clean #F4F3F8 canvas + crisp #FFFFFF surfaces + #161426 ink + Royal Violet -> Amethyst gradient.
    ============================================ */
 .app-shell:not(.app-shell-public) {
-  --meta-canvas: #F4F3F8;
+  --meta-canvas: #F7F7F9;
   --meta-surface: #FFFFFF;
-  --meta-surface-subtle: #F8F7FC;
-  --meta-border: rgba(34, 24, 68, 0.09);
-  --meta-border-strong: rgba(34, 24, 68, 0.15);
-  --meta-ink: #161426;
-  --meta-ink-secondary: #5D5A73;
-  --meta-ink-muted: #8A86A1;
-  --meta-accent: #6D28D9;
-  --meta-accent-hover: #5B21B6;
-  --meta-accent-soft: rgba(124, 58, 237, 0.10);
-  --brand-gradient: linear-gradient(135deg, #5B21B6 0%, #7C3AED 55%, #A855F7 100%);
-  --brand-gradient-hover: linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #9333EA 100%);
+  --meta-surface-subtle: #FAFAFB;
+  --meta-border: rgba(24, 24, 34, 0.08);
+  --meta-border-strong: rgba(24, 24, 34, 0.14);
+  --meta-ink: #14141A;
+  --meta-ink-secondary: #5B5D6B;
+  --meta-ink-muted: #8A8C9B;
+  --meta-accent: #5B21B6;
+  --meta-accent-hover: #4C1D95;
+  --meta-accent-soft: rgba(91, 33, 182, 0.08);
+  --brand-gradient: linear-gradient(135deg, #4C1D95 0%, #5B21B6 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #3B0764 0%, #4C1D95 100%);
   background: var(--meta-canvas);
   color: var(--meta-ink);
 }
@@ -977,14 +977,14 @@ aside[class*="sticky"] {
   --meta-surface-subtle: #1F202D;
   --meta-border: rgba(255, 255, 255, 0.08);
   --meta-border-strong: rgba(255, 255, 255, 0.15);
-  --meta-ink: #F5F3FF;
-  --meta-ink-secondary: #A5A1BE;
-  --meta-ink-muted: #706B8C;
-  --meta-accent: #8B5CF6;
-  --meta-accent-hover: #7C3AED;
-  --meta-accent-soft: rgba(139, 92, 246, 0.16);
-  --brand-gradient: linear-gradient(135deg, #6D28D9 0%, #7C3AED 55%, #C084FC 100%);
-  --brand-gradient-hover: linear-gradient(135deg, #5B21B6 0%, #6D28D9 55%, #A855F7 100%);
+  --meta-ink: #F5F5F7;
+  --meta-ink-secondary: #A1A3B3;
+  --meta-ink-muted: #707285;
+  --meta-accent: #7C3AED;
+  --meta-accent-hover: #6D28D9;
+  --meta-accent-soft: rgba(124, 58, 237, 0.14);
+  --brand-gradient: linear-gradient(135deg, #5B21B6 0%, #6D28D9 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #4C1D95 0%, #5B21B6 100%);
   background: var(--meta-canvas);
   color: var(--meta-ink);
 }
@@ -1036,30 +1036,41 @@ aside[class*="sticky"] {
   transform: translateY(-1px);
 }
 
-/* Signature aesthetic purple gradient accent for revenue KPI card */
+/* Restrained violet accent for primary finance highlight & CTAs */
 .app-shell:not(.app-shell-public) main .finance-highlight,
 .app-shell:not(.app-shell-public) main button.group.finance-highlight {
   position: relative;
   overflow: hidden;
-  border-color: rgba(124, 58, 237, 0.24);
-  background: linear-gradient(155deg, rgba(124, 58, 237, 0.07) 0%, rgba(168, 85, 247, 0.03) 45%, var(--meta-surface) 100%);
+  border-color: rgba(91, 33, 182, 0.18);
+  background: linear-gradient(160deg, rgba(91, 33, 182, 0.045) 0%, var(--meta-surface) 60%);
 }
 
 .dark .app-shell:not(.app-shell-public) main .finance-highlight,
 .dark .app-shell:not(.app-shell-public) main button.group.finance-highlight {
-  border-color: rgba(167, 139, 250, 0.28);
-  background: linear-gradient(155deg, rgba(124, 58, 237, 0.18) 0%, rgba(168, 85, 247, 0.07) 48%, var(--meta-surface) 100%);
+  border-color: rgba(139, 92, 246, 0.24);
+  background: linear-gradient(160deg, rgba(91, 33, 182, 0.14) 0%, var(--meta-surface) 60%);
 }
 
 .brand-gradient,
 .finance-cta {
-  background: linear-gradient(135deg, #5B21B6 0%, #7C3AED 55%, #A855F7 100%);
+  background: #5B21B6;
   color: #ffffff;
   border-color: transparent;
 }
 .brand-gradient:hover,
 .finance-cta:hover {
-  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #9333EA 100%);
+  background: #4C1D95;
+}
+
+/* Modern compact mobile app surfaces — flatter, crisper hairline cards instead of puffy boxes */
+@media (max-width: 639px) {
+  .app-shell:not(.app-shell-public) [data-slot="card"],
+  .app-shell:not(.app-shell-public) .stat-card,
+  .app-shell:not(.app-shell-public) main section.rounded-2xl,
+  .app-shell:not(.app-shell-public) main section.rounded-xl {
+    border-radius: 12px;
+    box-shadow: none;
+  }
 }
 
 /* Mobile-first smooth horizontal chip scrollers without visual scrollbar clutter */

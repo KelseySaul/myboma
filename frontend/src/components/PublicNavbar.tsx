@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Menu, Search, X } from 'lucide-react';
+import { Bookmark, Menu, Search, X } from 'lucide-react';
 import { tenantConfig } from '../config/tenant';
+import { getSavedForLaterIds, SAVED_LISTINGS_EVENT } from '../lib/savedListings';
 import SiteSearch from './search/SiteSearch';
+
+export const SHOW_SAVED_EVENT = 'myboma:show-saved';
 
 interface PublicNavbarProps {
   onLoginClick: () => void;
@@ -21,8 +24,19 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
   const [visible, setVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [savedCount, setSavedCount] = useState(() => getSavedForLaterIds().size);
   const previousScrollTop = useRef(0);
   const isNative = Capacitor.isNativePlatform();
+
+  useEffect(() => {
+    const syncSaved = () => setSavedCount(getSavedForLaterIds().size);
+    window.addEventListener(SAVED_LISTINGS_EVENT, syncSaved);
+    window.addEventListener('storage', syncSaved);
+    return () => {
+      window.removeEventListener(SAVED_LISTINGS_EVENT, syncSaved);
+      window.removeEventListener('storage', syncSaved);
+    };
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -61,6 +75,15 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
   const dark = overHero && !scrolled;
   const path = window.location.pathname;
 
+  const openSavedHomes = () => {
+    setMobileMenuOpen(false);
+    if (window.location.pathname !== '/') {
+      window.location.assign('/?saved=1');
+      return;
+    }
+    window.dispatchEvent(new CustomEvent(SHOW_SAVED_EVENT));
+  };
+
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 px-3 transition-transform duration-200 ease-out sm:px-6 ${visible ? 'translate-y-0' : '-translate-y-[calc(100%+1rem)]'}`}
@@ -71,118 +94,175 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           aria-label="Main"
           className={`flex h-14 items-center justify-between rounded-2xl border px-3 backdrop-blur-md sm:backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-300 sm:px-4 ${
             dark
-              ? 'border-white/30 bg-white/[0.14] text-white shadow-[0_12px_40px_rgba(0,0,0,0.22)] ring-1 ring-white/10'
-              : 'border-white/70 bg-white/60 text-zinc-950 shadow-[0_12px_32px_rgba(15,23,42,0.10)] ring-1 ring-black/5'
+              ? 'border-white/20 bg-black/30 text-white shadow-[0_12px_36px_rgba(0,0,0,0.22)]'
+              : 'border-zinc-200/80 bg-white/90 text-zinc-950 shadow-[0_8px_24px_rgba(15,23,42,0.06)]'
           }`}
         >
           <a href="/" className="flex items-center gap-2.5" onClick={() => setMobileMenuOpen(false)}>
-            <img src={tenantConfig.logoUrl} alt="" className={`h-8 w-8 object-contain transition-[filter] duration-300 ${dark ? "brightness-0 invert" : ""}`} width="32" height="32" />
+            <img src={tenantConfig.logoUrl} alt="" className={`h-8 w-8 object-contain transition-[filter] duration-300 ${dark ? 'brightness-0 invert' : ''}`} width="32" height="32" />
             <span className="font-brand text-2xl font-semibold leading-none tracking-tight sm:text-3xl">{tenantConfig.appName}</span>
           </a>
 
-          <div className="hidden items-center gap-2 sm:flex">
-          <button
-            type="button"
-            aria-label="Search homes"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              setSearchOpen(true);
-            }}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition  ${
-              dark ? 'text-white hover:bg-white/15' : 'text-zinc-950 hover:bg-zinc-950/5'
-            }`}
-          >
-            <Search className="h-5 w-5" />
-          </button>
-          {LINKS.map((link) => {
-            const active = path === link.href;
-            return (
-              <a
-                key={link.href}
-                href={link.href}
-                aria-current={active ? 'page' : undefined}
-                className={`rounded-lg px-2.5 py-2 text-sm font-medium transition-colors sm:px-3 ${
-                  dark
-                    ? active ? 'text-white' : 'text-white/75 hover:text-white'
-                    : active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-950'
-                }`}
-              >
-                {link.label}
-              </a>
-            );
-          })}
-          <button
-            type="button"
-            onClick={onLoginClick}
-            className={`ml-1 h-9 rounded-xl px-4 text-sm font-semibold transition ${
-              dark
-                ? 'bg-white text-[#161426] hover:bg-violet-50'
-                : 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/25 hover:brightness-110'
-            }`}
-          >
-            Sign in
-          </button>
-        </div>
+          <div className="hidden items-center gap-1.5 sm:flex">
+            <button
+              type="button"
+              aria-label="Search homes"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setSearchOpen(true);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                dark ? 'text-white hover:bg-white/15' : 'text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950'
+              }`}
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={openSavedHomes}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition ${
+                dark ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'
+              }`}
+            >
+              <Bookmark className="h-4 w-4" />
+              <span>Saved</span>
+              {savedCount > 0 && (
+                <span className={`rounded-full px-1.5 py-0.2 text-[11px] font-semibold tabular-nums ${dark ? 'bg-white/20 text-white' : 'bg-violet-50 text-violet-700'}`}>
+                  {savedCount}
+                </span>
+              )}
+            </button>
+            {LINKS.map((link) => {
+              const active = path === link.href;
+              return (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`rounded-lg px-2.5 py-2 text-sm font-medium transition-colors sm:px-3 ${
+                    dark
+                      ? active ? 'text-white' : 'text-white/75 hover:text-white'
+                      : active ? 'text-zinc-950' : 'text-zinc-500 hover:text-zinc-950'
+                  }`}
+                >
+                  {link.label}
+                </a>
+              );
+            })}
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className={`ml-1 h-9 rounded-xl px-4 text-sm font-semibold transition ${
+                dark
+                  ? 'bg-white text-zinc-950 hover:bg-zinc-100'
+                  : 'bg-[#5B21B6] text-white hover:bg-[#4C1D95]'
+              }`}
+            >
+              Sign in
+            </button>
+          </div>
+
           <div className="flex items-center gap-1 sm:hidden">
-          <button
-            type="button"
-            aria-label="Search homes"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              setSearchOpen(true);
-            }}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition  ${
-              dark ? 'text-white hover:bg-white/15' : 'text-zinc-950 hover:bg-zinc-950/5'
-            }`}
-          >
-            <Search className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-            aria-expanded={mobileMenuOpen}
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition sm:hidden ${
-              dark ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-zinc-950/8 text-zinc-950 hover:bg-zinc-950/12'
-            }`}
-          >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+            <button
+              type="button"
+              aria-label="Saved for later"
+              onClick={openSavedHomes}
+              className={`relative flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                dark ? 'text-white hover:bg-white/15' : 'text-zinc-800 hover:bg-zinc-100'
+              }`}
+            >
+              <Bookmark className="h-4 w-4" />
+              {savedCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#5B21B6] px-1 text-[9px] font-bold text-white">
+                  {savedCount > 9 ? '9+' : savedCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label="Search homes"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setSearchOpen(true);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                dark ? 'text-white hover:bg-white/15' : 'text-zinc-800 hover:bg-zinc-100'
+              }`}
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl transition sm:hidden ${
+                dark ? 'bg-white/15 text-white hover:bg-white/25' : 'bg-zinc-100 text-zinc-950 hover:bg-zinc-200/80'
+              }`}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
           </div>
         </nav>
 
         {mobileMenuOpen && (
           <div
-            className={`absolute inset-x-0 top-[calc(100%+0.5rem)] rounded-2xl border p-2 shadow-2xl backdrop-blur-2xl sm:hidden ${
+            className={`absolute inset-x-0 top-[calc(100%+0.5rem)] rounded-2xl border p-2.5 shadow-xl backdrop-blur-2xl sm:hidden ${
               dark
-                ? 'border-white/25 bg-zinc-950/75 text-white shadow-black/25'
-                : 'border-white/70 bg-white/85 text-zinc-950 shadow-zinc-900/15'
+                ? 'border-white/20 bg-zinc-950/90 text-white shadow-black/30'
+                : 'border-zinc-200/90 bg-white/95 text-zinc-950 shadow-zinc-900/10'
             }`}
           >
-            {LINKS.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`block rounded-xl px-4 py-3 text-sm font-medium ${dark ? 'hover:bg-white/10' : 'hover:bg-zinc-950/5'}`}
+            <div className="space-y-0.5">
+              {LINKS.map((link) => {
+                const active = path === link.href;
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium ${
+                      dark
+                        ? active ? 'bg-white/12 text-white' : 'text-white/80 hover:bg-white/10'
+                        : active ? 'bg-zinc-100 text-zinc-950 font-semibold' : 'text-zinc-600 hover:bg-zinc-50'
+                    }`}
+                  >
+                    {link.label}
+                  </a>
+                );
+              })}
+              <button
+                type="button"
+                onClick={openSavedHomes}
+                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm font-medium ${
+                  dark ? 'text-white/85 hover:bg-white/10' : 'text-zinc-700 hover:bg-zinc-50'
+                }`}
               >
-                {link.label}
-              </a>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onLoginClick();
-              }}
-              className={`mt-1 h-11 w-full rounded-xl text-sm font-semibold ${
-                dark
-                  ? 'bg-white text-[#161426]'
-                  : 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white'
-              }`}
-            >
-              Sign in
-            </button>
+                <span className="inline-flex items-center gap-2">
+                  <Bookmark className="h-4 w-4" />
+                  Saved for later
+                </span>
+                {savedCount > 0 && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${dark ? 'bg-white/15 text-white' : 'bg-violet-50 text-violet-700'}`}>
+                    {savedCount}
+                  </span>
+                )}
+              </button>
+            </div>
+            <div className={`mt-2 border-t pt-2 ${dark ? 'border-white/10' : 'border-zinc-100'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onLoginClick();
+                }}
+                className={`h-10 w-full rounded-xl text-sm font-semibold transition ${
+                  dark ? 'bg-white text-zinc-950' : 'bg-[#5B21B6] text-white hover:bg-[#4C1D95]'
+                }`}
+              >
+                Sign in
+              </button>
+            </div>
           </div>
         )}
       </div>

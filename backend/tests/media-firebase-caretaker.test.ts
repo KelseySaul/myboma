@@ -176,3 +176,52 @@ test('Landlords can provision caretakers for themselves and caretaker invite pay
   assert.equal(parsed?.role, 'caretaker');
   assert.deepEqual(parsed?.profile.propertyIds, ['33333333-3333-4333-8333-333333333333']);
 });
+
+test('Property Managers (agency admins) can invite landlords, tenants, and caretakers but not admins', () => {
+  const agencyManager = {
+    uid: '44444444-4444-4444-8444-444444444444',
+    email: 'agency@example.com',
+    role: 'admin',
+    isAdmin: false,
+    isSuperAdmin: false,
+    platformId: null,
+  };
+
+  assert.doesNotThrow(() =>
+    assertCanProvision(
+      agencyManager,
+      {
+        email: 'owner@example.com',
+        displayName: 'Grace Owner',
+        role: 'landlord',
+        rentRouting: 'admin',
+      },
+      true,
+    ),
+  );
+
+  assert.doesNotThrow(() =>
+    assertCanProvision(
+      agencyManager,
+      {
+        email: 'staff@example.com',
+        displayName: 'Sam Caretaker',
+        role: 'caretaker',
+        landlordId: agencyManager.uid,
+      },
+      true,
+    ),
+  );
+
+  assert.throws(() =>
+    assertCanProvision(
+      agencyManager,
+      {
+        email: 'evil@example.com',
+        displayName: 'Fake Admin',
+        role: 'admin',
+      },
+      true,
+    ),
+  );
+});

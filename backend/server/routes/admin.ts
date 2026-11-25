@@ -4,7 +4,7 @@ import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
 import {invalidatePublicListings} from '../http/cache.ts';
-import {canAdministerBuilding, canWriteUser, isSuperAdmin} from '../../db/authz.ts';
+import {canAdministerBuilding, canWriteUser, isAgencyManagerOfLandlord, isSuperAdmin} from '../../db/authz.ts';
 import {updatePlatformBrandingSchema} from '../adminHandlers.ts';
 import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {toActor} from '../types.ts';
@@ -54,17 +54,26 @@ export function registerAdminRoutes(bffRouter: Router) {
       // Loosely typed on purpose: this closes over columns from five different tables
       // (users/properties/invitations/rentPayments/buildings) that all happen to share
       // the same platformId/landlordId column shape.
-      const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
-      const withLandlordScope = (col: any, base: any) => (isSuperAdmin(actor) ? base : and(base, eq(col, actor.id)));
+      const managedLandlordRows = isSuperAdmin(actor)
+        ? []
+        : await db
+            .select({uid: schema.users.uid})
+            .from(schema.users)
+            .where(eq(schema.users.managedByAdminId, actor.id));
+      const managedOwnerIds = [actor.id, ...managedLandlordRows.map((row) => row.uid)];
 
-      // Plain admins only see users they've personally invited (as "landlordId" on the
-      // invitation), plus themselves. Filtered in SQL — filtering after a LIMIT made older
-      // managed users silently disappear once the table grew past the limit.
+      const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
+      const withLandlordScope = (col: any, base: any) =>
+        isSuperAdmin(actor) ? base : and(base, inArray(col, managedOwnerIds));
+
+      // Plain/agency admins see themselves, landlords/caretakers they manage, and users
+      // they've invited (as "landlordId" on the invitation).
       const invitedByMe = isSuperAdmin(actor)
         ? undefined
         : or(
             eq(schema.users.uid, actor.id),
-            sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${schema.invitations.landlordId} = ${actor.id})`,
+            eq(schema.users.managedByAdminId, actor.id),
+            sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${inArray(schema.invitations.landlordId, managedOwnerIds)})`,
           );
       const users = await db.query.users.findMany({
         where: invitedByMe ? and(platformWhere(schema.users.platformId), invitedByMe) : platformWhere(schema.users.platformId),
@@ -243,7 +252,12 @@ export function registerAdminRoutes(bffRouter: Router) {
         }
         ownerFilter = inArray(schema.invitations.landlordId, accountIds);
       } else {
-        ownerFilter = eq(schema.invitations.landlordId, actor.id);
+        const managedRows = await db
+          .select({uid: schema.users.uid})
+          .from(schema.users)
+          .where(eq(schema.users.managedByAdminId, actor.id));
+        const ownerIds = [actor.id, ...managedRows.map((r) => r.uid)];
+        ownerFilter = inArray(schema.invitations.landlordId, ownerIds);
       }
 
       const rows = await db.query.invitations.findMany({
@@ -330,7 +344,16 @@ export function registerAdminRoutes(bffRouter: Router) {
         }
       }
 
-      const targetIds = superAdmin ? selectedAccountIds : [actor.id];
+      let targetIds: string[];
+      if (superAdmin) {
+        targetIds = selectedAccountIds;
+      } else {
+        const managedRows = await db
+          .select({uid: schema.users.uid})
+          .from(schema.users)
+          .where(eq(schema.users.managedByAdminId, actor.id));
+        targetIds = [actor.id, ...managedRows.map((r) => r.uid)];
+      }
       const scoped = (landlordCol: any, platformCol: any, propertyIdCol?: any) => {
         const ownerCond =
           propertyIdCol && managedPropertyIds.length > 0
@@ -341,6 +364,7 @@ export function registerAdminRoutes(bffRouter: Router) {
 
       const invitedBySelected = or(
         inArray(schema.users.uid, targetIds),
+        inArray(schema.users.managedByAdminId, targetIds),
         sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${inArray(schema.invitations.landlordId, targetIds)})`,
       );
       const userWhere = and(platformWhere(schema.users.platformId), invitedBySelected);
@@ -539,7 +563,7 @@ export function registerAdminRoutes(bffRouter: Router) {
         res.status(404).json({error: 'Not found'});
         return;
       }
-      if (!canAdministerBuilding(actor, building)) {
+      if (!canAdministerBuilding(actor, building) && !(await isAgencyManagerOfLandlord(actor, building.landlordId))) {
         res.status(403).json({error: 'Forbidden'});
         return;
       }

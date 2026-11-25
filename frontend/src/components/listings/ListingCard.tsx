@@ -1,16 +1,18 @@
 import {useState, type KeyboardEvent, type MouseEvent} from 'react';
-import { Heart, Home, MapPin } from 'lucide-react';
+import { Bookmark, Heart, Home, MapPin } from 'lucide-react';
 import { resolveMediaUrl } from '../../lib/fileUrl';
 import { TYPE_LABELS, formatKes, type Listing } from './types';
 
 interface ListingCardProps {
   listing: Listing;
   liked: boolean;
+  saved: boolean;
   onToggleLike: (event: MouseEvent, id: string) => void;
+  onToggleSave: (event: MouseEvent, id: string) => void;
   onOpen: (listing: Listing) => void;
 }
 
-export default function ListingCard({ listing, liked, onToggleLike, onOpen }: ListingCardProps) {
+export default function ListingCard({ listing, liked, saved, onToggleLike, onToggleSave, onOpen }: ListingCardProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const open = () => onOpen(listing);
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -51,18 +53,40 @@ export default function ListingCard({ listing, liked, onToggleLike, onOpen }: Li
           {TYPE_LABELS[listing.type] ?? listing.type}
         </span>
 
-        <button
-          type="button"
-          aria-label={liked ? 'Remove from saved' : 'Save'}
-          aria-pressed={liked}
-          onClick={(event) => onToggleLike(event, listing.id)}
-          onKeyDown={(event) => event.stopPropagation()}
-          className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition sm:right-3 sm:top-3 ${
-            liked ? 'bg-white text-zinc-950' : 'bg-black/35 text-white hover:bg-white hover:text-zinc-950'
-          }`}
-        >
-          <Heart className="h-4 w-4" fill={liked ? 'currentColor' : 'none'} />
-        </button>
+        {/* Dual action buttons: Save for later (no account needed) + Like (account required) */}
+        <div className="absolute right-2 top-2 flex items-center gap-1.5 sm:right-3 sm:top-3">
+          <button
+            type="button"
+            title={saved ? 'Saved for later' : 'Save for later (no account needed)'}
+            aria-label={saved ? 'Remove from saved for later' : 'Save for later'}
+            aria-pressed={saved}
+            onClick={(event) => onToggleSave(event, listing.id)}
+            onKeyDown={(event) => event.stopPropagation()}
+            className={`flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition ${
+              saved
+                ? 'bg-white text-[#5B21B6]'
+                : 'bg-black/35 text-white hover:bg-white hover:text-zinc-950'
+            }`}
+          >
+            <Bookmark className="h-3.5 w-3.5" fill={saved ? 'currentColor' : 'none'} />
+          </button>
+
+          <button
+            type="button"
+            title={liked ? 'Liked' : 'Like (requires account)'}
+            aria-label={liked ? 'Unlike house' : 'Like house'}
+            aria-pressed={liked}
+            onClick={(event) => onToggleLike(event, listing.id)}
+            onKeyDown={(event) => event.stopPropagation()}
+            className={`flex h-8 w-8 items-center justify-center rounded-full shadow-sm backdrop-blur-md transition ${
+              liked
+                ? 'bg-white text-rose-600'
+                : 'bg-black/35 text-white hover:bg-white hover:text-rose-600'
+            }`}
+          >
+            <Heart className="h-3.5 w-3.5" fill={liked ? 'currentColor' : 'none'} />
+          </button>
+        </div>
       </div>
 
       <div className="px-0.5 pt-2.5 sm:pt-3">

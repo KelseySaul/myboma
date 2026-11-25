@@ -128,7 +128,7 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
       subtitle={heading.subtitle}
       action={
         tab === 'maintenance' && property && repairsEnabled ? (
-          <Button onClick={() => setRepairOpen(true)}>
+          <Button data-tour="tenant-report-repair" size="sm" onClick={() => setRepairOpen(true)}>
             <Plus /> Report a repair
           </Button>
         ) : undefined
@@ -196,21 +196,28 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 
 function Shell({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="db w-full min-w-0 pb-24 animate-in fade-in duration-300 sm:pb-10">
-      <header className="flex flex-col gap-3 border-b border-[#221844]/[0.08] bg-white px-4 py-5 dark:border-white/[0.08] dark:bg-[#181922] sm:flex-row sm:items-end sm:justify-between sm:px-6 md:px-8">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[#161426] dark:text-white sm:text-2xl md:text-3xl">{title}</h1>
-          <p className="mt-1 text-xs text-[#5D5A73] dark:text-slate-400 sm:text-sm">{subtitle}</p>
+    <div className="db w-full min-w-0 pb-20 animate-in fade-in duration-300 sm:pb-10">
+      <header className="flex flex-row items-center justify-between gap-3 border-b border-zinc-200/80 bg-white px-3.5 py-3 dark:border-white/[0.08] dark:bg-[#181922] sm:px-6 sm:py-5 md:px-8">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-bold tracking-tight text-zinc-950 dark:text-white sm:text-2xl">{title}</h1>
+          <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400 sm:text-sm">{subtitle}</p>
         </div>
-        {action}
+        {action && <div className="shrink-0">{action}</div>}
       </header>
-      <div className="mx-auto w-full max-w-6xl px-4 pt-5 sm:px-6 md:px-8">{children}</div>
+      <div className="mx-auto w-full max-w-6xl px-3 pt-3.5 sm:px-6 sm:pt-5 md:px-8">{children}</div>
     </div>
   );
 }
 
-function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6 ${className}`}>{children}</section>;
+function Card({ children, className = '', ...rest }: { children: React.ReactNode; className?: string; 'data-tour'?: string }) {
+  return (
+    <section
+      {...rest}
+      className={`rounded-xl border border-zinc-200/85 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900 sm:rounded-2xl sm:p-5 ${className}`}
+    >
+      {children}
+    </section>
+  );
 }
 
 function EmptyState({ icon: Icon, title, body, children }: { icon: typeof Home; title: string; body: string; children?: React.ReactNode }) {
@@ -395,10 +402,10 @@ function RentCard({
 
   if (state.kind === 'paid' || state.kind === 'verifying') {
     return (
-      <Card className="flex flex-col justify-center !border-transparent !bg-gradient-to-br from-[#1A0D36] via-[#4C1D95] to-[#7E22CE] text-white shadow-lg shadow-violet-900/20">
-        <CheckCircle2 className="h-7 w-7 text-fuchsia-300" />
-        <h2 className="mt-3 text-2xl font-bold">{state.kind === 'paid' ? 'You are all paid up' : 'Payment being checked'}</h2>
-        <p className="mt-1 text-sm text-violet-100/85">
+      <Card data-tour="tenant-rent-card" className="flex flex-col justify-center !border-zinc-800 !bg-[#14141A] text-white">
+        <CheckCircle2 className="h-6 w-6 text-violet-300" />
+        <h2 className="mt-2.5 text-xl font-bold sm:text-2xl">{state.kind === 'paid' ? 'You are all paid up' : 'Payment being checked'}</h2>
+        <p className="mt-1 text-xs leading-5 text-zinc-300 sm:text-sm">
           {state.kind === 'paid'
             ? 'Nothing is due right now. We will remind you before your next rent is due.'
             : `Your landlord is confirming your payment of ${formatMoney(state.payment.amount)}.`}
@@ -410,14 +417,16 @@ function RentCard({
   const overdue = state.kind === 'overdue';
   const amount = overdue ? state.total : state.payment.amount;
   return (
-    <Card className={overdue ? 'border-rose-300 dark:border-rose-900' : ''}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{overdue ? 'Overdue rent' : 'Next rent'}</p>
-          <p className="mt-2 text-4xl font-bold tabular-nums tracking-tight text-zinc-950 dark:text-white">{formatMoney(amount)}</p>
+    <Card data-tour="tenant-rent-card" className={overdue ? 'border-rose-300 dark:border-rose-900' : ''}>
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{overdue ? 'Overdue rent' : 'Next rent'}</p>
+          <p className="mt-1 whitespace-nowrap text-2xl font-bold tabular-nums tracking-tight text-zinc-950 dark:text-white sm:mt-2 sm:text-4xl">
+            {formatMoney(amount)}
+          </p>
         </div>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${
             overdue
               ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
               : state.days <= 3
@@ -425,12 +434,12 @@ function RentCard({
                 : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
           }`}
         >
-          {overdue ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+          {overdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
           {overdue ? `${state.days} day${state.days === 1 ? '' : 's'} late` : dueLabel(state.days)}
         </span>
       </div>
-      <p className="mt-2 flex items-center gap-1.5 text-sm text-zinc-500">
-        <CalendarDays className="h-4 w-4" />
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-zinc-500 sm:mt-2 sm:text-sm">
+        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
         {overdue
           ? `${state.count} unpaid invoice${state.count === 1 ? '' : 's'}, oldest due ${formatDate(state.payment.dueDate)}`
           : `Due ${formatDate(state.payment.dueDate)}`}
@@ -438,7 +447,7 @@ function RentCard({
       {overdue && state.count > 1 && (
         <p className="mt-1 text-xs text-zinc-500">Pay the oldest invoice first: {formatMoney(state.payment.amount)}.</p>
       )}
-      <div className="mt-6">
+      <div className="mt-4 sm:mt-5">
         <PayRent payment={state.payment} landlord={landlord} defaultPhone={phone} onSubmitted={onPaid} />
       </div>
     </Card>

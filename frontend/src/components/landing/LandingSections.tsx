@@ -1,15 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  AlertTriangle,
   ArrowRight,
-  Bell,
-  Building2,
   CheckCircle2,
-  Clock,
   Search,
   ShieldCheck,
   Smartphone,
-  Wrench,
 } from 'lucide-react';
 import Reveal from './Reveal';
 
@@ -49,7 +44,7 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
   };
 
   return (
-    <section className="relative isolate flex min-h-[620px] items-center overflow-hidden bg-zinc-950 pb-16 pt-28 sm:min-h-[86svh] sm:max-h-[880px] sm:py-24">
+    <section className="relative isolate flex min-h-[580px] items-center overflow-hidden bg-zinc-950 pb-14 pt-28 sm:min-h-[84svh] sm:max-h-[860px] sm:py-24">
       {/* Load only slide 0 eagerly for fast LCP; reveal subsequent slides after mount */}
       {HERO_IMAGES.map((src, index) => {
         if (index > 0 && !mounted) return null;
@@ -72,25 +67,20 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
       {/* Clean architectural charcoal photographic scrim */}
       <div
         aria-hidden
-        className="absolute inset-0 -z-10 bg-gradient-to-b from-black/70 via-black/45 to-black/80"
+        className="absolute inset-0 -z-10 bg-gradient-to-b from-black/68 via-black/45 to-black/78"
       />
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-3xl text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3.5 py-1.5 text-xs font-medium text-zinc-200 backdrop-blur-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-            Rentals &amp; property management across Kenya
-          </p>
-
-          <h1 className="mt-5 text-[2.35rem] font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-[4.15rem]">
+          <h1 className="text-[2.35rem] font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-[4.15rem]">
             Find your next home.
             <br />
             <span className="text-zinc-300">Manage rentals simply.</span>
           </h1>
 
           <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-200/90 sm:mt-6 sm:text-lg sm:leading-8">
-            Browse verified homes across Kenya, or manage your properties with{' '}
-            <span className="whitespace-nowrap font-semibold text-white">M-Pesa</span> rent tracking, caretaker reports, and one-tap reminders.
+            Browse verified spaces across Kenya, or run your rentals with{' '}
+            <span className="whitespace-nowrap font-semibold text-white">M-Pesa</span> rent tracking, caretaker reports, and automated reminders.
           </p>
 
           {/* Clean Hero Search Bar */}
@@ -111,7 +101,7 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
             </div>
             <button
               type="submit"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#5B21B6] to-[#6D28D9] px-6 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 active:scale-[0.98]"
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4C1D95] active:scale-[0.98]"
             >
               Search homes
             </button>
@@ -138,7 +128,7 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-zinc-300">
             <span className="inline-flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-zinc-200" />
-              Direct from landlords &amp; agents
+              Direct from landlords &amp; managers
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Smartphone className="h-3.5 w-3.5 text-zinc-200" />
@@ -146,7 +136,7 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
             </span>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5 text-zinc-200" />
-              Free forever for your 1st unit
+              Free forever for up to 2 units
             </span>
           </div>
         </div>
@@ -187,19 +177,19 @@ interface ListingsProps {
 
 export function ListingsSection({ activeType, onTypeChange, children }: ListingsProps) {
   return (
-    <section id="homes" className="scroll-mt-16 bg-white px-2 py-14 sm:px-4 sm:py-24">
+    <section id="homes" className="scroll-mt-16 bg-white px-2 py-12 sm:px-4 sm:py-20">
       <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-7 px-2 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-6 px-2 lg:flex-row lg:items-end lg:justify-between">
           <Reveal className="max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">Available now</p>
-            <h2 className="mt-2.5 text-2xl font-extrabold tracking-tight text-zinc-950 sm:text-5xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Available now</p>
+            <h2 className="mt-2 text-2xl font-extrabold tracking-tight text-zinc-950 sm:text-4xl">
               Spaces listed directly on MyBoma
             </h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-600 sm:mt-4 sm:text-base sm:leading-7">
-              Apartments, offices and short stays published by verified landlords and property managers. Tap any listing to inspect photos and enquire directly.
+            <p className="mt-2.5 text-sm leading-6 text-zinc-600 sm:text-base sm:leading-7">
+              Apartments, offices and short stays published by landlords and property managers. Save houses for later anytime, or sign in to like and track them.
             </p>
           </Reveal>
-          <Reveal delay={120} className="grid grid-cols-3 gap-2.5 sm:gap-3 lg:w-[460px]">
+          <Reveal delay={100} className="grid grid-cols-3 gap-2.5 sm:gap-3 lg:w-[440px]">
             {TYPE_TILES.map((tile) => {
               const selected = activeType === tile.id;
               return (
@@ -209,7 +199,7 @@ export function ListingsSection({ activeType, onTypeChange, children }: Listings
                   onClick={() => onTypeChange(selected ? 'all' : tile.id)}
                   aria-pressed={selected}
                   className={`group relative aspect-[4/5] overflow-hidden rounded-2xl text-left ring-offset-2 transition ${
-                    selected ? 'ring-2 ring-violet-700 shadow-md' : 'hover:ring-2 hover:ring-zinc-300'
+                    selected ? 'ring-2 ring-[#5B21B6] shadow-md' : 'hover:ring-2 hover:ring-zinc-300'
                   }`}
                 >
                   <img
@@ -231,130 +221,82 @@ export function ListingsSection({ activeType, onTypeChange, children }: Listings
             })}
           </Reveal>
         </div>
-        <Reveal delay={80} className="mt-8 sm:mt-10">{children}</Reveal>
+        <Reveal delay={60} className="mt-7 sm:mt-9">{children}</Reveal>
       </div>
     </section>
   );
 }
 
-/* For landlords ------------------------------------------------------------ */
+/* Editorial Workspace Overview (Quiet, Architectural, Non-AI-Slop) --------- */
 
 export function LandlordFeatures({ onStartLandlord }: { onStartLandlord: () => void }) {
-  const features = [
-    { icon: Building2, title: 'Unit-by-unit rent board', body: 'See which units have paid, who is overdue, and whose rent is due next at a single glance.' },
-    { icon: Smartphone, title: 'M-Pesa & card reconciliation', body: 'Tenants pay from their phone. Invoices update and receipts issue automatically.' },
-    { icon: Bell, title: 'Push & email rent reminders', body: 'Send reminders individually or to every unpaid unit by push notification, email, and in-app alert.' },
-    { icon: Wrench, title: 'Caretakers & repair tracking', body: 'Add caretakers to resolve tenant house issues and send field reports with photos straight to you.' },
-  ];
-
-  const previewUnits = [
-    { unit: 'A1 · Kilimani Heights', tenant: 'Grace Mwangi', amount: 'KES 48,000', status: 'paid' as const, meta: 'Paid via M-Pesa · 2nd' },
-    { unit: 'B4 · Kilimani Heights', tenant: 'David Ochieng', amount: 'KES 52,000', status: 'due' as const, meta: 'Due in 2 days' },
-    { unit: 'C2 · Kilimani Heights', tenant: 'Amina Hassan', amount: 'KES 45,000', status: 'overdue' as const, meta: '4 days overdue · Remind' },
+  const roles = [
+    {
+      number: '01',
+      title: 'Landlords',
+      body: 'Start free with up to 2 units (1 building). Log rent, track arrears, issue receipts, and send reminders without spreadsheets.',
+    },
+    {
+      number: '02',
+      title: 'Property managers & agencies',
+      body: 'Invite landlords under your agency, configure direct or agency-managed rent routing, and oversee multi-building portfolios from one account.',
+    },
+    {
+      number: '03',
+      title: 'Caretakers & tenants',
+      body: 'Caretakers respond to repair tickets and send on-site photo reports. Tenants pay rent via M-Pesa or card and download receipts anytime.',
+    },
   ];
 
   return (
-    <section id="landlords" className="scroll-mt-16 border-y border-zinc-200/70 bg-[#F7F7F9] px-4 py-14 sm:px-6 sm:py-24">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-2 lg:gap-16">
-        {/* Crisp Architectural Rent Board Preview Card */}
-        <Reveal className="order-2 lg:order-1">
-          <div className="relative overflow-hidden rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500">Live Rent Board</p>
-                <h3 className="mt-0.5 text-lg font-bold text-zinc-950">This month&apos;s collection</h3>
-              </div>
-              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-800 ring-1 ring-violet-700/15">
-                82% collected
-              </span>
-            </div>
-
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
-              <div className="h-full w-[82%] rounded-full bg-[#5B21B6]" />
-            </div>
-
-            <div className="mt-5 space-y-2.5">
-              {previewUnits.map((row) => (
-                <div
-                  key={row.unit}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 bg-[#FAFAFB] p-3.5"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
-                        row.status === 'paid'
-                          ? 'bg-violet-50 text-violet-700'
-                          : row.status === 'due'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-rose-50 text-rose-600'
-                      }`}
-                    >
-                      {row.status === 'paid' ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : row.status === 'due' ? (
-                        <Clock className="h-4 w-4" />
-                      ) : (
-                        <AlertTriangle className="h-4 w-4" />
-                      )}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-zinc-950">{row.unit}</p>
-                      <p className="truncate text-xs text-zinc-500">
-                        {row.tenant} · {row.meta}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-bold tabular-nums text-zinc-950">{row.amount}</p>
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        row.status === 'paid'
-                          ? 'bg-violet-50 text-violet-700'
-                          : row.status === 'due'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-rose-50 text-rose-700'
-                      }`}
-                    >
-                      {row.status === 'paid' ? 'Paid' : row.status === 'due' ? 'Due soon' : 'Overdue'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+    <section id="landlords" className="scroll-mt-16 border-y border-zinc-200/80 bg-[#F8F8FA] px-4 py-14 sm:px-6 sm:py-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-12 lg:gap-14">
+        <Reveal className="lg:col-span-5">
+          <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-zinc-100">
+            <img
+              src="/hero/hero-3.webp"
+              alt="Modern residential apartment building"
+              loading="lazy"
+              decoding="async"
+              className="aspect-[4/3] w-full object-cover lg:aspect-[4/5]"
+            />
           </div>
         </Reveal>
 
-        <Reveal delay={100} className="order-1 lg:order-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-700">
-            For landlords &amp; property managers
+        <Reveal delay={80} className="lg:col-span-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            Built for how rentals actually run
           </p>
           <h2 className="mt-2.5 text-2xl font-extrabold tracking-tight text-zinc-950 sm:text-4xl">
-            Know every unit&apos;s rent status in seconds
+            One quiet workspace for landlords, managers, caretakers, and tenants.
           </h2>
-          <p className="mt-3 text-sm leading-6 text-zinc-600 sm:mt-4 sm:text-base sm:leading-7">
-            Leave scattered M-Pesa messages and spreadsheets behind. Start free with your first unit and scale cleanly to multi-building portfolios.
-          </p>
-          <div className="mt-7 grid gap-5 sm:grid-cols-2 sm:gap-6">
-            {features.map(({ icon: Icon, title, body }) => (
-              <div key={title} className="flex gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-900 shadow-2xs">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-zinc-950">{title}</h3>
-                  <p className="mt-1 text-xs leading-5 text-zinc-600 sm:text-sm sm:leading-6">{body}</p>
-                </div>
+
+          <div className="mt-8 divide-y divide-zinc-200/80 border-y border-zinc-200/80">
+            {roles.map((item) => (
+              <div key={item.number} className="grid gap-2 py-5 sm:grid-cols-[44px_180px_1fr] sm:items-baseline sm:gap-4">
+                <span className="font-mono text-xs font-semibold text-zinc-400">{item.number}</span>
+                <h3 className="text-sm font-bold text-zinc-950">{item.title}</h3>
+                <p className="text-sm leading-6 text-zinc-600">{item.body}</p>
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={onStartLandlord}
-            className="mt-8 inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-[#5B21B6] to-[#6D28D9] px-6 text-sm font-semibold text-white shadow-sm transition hover:brightness-110 active:scale-[0.98]"
-          >
-            List your property free
-            <ArrowRight className="h-4 w-4" />
-          </button>
+
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onStartLandlord}
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#5B21B6] px-5 text-sm font-semibold text-white transition hover:bg-[#4C1D95] active:scale-[0.98]"
+            >
+              Create a free account
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <a
+              href="/about"
+              className="inline-flex h-11 items-center rounded-xl border border-zinc-200 bg-white px-5 text-sm font-semibold text-zinc-800 transition hover:bg-zinc-50"
+            >
+              View plans &amp; pricing
+            </a>
+          </div>
         </Reveal>
       </div>
     </section>
@@ -365,16 +307,16 @@ export function LandlordFeatures({ onStartLandlord }: { onStartLandlord: () => v
 
 export function GetStarted({ onStartLandlord, onSignIn }: { onStartLandlord: () => void; onSignIn: () => void }) {
   const steps = [
-    { title: 'Add your property', body: 'Upload or snap photos from your camera with one-tap description templates. Free for your first unit.' },
-    { title: 'Invite tenants & caretakers', body: 'Send secure setup links so tenants pay online and caretakers handle repairs and field reports.' },
-    { title: 'Track rent & get paid', body: 'Monitor paid, due and overdue units at a glance with push reminders and M-Pesa reconciliation.' },
+    { title: 'Add your property', body: 'Upload or snap photos from your camera with quick description presets. Free for up to 2 units (1 building).' },
+    { title: 'Invite landlords, tenants & caretakers', body: 'Send secure setup links so tenants pay online, caretakers track repairs, and managed landlords stay in sync.' },
+    { title: 'Collect rent & issue receipts', body: 'Track paid, due, and overdue invoices with push reminders, email notices, and M-Pesa reconciliation.' },
   ];
   return (
     <section className="bg-white px-4 py-14 sm:px-6 sm:py-20">
       <Reveal className="mx-auto max-w-7xl rounded-3xl border border-zinc-800 bg-[#14141A] px-5 py-8 text-white shadow-xl sm:px-10 sm:py-12">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Quick onboarding</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">Getting started</p>
             <h2 className="mt-2 max-w-md text-2xl font-extrabold tracking-tight sm:text-4xl">
               Go live with your rentals in 3 steps
             </h2>
@@ -399,8 +341,8 @@ export function GetStarted({ onStartLandlord, onSignIn }: { onStartLandlord: () 
         </div>
         <ol className="mt-8 grid gap-3 sm:grid-cols-3 sm:gap-4">
           {steps.map((step, index) => (
-            <li key={step.title} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-6">
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-xs font-bold text-violet-300">
+            <li key={step.title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-6">
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white/10 text-xs font-bold text-zinc-200">
                 0{index + 1}
               </span>
               <h3 className="mt-3 text-base font-bold text-white">{step.title}</h3>

@@ -25,6 +25,17 @@ export type Actor = {
 export const isCaretakerOfLandlord = (actor: Actor, landlordId: string) =>
   actor.role === 'caretaker' && Boolean(actor.managedByAdminId) && actor.managedByAdminId === landlordId;
 
+/** True when a Property Manager / Agency admin manages the given landlord account. */
+export async function isAgencyManagerOfLandlord(actor: Actor, landlordId: string): Promise<boolean> {
+  if (!landlordId || landlordId === actor.id) return false;
+  if (actor.role !== 'admin' && !actor.isAdmin && !actor.isSuperAdmin) return false;
+  const target = await db.query.users.findFirst({
+    where: and(eq(schema.users.uid, landlordId), eq(schema.users.managedByAdminId, actor.id)),
+    columns: { uid: true },
+  });
+  return Boolean(target);
+}
+
 const email = (value: string) => value.trim().toLowerCase();
 
 /**
@@ -84,6 +95,7 @@ export async function canViewUser(actor: Actor, target: UserRow): Promise<boolea
   if (target.uid === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, target.platformId)) return true;
+  if (target.managedByAdminId && target.managedByAdminId === actor.id) return true;
   if (email(target.email) === email(actor.email)) return true;
 
   const ownedProperty = await db
@@ -129,6 +141,7 @@ export async function canManageBuilding(
   if (building.landlordId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, building.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, building.landlordId)) return true;
   return isBuildingManager(actor, building.id);
 }
 
@@ -144,6 +157,7 @@ export async function canViewProperty(actor: Actor, property: PropertyRow): Prom
   if (email(property.tenantId ?? '') === email(actor.email)) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, property.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, property.landlordId)) return true;
   return isPropertyManager(actor, property.id);
 }
 
@@ -154,6 +168,7 @@ export async function canManageProperty(
   if (property.landlordId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, property.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, property.landlordId)) return true;
   return isPropertyManager(actor, property.id);
 }
 
@@ -217,6 +232,7 @@ export async function canUpdateMaintenanceRequest(
   if (isCaretakerOfLandlord(actor, row.landlordId)) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, row.landlordId)) return true;
   return isPropertyManager(actor, row.propertyId);
 }
 
@@ -252,6 +268,7 @@ export async function canViewRentPayment(actor: Actor, row: RentPaymentRow): Pro
   if (email(row.tenantId) === email(actor.email) || row.tenantId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, row.landlordId)) return true;
   return isPropertyManager(actor, row.propertyId);
 }
 
@@ -262,6 +279,7 @@ export async function canManageRentPayment(
   if (row.landlordId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, row.landlordId)) return true;
   return isPropertyManager(actor, row.propertyId);
 }
 
@@ -294,6 +312,7 @@ export async function canManageExpense(
   if (row.landlordId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, row.landlordId)) return true;
   return row.propertyId !== null && (await isPropertyManager(actor, row.propertyId));
 }
 
@@ -327,9 +346,14 @@ export async function canSendNotification(
     .select({ id: schema.properties.id })
     .from(schema.properties)
     .leftJoin(schema.propertyManagers, eq(schema.propertyManagers.propertyId, schema.properties.id))
+    .leftJoin(schema.users, eq(schema.users.uid, schema.properties.landlordId))
     .where(
       and(
-        or(eq(schema.properties.landlordId, actor.id), eq(schema.propertyManagers.userId, actor.id)),
+        or(
+          eq(schema.properties.landlordId, actor.id),
+          eq(schema.propertyManagers.userId, actor.id),
+          eq(schema.users.managedByAdminId, actor.id),
+        ),
         sql`lower(coalesce(${schema.properties.tenantId}, '')) = ${recipient}`,
       ),
     )
@@ -340,9 +364,14 @@ export async function canSendNotification(
     .select({ id: schema.rentPayments.id })
     .from(schema.rentPayments)
     .leftJoin(schema.propertyManagers, eq(schema.propertyManagers.propertyId, schema.rentPayments.propertyId))
+    .leftJoin(schema.users, eq(schema.users.uid, schema.rentPayments.landlordId))
     .where(
       and(
-        or(eq(schema.rentPayments.landlordId, actor.id), eq(schema.propertyManagers.userId, actor.id)),
+        or(
+          eq(schema.rentPayments.landlordId, actor.id),
+          eq(schema.propertyManagers.userId, actor.id),
+          eq(schema.users.managedByAdminId, actor.id),
+        ),
         sql`lower(${schema.rentPayments.tenantId}) = ${recipient}`,
       ),
     )
@@ -417,6 +446,7 @@ export async function canAdministerProperty(
   if (property.landlordId === actor.id) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, property.platformId)) return true;
+  if (await isAgencyManagerOfLandlord(actor, property.landlordId)) return true;
   return isPropertyCoOwner(actor, property.id);
 }
 
