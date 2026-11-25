@@ -9,6 +9,7 @@ import LandlordSubscriptionPay from './LandlordSubscriptionPay';
 import {
   addPropertyManager,
   assignTenant,
+  cancelLandlordInvitation,
   createBuilding,
   createExpense,
   createProperties,
@@ -20,6 +21,7 @@ import {
   markNotificationRead,
   markRentPaymentManual,
   provisionUser,
+  resendLandlordInvitation,
   sendRentReminder,
   syncRentInvoices,
   unassignTenant,
@@ -33,9 +35,11 @@ import type { UserProfile } from '../App';
 import OverviewTab from './landlord/OverviewTab';
 import PropertiesTab from './landlord/PropertiesTab';
 import TenantsTab from './landlord/TenantsTab';
+import PendingInvitesTab from './landlord/PendingInvitesTab';
 import PaymentsTab from './landlord/PaymentsTab';
 import MaintenanceTab from './landlord/MaintenanceTab';
 import NotificationsTab from './landlord/NotificationsTab';
+import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
 import PropertyFormDialog, { type PropertyFormValues } from './landlord/PropertyFormDialog';
 import {
   AssignDialog,
@@ -66,10 +70,42 @@ interface LandlordDashboardProps {
   profile: UserProfile;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  superAdminAccountIds?: string[];
+  onChangeSuperAdminAccountIds?: (ids: string[]) => void;
 }
 
-export default function LandlordDashboard({ profile, activeTab, setActiveTab }: LandlordDashboardProps) {
+const SUPER_ADMIN_TAB_CONTEXT: Record<LandlordTab, string> = {
+  dashboard: 'Overview',
+  properties: 'Properties',
+  tenants: 'Tenants',
+  pending: 'Pending invites',
+  finances: 'Rent & payments',
+  maintenance: 'Maintenance',
+  automations: 'Notifications',
+};
+
+const SUPER_ADMIN_TAB_GATE_LABEL: Record<LandlordTab, string> = {
+  dashboard: 'the dashboard overview',
+  properties: 'properties',
+  tenants: 'tenants',
+  pending: 'pending invites',
+  finances: 'rent & payments',
+  maintenance: 'maintenance requests',
+  automations: 'notifications',
+};
+
+export default function LandlordDashboard({
+  profile,
+  activeTab,
+  setActiveTab,
+  superAdminAccountIds,
+  onChangeSuperAdminAccountIds,
+}: LandlordDashboardProps) {
   const queryClient = useQueryClient();
+  const isSuperAdminScoped = Boolean(profile.isSuperAdmin && onChangeSuperAdminAccountIds);
+  const selectedAccountIds = superAdminAccountIds ?? [];
+  const needsAccountSelection = isSuperAdminScoped && selectedAccountIds.length === 0;
+  const shouldSyncOwnInvoices = !isSuperAdminScoped || selectedAccountIds.includes(profile.uid);
   const features = useMemo(() => getSubscriptionFeatures(profile), [profile.subscriptionPlan, profile.role]);
   const isPlatformAdmin = Boolean(profile.isAdmin || profile.isSuperAdmin);
   // Free plan: a single house unit, no buildings (also enforced by the server).
@@ -81,6 +117,10 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   // dashboard GET never writes, so the first fetch waits for this.
   const [syncedUid, setSyncedUid] = useState<string | null>(null);
   useEffect(() => {
+    if (!shouldSyncOwnInvoices) {
+      setSyncedUid(profile.uid);
+      return;
+    }
     let active = true;
     syncRentInvoices()
       .catch(() => undefined)
@@ -88,9 +128,12 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     return () => {
       active = false;
     };
-  }, [profile.uid]);
+  }, [profile.uid, shouldSyncOwnInvoices]);
 
-  const { data, error, isPending } = useLandlordDashboard(profile.uid, { enabled: syncedUid === profile.uid });
+  const { data, error, isPending } = useLandlordDashboard(profile.uid, {
+    enabled: !needsAccountSelection && (!shouldSyncOwnInvoices || syncedUid === profile.uid),
+    accountIds: isSuperAdminScoped ? selectedAccountIds : undefined,
+  });
   useEffect(() => {
     if (error) toast.error('Could not load your dashboard. Check your connection and try again.');
   }, [error]);
@@ -104,11 +147,18 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
   const expenses = (raw?.expenses ?? []) as Expense[];
   const invitations = (raw?.invitations ?? []) as Invitation[];
   const notifications = (raw?.notifications ?? []) as Notification[];
-  const leases = raw?.leases ?? [];
+  const leases = (raw?.leases ?? []) as Lease[];
   const registered = useMemo(() => new Set((raw?.registeredEmails ?? []).map((e) => e.toLowerCase())), [raw?.registeredEmails]);
-  const loading = isPending || syncedUid !== profile.uid;
+  const pendingInvitations = useMemo(
+    () => invitations.filter((inv) => !registered.has(inv.email.toLowerCase())),
+    [invitations, registered],
+  );
+  const loading = !needsAccountSelection && (isPending || (shouldSyncOwnInvoices && syncedUid !== profile.uid));
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.landlordDashboard(profile.uid) });
+  const refresh = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.landlordDashboard(profile.uid, isSuperAdminScoped ? selectedAccountIds : undefined),
+    });
 
   /* Derived lookups ---------------------------------------------------------- */
 
@@ -172,7 +222,7 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     bankAccountName: profile.bankAccountName ?? '',
   }));
 
-  const tab: LandlordTab = (['properties', 'tenants', 'finances', 'maintenance', 'automations'] as const).includes(activeTab as any)
+  const tab: LandlordTab = (['properties', 'tenants', 'pending', 'finances', 'maintenance', 'automations'] as const).includes(activeTab as any)
     ? (activeTab as LandlordTab)
     : 'dashboard';
 
@@ -244,13 +294,14 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     });
 
   const inviteTenant = async (values: { email: string; name: string; phone: string; propertyId: string }) => {
+    const targetLandlordId = isSuperAdminScoped && selectedAccountIds.length === 1 ? selectedAccountIds[0] : profile.uid;
     const result = await provisionUser({
       email: values.email,
       displayName: values.name,
       phone: values.phone || undefined,
       role: 'tenant',
       platformId: profile.platformId,
-      landlordId: profile.uid,
+      landlordId: targetLandlordId,
     });
     logAudit('TENANT_INVITE', 'user', values.email);
     if (values.propertyId !== 'none') await assignTenant(values.propertyId, values.email);
@@ -258,22 +309,35 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
     toast.success(result.existing ? `${values.email} already has an account and was added to your tenants` : `Invite sent to ${values.email}`);
   };
 
-  const resendInvite = (tenant: Tenant) =>
-    run(`resend-${tenant.email}`, async () => {
+  const resendInvite = (target: { email: string }) => {
+    const emailLower = target.email.toLowerCase();
+    return run(`resend-${emailLower}`, async () => {
       try {
-        await provisionUser({
-          email: tenant.email,
-          displayName: tenant.name || tenant.email,
-          phone: tenant.phone || undefined,
-          role: 'tenant',
-          platformId: profile.platformId,
-          landlordId: profile.uid,
-        });
-        toast.success(`New invite sent to ${tenant.email}. The old link no longer works.`);
+        await resendLandlordInvitation(emailLower);
+        await refresh();
+        toast.success(`New invite sent to ${emailLower}. The old link no longer works.`);
       } catch (err: any) {
         toast.error(err.message || 'Could not resend the invite');
       }
     });
+  };
+
+  const cancelInvite = (inv: Invitation) => {
+    const emailLower = inv.email.toLowerCase();
+    setConfirm({
+      title: 'Cancel pending invite',
+      body: `Cancel the invitation for ${inv.displayName || inv.email}? Their setup link will stop working and any pre-assigned unit will become available again.`,
+      confirmLabel: 'Cancel invite',
+      danger: true,
+      action: async () => {
+        await run(`cancel-invite-${emailLower}`, async () => {
+          await cancelLandlordInvitation(emailLower);
+          await refresh();
+          toast.success(`Invitation for ${inv.email} cancelled`);
+        });
+      },
+    });
+  };
 
   const assignToUnit = async (propertyId: string, email: string) => {
     await assignTenant(propertyId, email);
@@ -432,95 +496,126 @@ export default function LandlordDashboard({ profile, activeTab, setActiveTab }: 
 
   return (
     <div className="w-full min-w-0 px-4 pb-24 pt-6 sm:px-6 sm:pb-10 lg:px-8 animate-in fade-in duration-300">
-      {tab === 'dashboard' && (
-        <OverviewTab
-          firstName={firstName}
-          loading={loading}
-          properties={properties}
-          payments={payments}
-          requests={requests}
-          tenantName={tenantName}
-          propertyName={propertyName}
-          maintenanceEnabled={features.maintenanceHub}
-          planLabel={features.label}
-          unitLimit={features.maxListings}
-          onFreePlan={onFreePlan}
-          isBusy={isBusy}
-          onOpenTab={(next) => setActiveTab(next)}
-          onRemind={remind}
-          onRecordCash={recordCash}
-          onAddProperty={openAddProperty}
-          onInviteTenant={() => setInviteOpen(true)}
-          onUpgrade={() => setUpgradeOpen(true)}
+      {isSuperAdminScoped && (
+        <SuperAdminAccountFilterBar
+          profile={profile}
+          selectedIds={selectedAccountIds}
+          onChange={onChangeSuperAdminAccountIds!}
+          contextLabel={SUPER_ADMIN_TAB_CONTEXT[tab]}
         />
       )}
 
-      {tab === 'properties' && (
-        <PropertiesTab
-          properties={properties}
-          buildings={buildings}
-          allowBuildings={allowBuildings}
-          onFreePlan={onFreePlan}
-          tenantName={tenantName}
-          onAdd={openAddProperty}
-          onAddBulk={() => setBulkOpen(true)}
-          onEdit={(property) => setPropertyDialog({ open: true, property })}
-          onDelete={removeProperty}
-          onAssign={openAssignForProperty}
-          onShareAccess={setManagerFor}
-          onAddBuilding={() => setBuildingDialog({ open: true, building: null })}
-          onEditBuilding={(building) => setBuildingDialog({ open: true, building })}
-          onDeleteBuilding={removeBuilding}
-          onUpgrade={() => setUpgradeOpen(true)}
+      {needsAccountSelection ? (
+        <SuperAdminAccountGate
+          profile={profile}
+          pageLabel={SUPER_ADMIN_TAB_GATE_LABEL[tab]}
+          onSelectIds={onChangeSuperAdminAccountIds!}
         />
-      )}
+      ) : (
+        <>
+          {tab === 'dashboard' && (
+            <OverviewTab
+              firstName={firstName}
+              loading={loading}
+              properties={properties}
+              payments={payments}
+              requests={requests}
+              pendingInvitesCount={pendingInvitations.length}
+              tenantName={tenantName}
+              propertyName={propertyName}
+              maintenanceEnabled={features.maintenanceHub}
+              planLabel={features.label}
+              unitLimit={features.maxListings}
+              onFreePlan={onFreePlan}
+              isBusy={isBusy}
+              onOpenTab={(next) => setActiveTab(next)}
+              onRemind={remind}
+              onRecordCash={recordCash}
+              onAddProperty={openAddProperty}
+              onInviteTenant={() => setInviteOpen(true)}
+              onUpgrade={() => setUpgradeOpen(true)}
+            />
+          )}
 
-      {tab === 'tenants' && (
-        <TenantsTab
-          tenants={tenants}
-          isBusy={isBusy}
-          onInvite={() => setInviteOpen(true)}
-          onResend={resendInvite}
-          onAssign={openAssignForTenant}
-          onUnassign={tenantMoveOut}
-          onRemove={removeTenant}
-        />
-      )}
+          {tab === 'properties' && (
+            <PropertiesTab
+              properties={properties}
+              buildings={buildings}
+              allowBuildings={allowBuildings}
+              onFreePlan={onFreePlan}
+              tenantName={tenantName}
+              onAdd={openAddProperty}
+              onAddBulk={() => setBulkOpen(true)}
+              onEdit={(property) => setPropertyDialog({ open: true, property })}
+              onDelete={removeProperty}
+              onAssign={openAssignForProperty}
+              onShareAccess={setManagerFor}
+              onAddBuilding={() => setBuildingDialog({ open: true, building: null })}
+              onEditBuilding={(building) => setBuildingDialog({ open: true, building })}
+              onDeleteBuilding={removeBuilding}
+              onUpgrade={() => setUpgradeOpen(true)}
+            />
+          )}
 
-      {tab === 'finances' && (
-        <PaymentsTab
-          payments={payments}
-          expenses={expenses}
-          bookings={bookings}
-          tenantName={tenantName}
-          propertyName={propertyName}
-          isBusy={isBusy}
-          onRemind={remind}
-          onRecordCash={recordCash}
-          onRecordExpense={() => setExpenseOpen(true)}
-        />
-      )}
+          {tab === 'tenants' && (
+            <TenantsTab
+              tenants={tenants}
+              isBusy={isBusy}
+              onInvite={() => setInviteOpen(true)}
+              onResend={resendInvite}
+              onAssign={openAssignForTenant}
+              onUnassign={tenantMoveOut}
+              onRemove={removeTenant}
+            />
+          )}
 
-      {tab === 'maintenance' && (
-        <MaintenanceTab
-          enabled={features.maintenanceHub}
-          requests={requests}
-          propertyName={propertyName}
-          tenantName={tenantName}
-          isBusy={isBusy}
-          onStatusChange={setRequestStatus}
-          onUpgrade={() => setUpgradeOpen(true)}
-        />
-      )}
+          {tab === 'pending' && (
+            <PendingInvitesTab
+              invitations={pendingInvitations}
+              properties={properties}
+              isBusy={isBusy}
+              onInvite={() => setInviteOpen(true)}
+              onResend={resendInvite}
+              onCancel={cancelInvite}
+            />
+          )}
 
-      {tab === 'automations' && (
-        <NotificationsTab
-          notifications={notifications}
-          isBusy={isBusy}
-          onMarkRead={markRead}
-          onMarkAllRead={markAllRead}
-          onDelete={removeNotification}
-        />
+          {tab === 'finances' && (
+            <PaymentsTab
+              payments={payments}
+              expenses={expenses}
+              bookings={bookings}
+              tenantName={tenantName}
+              propertyName={propertyName}
+              isBusy={isBusy}
+              onRemind={remind}
+              onRecordCash={recordCash}
+              onRecordExpense={() => setExpenseOpen(true)}
+            />
+          )}
+
+          {tab === 'maintenance' && (
+            <MaintenanceTab
+              enabled={features.maintenanceHub}
+              requests={requests}
+              propertyName={propertyName}
+              tenantName={tenantName}
+              isBusy={isBusy}
+              onStatusChange={setRequestStatus}
+              onUpgrade={() => setUpgradeOpen(true)}
+            />
+          )}
+
+          {tab === 'automations' && (
+            <NotificationsTab
+              notifications={notifications}
+              isBusy={isBusy}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+              onDelete={removeNotification}
+            />
+          )}
+        </>
       )}
 
       <PropertyFormDialog

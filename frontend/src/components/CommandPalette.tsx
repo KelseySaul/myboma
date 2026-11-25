@@ -107,6 +107,7 @@ export default function CommandPalette({ profile, currentRole, onNavigate, onHel
         { id: 'finances', label: 'Rent & payments', section: 'Navigation', keywords: 'invoices mpesa money billing', icon: Wallet, action: go('finances') },
         { id: 'maintenance', label: 'Maintenance', section: 'Navigation', keywords: 'repairs issues', icon: Wrench, action: go('maintenance') },
         { id: 'tenants', label: 'Tenants', section: 'Navigation', keywords: 'renters leases', icon: Users, action: go('tenants') },
+        { id: 'pending', label: 'Pending invites', section: 'Navigation', keywords: 'invitations email onboarding resend', icon: Mail, action: go('pending') },
         { id: 'automations', label: 'Notifications', section: 'Navigation', keywords: 'alerts reminders', icon: Bell, action: go('automations') },
       );
     } else if (currentRole === 'tenant') {

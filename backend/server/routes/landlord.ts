@@ -1,13 +1,15 @@
-import {and, desc, eq, inArray, ne, or, sql} from 'drizzle-orm';
+import {and, desc, eq, inArray, like, ne, or, sql} from 'drizzle-orm';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
+import {withSystemAccess} from '../../db/requestContext.ts';
 import {
   canAdministerBuilding,
   canAdministerProperty,
   canManageProperty,
   canUpdateMaintenanceRequest,
   isAdminInPlatform,
+  isSuperAdmin,
 } from '../../db/authz.ts';
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
 import {ensureRentInvoiceForProperty, syncAutomaticRentInvoices} from '../rentInvoiceSync.ts';
@@ -18,6 +20,7 @@ import {
   asyncHandler,
   getValidatedBody,
   hasActiveSubscription,
+  inviteSendLimiter,
   isAgencyAdmin,
   recordAudit,
   requireAuth,
@@ -26,21 +29,22 @@ import {
   FREE_PLAN_BUILDING_ERROR,
   validateBody,
 } from '../http/middleware.ts';
-import {emailSchema} from '../http/schemas.ts';
+import {emailSchema, parseAccountIdsParam} from '../http/schemas.ts';
 import {invalidatePublicListings} from '../http/cache.ts';
+import {createAndSendInvite} from '../inviteService.ts';
+import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload, type InvitePayload} from '../invitePolicy.ts';
 
 /**
- * Resolves the property/building ids a landlord's account can reach: rows they own
- * directly, plus rows for properties they've been added as a manager on. The old
- * client fetched these tables unfiltered and relied on Postgres RLS to narrow the
- * result set to exactly this — see db/authz.ts for the ported policy logic.
+ * Resolves the property/building ids one or more landlord accounts can reach: rows they
+ * own directly, plus rows for properties they've been added as a manager on.
  */
-async function landlordReach(actorId: string) {
+async function landlordReachMany(actorIds: string[]) {
+  if (actorIds.length === 0) return {managedPropertyIds: [] as string[], managedBuildingIds: [] as string[]};
   const managed = await db
     .select({propertyId: schema.propertyManagers.propertyId})
     .from(schema.propertyManagers)
-    .where(eq(schema.propertyManagers.userId, actorId));
-  const managedPropertyIds = managed.map((m) => m.propertyId);
+    .where(inArray(schema.propertyManagers.userId, actorIds));
+  const managedPropertyIds = [...new Set(managed.map((m) => m.propertyId))];
 
   let managedBuildingIds: string[] = [];
   if (managedPropertyIds.length > 0) {
@@ -48,11 +52,13 @@ async function landlordReach(actorId: string) {
       .select({buildingId: schema.properties.buildingId})
       .from(schema.properties)
       .where(inArray(schema.properties.id, managedPropertyIds));
-    managedBuildingIds = rows.map((r) => r.buildingId).filter((id): id is string => Boolean(id));
+    managedBuildingIds = [...new Set(rows.map((r) => r.buildingId).filter((id): id is string => Boolean(id)))];
   }
 
   return {managedPropertyIds, managedBuildingIds};
 }
+
+const landlordReach = (actorId: string) => landlordReachMany([actorId]);
 
 const buildingFields = {
   name: z.string().min(1).max(160),
@@ -173,26 +179,87 @@ export function registerLandlordRoutes(bffRouter: Router) {
     requireAuth,
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
-      const {managedPropertyIds, managedBuildingIds} = await landlordReach(actor.id);
-      const propertyReach = or(eq(schema.properties.landlordId, actor.id), inArray(schema.properties.id, managedPropertyIds));
+      const superAdmin = isSuperAdmin(actor);
+      const hasAccountFilterParam = req.query.accountIds !== undefined;
+
+      // Super admins may pass `?accountIds=uuid1,uuid2` to inspect one, multiple, or their
+      // own accounts across Maintenance, Rent & Payments, Tenants, and Notifications.
+      // Passing an empty filter returns empty collections instead of leaking unscoped data.
+      let targetIds = [actor.id];
+      let targetEmails = [actor.email.toLowerCase()];
+      let superMultiScoped = false;
+
+      if (superAdmin && hasAccountFilterParam) {
+        superMultiScoped = true;
+        targetIds = parseAccountIdsParam(req.query.accountIds);
+        if (targetIds.length === 0) {
+          res.json({
+            buildings: [],
+            properties: [],
+            requests: [],
+            payments: [],
+            bookings: [],
+            expenses: [],
+            invitations: [],
+            notifications: [],
+            leases: [],
+            registeredEmails: [],
+          });
+          return;
+        }
+        const selectedAccounts = await db.query.users.findMany({
+          where: inArray(schema.users.uid, targetIds),
+          columns: {uid: true, email: true},
+        });
+        targetIds = selectedAccounts.map((u) => u.uid);
+        targetEmails = selectedAccounts.map((u) => u.email.toLowerCase());
+        if (targetIds.length === 0) {
+          res.json({
+            buildings: [],
+            properties: [],
+            requests: [],
+            payments: [],
+            bookings: [],
+            expenses: [],
+            invitations: [],
+            notifications: [],
+            leases: [],
+            registeredEmails: [],
+          });
+          return;
+        }
+      }
+
+      const {managedPropertyIds, managedBuildingIds} = await landlordReachMany(targetIds);
+      const propertyReach = managedPropertyIds.length
+        ? or(inArray(schema.properties.landlordId, targetIds), inArray(schema.properties.id, managedPropertyIds))
+        : inArray(schema.properties.landlordId, targetIds);
 
       const buildings = await db
         .select()
         .from(schema.buildings)
-        .where(or(eq(schema.buildings.landlordId, actor.id), inArray(schema.buildings.id, managedBuildingIds)));
+        .where(
+          managedBuildingIds.length
+            ? or(inArray(schema.buildings.landlordId, targetIds), inArray(schema.buildings.id, managedBuildingIds))
+            : inArray(schema.buildings.landlordId, targetIds),
+        );
 
       const properties = await db.select().from(schema.properties).where(propertyReach);
       const propertyIds = properties.map((p) => p.id);
 
       const requests = propertyIds.length
         ? await db.query.maintenanceRequests.findMany({
-            where: or(eq(schema.maintenanceRequests.landlordId, actor.id), inArray(schema.maintenanceRequests.propertyId, propertyIds)),
+            where: or(inArray(schema.maintenanceRequests.landlordId, targetIds), inArray(schema.maintenanceRequests.propertyId, propertyIds)),
+            orderBy: desc(schema.maintenanceRequests.createdAt),
           })
-        : await db.query.maintenanceRequests.findMany({where: eq(schema.maintenanceRequests.landlordId, actor.id)});
+        : await db.query.maintenanceRequests.findMany({
+            where: inArray(schema.maintenanceRequests.landlordId, targetIds),
+            orderBy: desc(schema.maintenanceRequests.createdAt),
+          });
 
       const paymentsWhere = propertyIds.length
-        ? or(eq(schema.rentPayments.landlordId, actor.id), inArray(schema.rentPayments.propertyId, propertyIds))
-        : eq(schema.rentPayments.landlordId, actor.id);
+        ? or(inArray(schema.rentPayments.landlordId, targetIds), inArray(schema.rentPayments.propertyId, propertyIds))
+        : inArray(schema.rentPayments.landlordId, targetIds);
 
       const rentPaymentRows = await db.query.rentPayments.findMany({where: paymentsWhere, orderBy: desc(schema.rentPayments.dueDate)});
 
@@ -203,27 +270,36 @@ export function registerLandlordRoutes(bffRouter: Router) {
       const [bookings, expenses, invitations, notifications] = await Promise.all([
         db.query.bookings.findMany({
           where: propertyIds.length
-            ? or(eq(schema.bookings.landlordId, actor.id), inArray(schema.bookings.propertyId, propertyIds))
-            : eq(schema.bookings.landlordId, actor.id),
+            ? or(inArray(schema.bookings.landlordId, targetIds), inArray(schema.bookings.propertyId, propertyIds))
+            : inArray(schema.bookings.landlordId, targetIds),
           orderBy: desc(schema.bookings.startDate),
           limit: 500,
         }),
         db.query.expenses.findMany({
           where: propertyIds.length
-            ? or(eq(schema.expenses.landlordId, actor.id), inArray(schema.expenses.propertyId, propertyIds))
-            : eq(schema.expenses.landlordId, actor.id),
+            ? or(inArray(schema.expenses.landlordId, targetIds), inArray(schema.expenses.propertyId, propertyIds))
+            : inArray(schema.expenses.landlordId, targetIds),
           orderBy: desc(schema.expenses.expenseDate),
           limit: 1000,
         }),
-        // Agency admins see their own platform's invitations; a missing platform matches nothing.
-        actor.role === 'admin' && actor.platformId
-          ? db.query.invitations.findMany({where: eq(schema.invitations.platformId, actor.platformId)})
-          : db.query.invitations.findMany({where: eq(schema.invitations.landlordId, actor.id)}),
-        db.query.notifications.findMany({
-          where: sql`lower(${schema.notifications.recipientEmail}) = ${actor.email.toLowerCase()}`,
-          orderBy: desc(schema.notifications.createdAt),
-          limit: 100,
-        }),
+        // Agency admins see their own platform's invitations; superadmins with account filter
+        // see invitations sent by the selected account(s); landlords see invitations they sent.
+        !superMultiScoped && actor.role === 'admin' && actor.platformId
+          ? db.query.invitations.findMany({
+              where: eq(schema.invitations.platformId, actor.platformId),
+              orderBy: desc(schema.invitations.createdAt),
+            })
+          : db.query.invitations.findMany({
+              where: inArray(schema.invitations.landlordId, targetIds),
+              orderBy: desc(schema.invitations.createdAt),
+            }),
+        targetEmails.length
+          ? db.query.notifications.findMany({
+              where: inArray(sql`lower(${schema.notifications.recipientEmail})`, targetEmails),
+              orderBy: desc(schema.notifications.createdAt),
+              limit: 200,
+            })
+          : Promise.resolve([]),
       ]);
 
       // Lease terms for the tenant list, and which invitees have already created an account
@@ -257,6 +333,106 @@ export function registerLandlordRoutes(bffRouter: Router) {
         leases: leases.map((l) => ({...l, rentAmount: Number(l.rentAmount), depositAmount: Number(l.depositAmount)})),
         registeredEmails,
       });
+    }),
+  );
+
+  /** Landlords (and admins/superadmins) can resend a pending invitation they created. */
+  bffRouter.post(
+    '/landlord/invitations/resend',
+    requireAuth,
+    inviteSendLimiter,
+    validateBody(z.object({email: emailSchema}).strict()),
+    asyncHandler(async (req, res) => {
+      const actor = toActor(req.profile!);
+      const {email} = getValidatedBody<{email: string}>(req);
+      const target = email.trim().toLowerCase();
+      const invitation = await db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`});
+      if (!invitation) {
+        res.status(404).json({error: 'No pending invitation found for that email.'});
+        return;
+      }
+      const allowed =
+        isSuperAdmin(actor) ||
+        invitation.landlordId === actor.id ||
+        (actor.isAdmin && actor.platformId && invitation.platformId === actor.platformId);
+      if (!allowed) {
+        res.status(403).json({error: 'You can only resend invitations you created.'});
+        return;
+      }
+      const existingAccount = await db.query.users.findFirst({where: sql`lower(${schema.users.email}) = ${target}`, columns: {uid: true}});
+      if (existingAccount) {
+        res.status(409).json({error: 'This person has already set up their account.'});
+        return;
+      }
+
+      const tokens = await withSystemAccess(() =>
+        db
+          .select({value: schema.authVerification.value})
+          .from(schema.authVerification)
+          .where(like(schema.authVerification.identifier, `${INVITE_IDENTIFIER_PREFIX}%`)),
+      );
+      const previous = tokens.map((row) => parseInvitePayload(row.value)).find((payload) => payload?.email === target);
+
+      try {
+        const {expiresAt} = await createAndSendInvite({
+          email: target,
+          role: previous?.role ?? (invitation.role as InvitePayload['role']),
+          platformId: previous?.platformId ?? invitation.platformId ?? null,
+          landlordId: previous?.landlordId ?? invitation.landlordId ?? actor.id,
+          invitedBy: actor.id,
+          invitedByName: req.profile!.displayName || 'MyBoma',
+          displayName: previous?.displayName ?? invitation.displayName ?? null,
+          phone: previous?.phone ?? invitation.phone ?? null,
+          profile: previous?.profile ?? {},
+        });
+        await recordAudit(req.profile!, 'INVITE_RESENT', 'invitation', target);
+        res.json({ok: true, expiresAt});
+      } catch (err) {
+        console.error('[Landlord Invite] Resend failed:', err);
+        res.status(502).json({error: 'The email could not be sent. Try again shortly.'});
+      }
+    }),
+  );
+
+  /** Cancels a pending invitation created by this landlord (or any invite, for superadmin). */
+  bffRouter.delete(
+    '/landlord/invitations/:email',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const parsed = tenantEmailParamSchema.safeParse({email: req.params.email});
+      if (!parsed.success) {
+        res.status(400).json({error: 'Invalid email'});
+        return;
+      }
+      const actor = toActor(req.profile!);
+      const target = parsed.data.email.toLowerCase();
+      const invitation = await db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`});
+      if (!invitation) {
+        res.status(404).json({error: 'Invitation not found'});
+        return;
+      }
+      const allowed =
+        isSuperAdmin(actor) ||
+        invitation.landlordId === actor.id ||
+        (actor.isAdmin && actor.platformId && invitation.platformId === actor.platformId);
+      if (!allowed) {
+        res.status(403).json({error: 'You can only cancel invitations you created.'});
+        return;
+      }
+
+      const ownerLandlordId = invitation.landlordId ?? actor.id;
+      await db.delete(schema.invitations).where(sql`lower(${schema.invitations.email}) = ${target}`);
+      await db
+        .update(schema.properties)
+        .set({tenantId: null, status: 'available'})
+        .where(and(sql`lower(${schema.properties.tenantId}) = ${target}`, eq(schema.properties.landlordId, ownerLandlordId)));
+      await db
+        .delete(schema.rentPayments)
+        .where(and(sql`lower(${schema.rentPayments.tenantId}) = ${target}`, eq(schema.rentPayments.landlordId, ownerLandlordId), ne(schema.rentPayments.status, 'paid')));
+      invalidatePublicListings();
+      await endLeasesForTenant(target, undefined, ownerLandlordId);
+      await recordAudit(req.profile!, 'INVITE_CANCELLED', 'invitation', target);
+      res.json({deleted: true});
     }),
   );
 

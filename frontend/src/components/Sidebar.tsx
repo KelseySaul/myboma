@@ -61,6 +61,7 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
             { id: 'finances', label: 'Rent & payments', icon: Wallet },
             ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: Wrench }] : []),
             { id: 'tenants', label: 'Tenants', icon: Users },
+            { id: 'pending', label: 'Pending invites', icon: Mail },
             { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },

@@ -22,6 +22,7 @@ import { DASHBOARD_POLL_MS } from '../../lib/polling';
 interface AdminOverviewProps {
   firstName: string;
   platformId: string;
+  accountIds?: string[];
   isSuperAdmin: boolean;
   onNavigate: (tab: string) => void;
   onInviteUser: () => void;
@@ -98,14 +99,16 @@ const timeAgo = (iso: string) => {
 export default function AdminOverview({
   firstName,
   platformId,
+  accountIds,
   isSuperAdmin,
   onNavigate,
   onInviteUser,
   onAddProperty,
 }: AdminOverviewProps) {
+  const accountKey = accountIds === undefined ? 'self' : [...accountIds].sort().join(',');
   const { data, isPending, isError, refetch } = useQuery({
-    queryKey: ['admin', 'overview', platformId],
-    queryFn: () => getAdminOverview(platformId),
+    queryKey: ['admin', 'overview', platformId, accountKey],
+    queryFn: () => getAdminOverview(platformId, accountIds),
     refetchInterval: DASHBOARD_POLL_MS,
   });
 

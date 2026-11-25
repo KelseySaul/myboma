@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Banknote, BellRing, Building2, Home, Plus, UserPlus, Wrench } from 'lucide-react';
+import { Banknote, BellRing, Building2, Home, Mail, Plus, UserPlus, Wrench } from 'lucide-react';
 import type { LandlordTab, MaintenanceRequest, Property, RentPayment } from './types';
 import { ActionButton, EmptyBlock, Panel, Skeleton, StatusPill, daysLate, isLate, kes } from './ui';
 
@@ -9,6 +9,7 @@ interface OverviewTabProps {
   properties: Property[];
   payments: RentPayment[];
   requests: MaintenanceRequest[];
+  pendingInvitesCount?: number;
   tenantName: (emailOrId: string) => string;
   propertyName: (id: string) => string;
   maintenanceEnabled: boolean;
@@ -141,6 +142,11 @@ export default function OverviewTab(props: OverviewTabProps) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {(props.pendingInvitesCount ?? 0) > 0 && (
+            <ActionButton size="sm" variant="secondary" icon={<Mail className="h-4 w-4" />} onClick={() => props.onOpenTab('pending')}>
+              {props.pendingInvitesCount} pending {props.pendingInvitesCount === 1 ? 'invite' : 'invites'}
+            </ActionButton>
+          )}
           <ActionButton size="sm" icon={<Plus className="h-4 w-4" />} onClick={props.onAddProperty}>Add property</ActionButton>
           <ActionButton size="sm" variant="secondary" icon={<UserPlus className="h-4 w-4" />} onClick={props.onInviteTenant}>Invite tenant</ActionButton>
           <ActionButton size="sm" variant="secondary" icon={<Banknote className="h-4 w-4" />} onClick={() => props.onOpenTab('finances')}>Record payment</ActionButton>

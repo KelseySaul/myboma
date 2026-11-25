@@ -141,8 +141,9 @@ export const markAllNotificationsRead = () =>
 
 export const deleteNotification = (id: string) => bffRequest<{deleted: boolean}>(`/notifications/${id}`, {method: 'DELETE'});
 
-export const getLandlordDashboard = () =>
-  bffRequest<{
+export const getLandlordDashboard = (accountIds?: string[]) => {
+  const qs = accountIds !== undefined ? `?accountIds=${encodeURIComponent(accountIds.join(','))}` : '';
+  return bffRequest<{
     buildings: Record<string, any>[];
     properties: Record<string, any>[];
     requests: Record<string, any>[];
@@ -151,7 +152,18 @@ export const getLandlordDashboard = () =>
     expenses: Record<string, any>[];
     invitations: Record<string, any>[];
     notifications: Record<string, any>[];
-  }>('/landlord/dashboard');
+    leases?: Record<string, any>[];
+    registeredEmails?: string[];
+  }>(`/landlord/dashboard${qs}`);
+};
+
+/** Emails a fresh 7-day setup link for a pending tenant invitation created by this landlord. */
+export const resendLandlordInvitation = (email: string) =>
+  bffRequest<{ok: true; expiresAt: string}>('/landlord/invitations/resend', {method: 'POST', body: {email}});
+
+/** Cancels a pending invitation created by this landlord. */
+export const cancelLandlordInvitation = (email: string) =>
+  bffRequest<{deleted: boolean}>(`/landlord/invitations/${encodeURIComponent(email)}`, {method: 'DELETE'});
 
 export const syncRentInvoices = () => bffRequest<{created: number; overdueUpdated: number}>('/landlord/rent-invoices/sync', {method: 'POST'});
 
@@ -375,13 +387,40 @@ export type AdminOverview = {
   activity: {id: string; action: string; userEmail: string | null; resource: string | null; createdAt: string}[];
 };
 
+export type SuperAdminAccountOption = {
+  uid: string;
+  displayName: string;
+  email: string;
+  role: 'landlord' | 'tenant' | 'hunter' | 'admin';
+  platformId: string | null;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  status: 'active' | 'suspended';
+};
+
+export const getSuperAdminAccounts = () => bffRequest<SuperAdminAccountOption[]>('/admin/accounts');
+
+export const getAdminPendingInvites = (params: {platformId?: string; accountIds?: string[]} = {}) => {
+  const qs = new URLSearchParams();
+  if (params.platformId && params.platformId !== 'all') qs.set('platformId', params.platformId);
+  if (params.accountIds !== undefined) qs.set('accountIds', params.accountIds.join(','));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return bffRequest<Record<string, any>[]>(`/admin/pending-invites${suffix}`);
+};
+
 /** Emails a fresh 7-day setup link to someone who hasn't accepted their invitation. */
 export const resendInvitation = (email: string) =>
   bffRequest<{ok: true; expiresAt: string}>('/admin/invitations/resend', {method: 'POST', body: {email}});
 
 /** Real counts and trends for the admin overview (see GET /admin/overview). */
-export const getAdminOverview = (platformId?: string) =>
-  bffRequest<AdminOverview>(`/admin/overview${platformId && platformId !== 'all' ? `?platformId=${encodeURIComponent(platformId)}` : ''}`);
+export const getAdminOverview = (platformId?: string, accountIds?: string[]) => {
+  const qs = new URLSearchParams();
+  if (platformId && platformId !== 'all') qs.set('platformId', platformId);
+  if (accountIds !== undefined) qs.set('accountIds', accountIds.join(','));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return bffRequest<AdminOverview>(`/admin/overview${suffix}`);
+};
 
 export const getAdminDashboard = (platformId?: string) =>
   bffRequest<{

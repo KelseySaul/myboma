@@ -114,4 +114,4 @@ export interface Tenant {
   invitedAt: string;
 }
 
-export type LandlordTab = 'dashboard' | 'properties' | 'tenants' | 'finances' | 'maintenance' | 'automations';
+export type LandlordTab = 'dashboard' | 'properties' | 'tenants' | 'pending' | 'finances' | 'maintenance' | 'automations';

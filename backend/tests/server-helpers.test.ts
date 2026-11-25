@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {assertAllowedRedirectUrl, buildAllowedRedirectOrigins} from '../server/helpers';
+import {parseAccountIdsParam} from '../server/http/schemas';
 
 describe('buildAllowedRedirectOrigins', () => {
   it('collects origins from app base and cors list', () => {
@@ -27,5 +28,24 @@ describe('assertAllowedRedirectUrl', () => {
       () => assertAllowedRedirectUrl('https://evil.example/phish', allowed),
       /not allowed/,
     );
+  });
+});
+
+describe('parseAccountIdsParam', () => {
+  const idA = '11111111-1111-4111-8111-111111111111';
+  const idB = '22222222-2222-4222-8222-222222222222';
+
+  it('parses comma-separated UUIDs and deduplicates', () => {
+    assert.deepEqual(parseAccountIdsParam(`${idA}, ${idB}, ${idA}`), [idA, idB]);
+  });
+
+  it('accepts array query values and strips invalid entries', () => {
+    assert.deepEqual(parseAccountIdsParam([`${idA},not-a-uuid`, idB, '']), [idA, idB]);
+  });
+
+  it('returns empty array for missing or invalid input', () => {
+    assert.deepEqual(parseAccountIdsParam(undefined), []);
+    assert.deepEqual(parseAccountIdsParam(''), []);
+    assert.deepEqual(parseAccountIdsParam('all,invalid'), []);
   });
 });

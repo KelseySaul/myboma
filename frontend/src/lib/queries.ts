@@ -1,15 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   getAdminDashboard,
+  getAdminPendingInvites,
   getAuditLogs,
   getAvailableProperties,
   getImpersonatedUser,
   getLandlordDashboard,
   getSession,
+  getSuperAdminAccounts,
   getTenantDashboard,
   getUnreadNotificationCount,
 } from './api';
 import { DASHBOARD_POLL_MS, LISTINGS_POLL_MS, PROFILE_POLL_MS, UNREAD_POLL_MS } from './polling';
+
+const accountKey = (accountIds?: string[]) =>
+  accountIds === undefined ? 'self' : [...accountIds].sort().join(',');
 
 /**
  * Query-key factories. Every user-scoped key carries the uid the request is served as
@@ -18,10 +23,13 @@ import { DASHBOARD_POLL_MS, LISTINGS_POLL_MS, PROFILE_POLL_MS, UNREAD_POLL_MS } 
  */
 export const queryKeys = {
   session: (userId: string | null | undefined) => ['session', userId ?? null] as const,
-  landlordDashboard: (uid: string) => ['landlord', 'dashboard', uid] as const,
+  landlordDashboard: (uid: string, accountIds?: string[]) => ['landlord', 'dashboard', uid, accountKey(accountIds)] as const,
   tenantDashboard: (uid: string) => ['tenant', 'dashboard', uid] as const,
   adminDashboard: (params: AdminDashboardParams) =>
     ['admin', 'dashboard', params.uid, params.viewerPlatformId ?? null, params.platformId ?? 'all'] as const,
+  adminPendingInvites: (params: { uid: string; platformId?: string; accountIds?: string[] }) =>
+    ['admin', 'pending-invites', params.uid, params.platformId ?? 'all', accountKey(params.accountIds)] as const,
+  superAdminAccounts: (uid: string) => ['admin', 'accounts', uid] as const,
   auditLogs: (params: { uid: string; userId: string }) => ['admin', 'audit-logs', params.uid, params.userId] as const,
   availableProperties: () => ['properties', 'available'] as const,
   /** Shared by Navbar and Sidebar so both badges come from one request. */
@@ -33,7 +41,7 @@ export const queryKeys = {
  * `platformId` is the super-admin's optional platform filter. */
 type AdminDashboardParams = { uid: string; viewerPlatformId?: string | null; platformId?: string };
 
-type EnabledOption = { enabled?: boolean };
+type EnabledOption = { enabled?: boolean; accountIds?: string[] };
 
 /** Current session's profile (/session is never impersonated). Polls for role/subscription
  * changes made elsewhere, e.g. by an admin. */
@@ -48,9 +56,30 @@ export const useSessionProfile = (userId: string | null | undefined) =>
 
 export const useLandlordDashboard = (uid: string, options: EnabledOption = {}) =>
   useQuery({
-    queryKey: queryKeys.landlordDashboard(uid),
-    queryFn: getLandlordDashboard,
+    queryKey: queryKeys.landlordDashboard(uid, options.accountIds),
+    queryFn: () => getLandlordDashboard(options.accountIds),
     enabled: Boolean(uid) && (options.enabled ?? true),
+    refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
+  });
+
+export const useSuperAdminAccounts = (uid: string | undefined, enabled: boolean) =>
+  useQuery({
+    queryKey: queryKeys.superAdminAccounts(uid ?? ''),
+    queryFn: getSuperAdminAccounts,
+    enabled: enabled && Boolean(uid),
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+export const useAdminPendingInvites = (
+  params: { uid: string; platformId?: string; accountIds?: string[] },
+  enabled: boolean,
+) =>
+  useQuery({
+    queryKey: queryKeys.adminPendingInvites(params),
+    queryFn: () => getAdminPendingInvites({ platformId: params.platformId, accountIds: params.accountIds }),
+    enabled: enabled && Boolean(params.uid),
     refetchInterval: DASHBOARD_POLL_MS,
     refetchOnWindowFocus: true,
   });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Pagination, usePagination } from '@/components/ui/pagination';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
 import {
@@ -83,8 +84,9 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { useAdminDashboard, useAuditLogs } from '../lib/queries';
+import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSuperAdminAccounts } from '../lib/queries';
 import AdminOverview from './admin/AdminOverview';
+import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
 
 const formatKes = (amount: number | string | null | undefined) =>
   `KES ${Math.round(Number(amount) || 0).toLocaleString('en-KE')}`;
@@ -149,6 +151,8 @@ interface AdminDashboardProps {
   onImpersonate?: (user: UserProfile) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  superAdminAccountIds?: string[];
+  onChangeSuperAdminAccountIds?: (ids: string[]) => void;
 }
 
 const TAB_TITLES: Record<string, { title: string; description: string }> = {
@@ -160,7 +164,19 @@ const TAB_TITLES: Record<string, { title: string; description: string }> = {
   audit: { title: 'Activity log', description: 'A record of important actions, newest first.' },
 };
 
-export default function AdminDashboard({ profile, onImpersonate, activeTab, setActiveTab }: AdminDashboardProps) {
+export default function AdminDashboard({
+  profile,
+  onImpersonate,
+  activeTab,
+  setActiveTab,
+  superAdminAccountIds,
+  onChangeSuperAdminAccountIds,
+}: AdminDashboardProps) {
+  const queryClient = useQueryClient();
+  const isSuperAdminScoped = Boolean(profile.isSuperAdmin && onChangeSuperAdminAccountIds);
+  const selectedAccountIds = superAdminAccountIds ?? [];
+  const selectedAccountIdsKey = selectedAccountIds.join(',');
+  const needsAccountSelection = isSuperAdminScoped && selectedAccountIds.length === 0;
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [buildings, setBuildings] = useState<any[]>([]);
   const buildingPager = usePagination(buildings, 10);
@@ -284,6 +300,20 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   // /admin/dashboard in app.ts. Query data is copied into local state because handlers
   // below update it optimistically.
   const dashboardPlatformId = profile.isSuperAdmin ? (selectedPlatformId === 'all' ? undefined : selectedPlatformId) : undefined;
+  const superAdminAccountsQuery = useSuperAdminAccounts(profile.uid, isSuperAdminScoped);
+  const accountLookup = new Map((superAdminAccountsQuery.data ?? []).map((acc) => [acc.uid, acc]));
+  const pendingInvitesQuery = useAdminPendingInvites(
+    {
+      uid: profile.uid,
+      platformId: dashboardPlatformId,
+      accountIds: isSuperAdminScoped ? selectedAccountIds : undefined,
+    },
+    activeTab === 'pending' && !needsAccountSelection,
+  );
+  useEffect(() => {
+    setInvitePage(1);
+  }, [selectedAccountIdsKey, dashboardPlatformId]);
+
   const {
     data: dashboardData,
     error: dashboardError,
@@ -412,6 +442,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
     setResendingEmail(email);
     try {
       await resendInvitation(email);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'pending-invites'] });
       toast.success(`New invite sent to ${email}. The link expires in 7 days.`);
     } catch (error: any) {
       toast.error(error.message || 'Could not resend the invite.');
@@ -449,6 +480,9 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
           return [...prev, result.invitation];
         });
       }
+
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'pending-invites'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'overview'] });
 
       toast.success(`Invitation sent to ${result.email}`);
       setIsInviteUserOpen(false);
@@ -861,14 +895,20 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const totalUserPages = Math.ceil(filteredUsers.length / usersPerPage);
 
   // Pagination calculations - Invitations (Awaiting Auth)
-  const filteredInvs = invitations.filter(inv => {
+  const pendingSource = isSuperAdminScoped
+    ? (pendingInvitesQuery.data ?? [])
+    : (pendingInvitesQuery.data ?? invitations);
+  const filteredInvs = pendingSource.filter(inv => {
     const search = inviteSearch.toLowerCase();
     const platName = platforms.find(p => p.id === inv.platformId)?.name || 'No platform';
+    const inviter = inv.landlordId ? accountLookup.get(inv.landlordId) : undefined;
+    const inviterLabel = inviter ? `${inviter.displayName} ${inviter.email}` : '';
     return (
       (inv.displayName || '').toLowerCase().includes(search) ||
       (inv.email || '').toLowerCase().includes(search) ||
       (inv.role || '').toLowerCase().includes(search) ||
-      platName.toLowerCase().includes(search)
+      platName.toLowerCase().includes(search) ||
+      inviterLabel.toLowerCase().includes(search)
     );
   });
   const totalInvitePages = Math.ceil(filteredInvs.length / 10);
@@ -1185,20 +1225,37 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       {/* ── Overview (real numbers from /admin/overview) ── */}
       {(activeTab === 'dashboard' || !activeTab) && (
         <div className="px-4 pt-6 sm:px-6 md:px-8">
-          <AdminOverview
-            firstName={(profile.displayName || 'there').split(' ')[0]}
-            platformId={dashboardPlatformId ?? 'all'}
-            isSuperAdmin={Boolean(profile.isSuperAdmin)}
-            onNavigate={(tab) => setActiveTab(tab)}
-            onInviteUser={() => {
-              setActiveTab('registered');
-              setIsInviteUserOpen(true);
-            }}
-            onAddProperty={() => {
-              setActiveTab('properties');
-              setIsAddPropertyOpen(true);
-            }}
-          />
+          {isSuperAdminScoped && (
+            <SuperAdminAccountFilterBar
+              profile={profile}
+              selectedIds={selectedAccountIds}
+              onChange={onChangeSuperAdminAccountIds!}
+              contextLabel="Overview"
+            />
+          )}
+          {needsAccountSelection ? (
+            <SuperAdminAccountGate
+              profile={profile}
+              pageLabel="the dashboard overview"
+              onSelectIds={onChangeSuperAdminAccountIds!}
+            />
+          ) : (
+            <AdminOverview
+              firstName={(profile.displayName || 'there').split(' ')[0]}
+              platformId={dashboardPlatformId ?? 'all'}
+              accountIds={isSuperAdminScoped ? selectedAccountIds : undefined}
+              isSuperAdmin={Boolean(profile.isSuperAdmin)}
+              onNavigate={(tab) => setActiveTab(tab)}
+              onInviteUser={() => {
+                setActiveTab('registered');
+                setIsInviteUserOpen(true);
+              }}
+              onAddProperty={() => {
+                setActiveTab('properties');
+                setIsAddPropertyOpen(true);
+              }}
+            />
+          )}
         </div>
       )}
 
@@ -1488,96 +1545,139 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── PENDING TAB ── */}
         {activeTab === 'pending' && (
-          <Card className="overflow-hidden py-0 gap-0">
-            <CardHeader className="p-4 sm:px-5 sm:py-3.5 border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <span className="hidden text-xs font-semibold text-[#5F6C7B] sm:inline dark:text-slate-400">
-                <strong className="tabular-nums text-[#1C2B33] dark:text-white">{filteredInvs.length}</strong> pending {filteredInvs.length === 1 ? 'invitation' : 'invitations'} · links expire after 7 days
-              </span>
-              <div className="relative w-full sm:max-w-xs shrink-0">
-                <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                <Input 
-                  placeholder="Search invitations..." 
-                  className="h-9 pl-8 text-xs font-semibold rounded-xl" 
-                  value={inviteSearch} 
-                  onChange={(e) => { setInviteSearch(e.target.value); setInvitePage(1); }} 
-                />
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
-                <TableHeader>
-                  <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
-                    <TableHead className="px-4 py-3">Name</TableHead>
-                    <TableHead className="hidden px-4 py-3 sm:table-cell">Email</TableHead>
-                    <TableHead className="px-4 py-3">Role</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="hidden px-4 py-3 lg:table-cell">Platform</TableHead>}
-                    <TableHead className="px-4 py-3 text-right"><span className="sr-only">Actions</span></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedInvs.map((inv, i) => (
-                    <TableRow key={i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
-                      <TableCell className="px-4 py-3 text-xs font-semibold text-slate-900 dark:text-white">{inv.displayName}</TableCell>
-                      <TableCell className="hidden px-4 py-3 text-xs font-normal text-slate-500 sm:table-cell">{inv.email}</TableCell>
-                      <TableCell className="px-4 py-3"><Badge variant="secondary">{inv.role}</Badge></TableCell>
-                      {profile.isSuperAdmin && (
-                        <TableCell className="hidden px-4 py-3 text-xs font-medium text-slate-500 lg:table-cell">
-                          {platforms.find(p => p.id === inv.platformId)?.name || 'No platform'}
-                        </TableCell>
-                      )}
-                      <TableCell className="px-4 py-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 rounded-lg text-xs font-semibold"
-                          disabled={resendingEmail === inv.email}
-                          onClick={() => handleResendInvite(inv.email)}
-                        >
-                          {resendingEmail === inv.email ? <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" /> : <><span className="sm:hidden">Resend</span><span className="hidden sm:inline">Resend invite</span></>}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {paginatedInvs.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={profile.isSuperAdmin ? 5 : 4} className="h-32 text-center text-slate-400 font-medium text-xs">
-                        No pending invites. Use "Invite user" on the Users page to add someone.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-
-              {totalInvitePages > 1 && (
-                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
-                  <span className="text-xs text-slate-500 font-medium pl-2">
-                    Page {invitePage} of {totalInvitePages}
+          <>
+            {isSuperAdminScoped && (
+              <SuperAdminAccountFilterBar
+                profile={profile}
+                selectedIds={selectedAccountIds}
+                onChange={onChangeSuperAdminAccountIds!}
+                contextLabel="Pending invites"
+              />
+            )}
+            {needsAccountSelection ? (
+              <SuperAdminAccountGate
+                profile={profile}
+                pageLabel="pending invites"
+                onSelectIds={onChangeSuperAdminAccountIds!}
+              />
+            ) : (
+              <Card className="overflow-hidden py-0 gap-0">
+                <CardHeader className="p-4 sm:px-5 sm:py-3.5 border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <span className="hidden text-xs font-semibold text-[#5F6C7B] sm:inline dark:text-slate-400">
+                    <strong className="tabular-nums text-[#1C2B33] dark:text-white">{filteredInvs.length}</strong> pending {filteredInvs.length === 1 ? 'invitation' : 'invitations'} · links expire after 7 days
                   </span>
-                  <div className="flex items-center gap-1.5 pr-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={invitePage === 1}
-                      onClick={() => setInvitePage(p => Math.max(1, p - 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                    </Button>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{invitePage}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={invitePage === totalInvitePages}
-                      onClick={() => setInvitePage(p => Math.min(totalInvitePages, p + 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                    </Button>
+                  <div className="relative w-full sm:max-w-xs shrink-0">
+                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                    <Input 
+                      placeholder="Search invitations..." 
+                      className="h-9 pl-8 text-xs font-semibold rounded-xl" 
+                      value={inviteSearch} 
+                      onChange={(e) => { setInviteSearch(e.target.value); setInvitePage(1); }} 
+                    />
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
+                    <TableHeader>
+                      <TableRow className="bg-slate-50/70 dark:bg-slate-800/40">
+                        <TableHead className="px-4 py-3">Name</TableHead>
+                        <TableHead className="hidden px-4 py-3 sm:table-cell">Email</TableHead>
+                        <TableHead className="px-4 py-3">Role</TableHead>
+                        {isSuperAdminScoped && <TableHead className="hidden px-4 py-3 md:table-cell">Invited by</TableHead>}
+                        {profile.isSuperAdmin && <TableHead className="hidden px-4 py-3 lg:table-cell">Platform</TableHead>}
+                        <TableHead className="px-4 py-3 text-right"><span className="sr-only">Actions</span></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingInvitesQuery.isPending && pendingSource.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={isSuperAdminScoped ? 6 : profile.isSuperAdmin ? 5 : 4} className="h-32 text-center text-slate-400 font-medium text-xs">
+                            Loading pending invitations…
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        <>
+                          {paginatedInvs.map((inv, i) => {
+                            const inviter = inv.landlordId ? accountLookup.get(inv.landlordId) : undefined;
+                            const inviterName =
+                              inv.landlordId === profile.uid
+                                ? `${profile.displayName || 'You'} (You)`
+                                : inviter?.displayName || inviter?.email || '—';
+                            return (
+                              <TableRow key={inv.email ?? i} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                                <TableCell className="px-4 py-3 text-xs font-semibold text-slate-900 dark:text-white">{inv.displayName}</TableCell>
+                                <TableCell className="hidden px-4 py-3 text-xs font-normal text-slate-500 sm:table-cell">{inv.email}</TableCell>
+                                <TableCell className="px-4 py-3"><Badge variant="secondary">{inv.role}</Badge></TableCell>
+                                {isSuperAdminScoped && (
+                                  <TableCell className="hidden px-4 py-3 text-xs font-medium text-slate-600 dark:text-slate-300 md:table-cell">
+                                    {inviterName}
+                                  </TableCell>
+                                )}
+                                {profile.isSuperAdmin && (
+                                  <TableCell className="hidden px-4 py-3 text-xs font-medium text-slate-500 lg:table-cell">
+                                    {platforms.find(p => p.id === inv.platformId)?.name || 'No platform'}
+                                  </TableCell>
+                                )}
+                                <TableCell className="px-4 py-3 text-right">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 rounded-lg text-xs font-semibold"
+                                    disabled={resendingEmail === inv.email}
+                                    onClick={() => handleResendInvite(inv.email)}
+                                  >
+                                    {resendingEmail === inv.email ? <FontAwesomeIcon icon={faSpinner} className="h-3 w-3 animate-spin" /> : <><span className="sm:hidden">Resend</span><span className="hidden sm:inline">Resend invite</span></>}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {paginatedInvs.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={isSuperAdminScoped ? 6 : profile.isSuperAdmin ? 5 : 4} className="h-32 text-center text-slate-400 font-medium text-xs">
+                                {isSuperAdminScoped
+                                  ? 'No pending invites for the selected account(s).'
+                                  : 'No pending invites. Use "Invite user" on the Users page to add someone.'}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </>
+                      )}
+                    </TableBody>
+                  </Table>
+
+                  {totalInvitePages > 1 && (
+                    <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
+                      <span className="text-xs text-slate-500 font-medium pl-2">
+                        Page {invitePage} of {totalInvitePages}
+                      </span>
+                      <div className="flex items-center gap-1.5 pr-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="rounded-lg h-7 w-7 p-0"
+                          disabled={invitePage === 1}
+                          onClick={() => setInvitePage(p => Math.max(1, p - 1))}
+                        >
+                          <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
+                        </Button>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{invitePage}</span>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="rounded-lg h-7 w-7 p-0"
+                          disabled={invitePage === totalInvitePages}
+                          onClick={() => setInvitePage(p => Math.min(totalInvitePages, p + 1))}
+                        >
+                          <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
 
         {/* ── ASSETS TAB ── */}

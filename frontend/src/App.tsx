@@ -151,6 +151,12 @@ export default function App() {
   // Lifted tab state — shared between Sidebar and the active dashboard
   const [activeTab, setActiveTab] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Super-admin multi-account filter shared across gated AdminDashboard + LandlordDashboard pages
+  const [superAdminAccountIds, setSuperAdminAccountIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSuperAdminAccountIds([]);
+  }, [user?.id]);
 
   useEffect(() => {
     // Patch history.replaceState to dispatch a custom event
@@ -704,6 +710,16 @@ export default function App() {
                           profile={activeProfile!}
                           activeTab={activeTab || 'dashboard'}
                           setActiveTab={setActiveTab}
+                          superAdminAccountIds={
+                            currentRole === 'admin' && profile?.isSuperAdmin && !impersonatedProfile
+                              ? superAdminAccountIds
+                              : undefined
+                          }
+                          onChangeSuperAdminAccountIds={
+                            currentRole === 'admin' && profile?.isSuperAdmin && !impersonatedProfile
+                              ? setSuperAdminAccountIds
+                              : undefined
+                          }
                         />
                       )}
                     {currentRole === 'tenant' && (
@@ -726,6 +742,8 @@ export default function App() {
                         onImpersonate={handleImpersonate}
                         activeTab={activeTab || 'dashboard'}
                         setActiveTab={setActiveTab}
+                        superAdminAccountIds={profile?.isSuperAdmin ? superAdminAccountIds : undefined}
+                        onChangeSuperAdminAccountIds={profile?.isSuperAdmin ? setSuperAdminAccountIds : undefined}
                       />
                     )}
                     {currentRole === 'admin' && !['maintenance', 'finances', 'tenants', 'automations'].includes(activeTab) && impersonatedProfile && (
@@ -903,7 +921,7 @@ export default function App() {
                 </button>
               ))}
               {(() => {
-                const isMenuTabActive = ['maintenance', 'automations', 'settings'].includes(activeTab);
+                const isMenuTabActive = ['pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
                 return (
                   <button
                     onClick={() => setIsMobileMenuOpen(true)}
@@ -952,6 +970,7 @@ export default function App() {
             
             <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
+                { id: 'pending',     label: 'Pending invites', icon: faLink },
                 { id: 'maintenance', label: 'Repairs', icon: faTools },
                 { id: 'automations', label: 'Notifications', icon: faBell },
                 { id: 'settings',    label: 'Settings',          icon: faCog }
