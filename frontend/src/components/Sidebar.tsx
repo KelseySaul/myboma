@@ -29,7 +29,6 @@ interface SidebarProps {
   activeView?: UserRole | null;
   setActiveView?: (role: UserRole) => void;
   onHelpClick?: () => void;
-  onEnableNotifications?: () => void;
   isImpersonating?: boolean;
 }
 
@@ -134,7 +133,6 @@ export default function Sidebar({
   activeView,
   setActiveView,
   onHelpClick,
-  onEnableNotifications,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myboma-sidebar-collapsed') === 'true');
   const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
@@ -202,21 +200,6 @@ export default function Sidebar({
         </div>
 
         <nav className={`space-y-4 overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">
-          {onEnableNotifications && (
-            <button
-              type="button"
-              onClick={onEnableNotifications}
-              title={collapsed ? 'Enable notifications' : undefined}
-              className={`relative flex w-full items-center rounded-xl py-2 text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'}`}
-            >
-              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400">
-                <FontAwesomeIcon icon={faBell} className="h-3.5 w-3.5" />
-                {unreadCount > 0 && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-zinc-950 dark:bg-white" />}
-              </span>
-              <span className={collapsed ? 'sr-only' : 'text-sm font-medium'}>Enable notifications</span>
-            </button>
-          )}
-
           {navSections.map((section) => (
             <div key={section.title} className="space-y-1">
               <p className={collapsed ? 'sr-only' : 'px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500'}>

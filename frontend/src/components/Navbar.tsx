@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
-import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UserProfile, UserRole } from '../App';
-import { promptForPush } from '../App';
 import { getPlatformBranding } from '../lib/api';
 import { tenantConfig } from '../config/tenant';
 import { useUnreadCount } from '../lib/queries';
@@ -48,11 +46,6 @@ export default function Navbar({
       .catch(() => undefined);
   }, [profile?.platformId]);
 
-  const requestNotifications = () => {
-    navigator.vibrate?.(50);
-    void promptForPush();
-  };
-
   return (
     <header className="topbar z-40 flex w-full shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 sm:hidden">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -68,17 +61,6 @@ export default function Navbar({
 
       {user ? (
         <div className="flex shrink-0 items-center gap-2">
-          <Button
-            variant="ghost"
-            onClick={requestNotifications}
-            className="relative h-9 w-9 rounded-xl p-0 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-            title="Enable notifications"
-            aria-label="Enable notifications"
-          >
-            <Bell className="h-4 w-4" />
-            {unreadCount > 0 && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-zinc-950 dark:bg-white" />}
-          </Button>
-
           <AccountMenu
             profile={profile}
             activeView={activeView}

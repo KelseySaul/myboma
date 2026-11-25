@@ -52,10 +52,9 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
 import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
-import { initializeOneSignal, onPushSubscriptionReady, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
+import { initializeOneSignal, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
 import {
   isLandlordSubscriptionActive,
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -143,12 +142,8 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [contentScroller, setContentScroller] = useState<HTMLElement | null>(null);
   const [mobileNavbarVisible, setMobileNavbarVisible] = useState(true);
-  const [showPushConfirmation, setShowPushConfirmation] = useState(false);
-  const [requestingPushPermission, setRequestingPushPermission] = useState(false);
 
   useEffect(() => {
-    initializeOneSignal().catch((error) => console.error('OneSignal initialization error:', error));
-
     // Patch history.replaceState to dispatch a custom event
     const originalReplaceState = history.replaceState;
     history.replaceState = function(...args) {
@@ -187,33 +182,6 @@ export default function App() {
       if (frame) window.cancelAnimationFrame(frame);
     };
   }, [contentScroller]);
-
-  useEffect(() => {
-    const unsubscribe = onPushSubscriptionReady((subscriptionId) => {
-      const noticeKey = `myboma_onesignal_confirmed_${subscriptionId}`;
-      try {
-        if (localStorage.getItem(noticeKey)) return;
-        localStorage.setItem(noticeKey, '1');
-      } catch {
-        // If storage is unavailable, showing the confirmation is harmless.
-      }
-      setShowPushConfirmation(true);
-    });
-    return () => { unsubscribe(); };
-  }, []);
-
-  const confirmPushPermission = async () => {
-    setRequestingPushPermission(true);
-    try {
-      await promptForPush();
-    } catch (error) {
-      console.error('Push permission request failed:', error);
-      toast.error('We could not open the notification permission prompt.');
-    } finally {
-      setRequestingPushPermission(false);
-      setShowPushConfirmation(false);
-    }
-  };
 
   // Forced password reset state
   const [newPassword, setNewPassword] = useState('');
@@ -332,7 +300,10 @@ export default function App() {
     if (user) {
       const pref = localStorage.getItem(`myboma_default_page_${user.id}`);
       if (pref) setActiveTab(pref);
-      syncOneSignalIdentity(user.id).catch((error) => console.error('OneSignal identity sync failed:', error));
+      initializeOneSignal().then(async () => {
+        await syncOneSignalIdentity(user.id);
+        await promptForPush();
+      }).catch((error) => console.error('OneSignal setup failed:', error));
       loadProfile().finally(() => {
         if (isMounted) {
           setLoading(false);
@@ -660,7 +631,6 @@ export default function App() {
           activeView={activeView}
           setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
           onHelpClick={() => setShowOnboarding(true)}
-          onEnableNotifications={() => void promptForPush()}
           isImpersonating={Boolean(impersonatedProfile)}
         />
       )}
@@ -1077,21 +1047,6 @@ export default function App() {
       )}
 
       <Toaster />
-      <Dialog open={showPushConfirmation} onOpenChange={setShowPushConfirmation}>
-        <DialogContent size="sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>Your OneSignal SDK integration is complete!</DialogTitle>
-            <DialogDescription>
-              You can now send Push Notifications &amp; In-App Messages through OneSignal. Tap below to enable push notifications.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => void confirmPushPermission()} disabled={requestingPushPermission}>
-              {requestingPushPermission ? 'Opening settings…' : 'Got it'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {showOnboarding && !impersonatedProfile && profile && (
         <OnboardingTour
           role={profile.role}

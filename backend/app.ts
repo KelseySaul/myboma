@@ -66,7 +66,7 @@ app.use(
         imgSrc: ["'self'", 'data:', 'https:'],
         // cdn.onesignal.com: the web push SDK, also importScripts()-ed by /OneSignalSDKWorker.js,
         // which is served with this same policy.
-        scriptSrc: ["'self'", 'https://cdn.onesignal.com'],
+        scriptSrc: ["'self'", 'https://cdn.onesignal.com', 'https://api.onesignal.com'],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://onesignal.com'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
         connectSrc: [
@@ -79,6 +79,7 @@ app.use(
           'https://cybqa.pesapal.com',
           'https://pay.pesapal.com',
           'https://onesignal.com',
+          'https://cdn.onesignal.com',
           'https://api.onesignal.com',
         ].filter(Boolean),
       },
