@@ -185,7 +185,7 @@ export default function Sidebar({
       }`}
     >
       <div className="min-h-0 flex-1">
-        <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-between px-2' : 'gap-2.5 px-4'}`}>
+        <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'}`}>
           <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
           {!collapsed && <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>}
         </div>
