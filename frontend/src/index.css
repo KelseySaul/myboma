@@ -1007,3 +1007,27 @@ aside[class*="sticky"] {
 .app-shell main .finance-highlight :is(p, span, svg) { color: #f0fdf8; }
 .app-shell main .finance-highlight :is(p, span):first-child { color: #d1fae5; }
 .app-shell main .finance-highlight:hover { border-color: #6ee7b7; }
+
+/* Neutral work surfaces keep tables and lists clear and readable. */
+.app-shell [data-slot="card"], .app-shell main section.rounded-2xl {
+  background: #fff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+}
+.dark .app-shell [data-slot="card"], .dark .app-shell main section.rounded-2xl {
+  background: #182427;
+  border-color: #334155;
+}
+.app-shell main .stat-tint, .app-shell main button.group.stat-tint {
+  background: linear-gradient(135deg, rgba(16,185,129,.08), rgba(37,99,235,.05)), #fff;
+  border-color: #e2e8f0;
+}
+.dark .app-shell main .stat-tint, .dark .app-shell main button.group.stat-tint {
+  background: linear-gradient(135deg, rgba(16,185,129,.12), rgba(37,99,235,.08)), #182427;
+  border-color: #334155;
+}
+.finance-cta {
+  background: linear-gradient(135deg, #0f172a 0%, #065f46 60%, #10b981 100%);
+  color: #fff;
+}
+.finance-cta:hover { filter: brightness(1.08); }

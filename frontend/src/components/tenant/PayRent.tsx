@@ -69,7 +69,7 @@ export default function PayRent({ payment, landlord, defaultPhone = '', onSubmit
   if (directMpesaNumber) {
     return (
       <>
-        <Button className="h-12 w-full text-base" onClick={() => setDirectOpen(true)}>
+        <Button className="finance-cta h-12 w-full text-base" onClick={() => setDirectOpen(true)}>
           <Smartphone /> Pay with M-Pesa
         </Button>
         <DirectMpesaDialog
@@ -85,7 +85,7 @@ export default function PayRent({ payment, landlord, defaultPhone = '', onSubmit
 
   return (
     <div className="space-y-2">
-      <Button className="h-12 w-full text-base" onClick={() => setStkOpen(true)} disabled={Boolean(busy)}>
+      <Button className="finance-cta h-12 w-full text-base" onClick={() => setStkOpen(true)} disabled={Boolean(busy)}>
         <Smartphone /> Pay with M-Pesa
       </Button>
       <div className={`grid gap-2 ${hasBankDetails ? 'grid-cols-2' : 'grid-cols-1'}`}>

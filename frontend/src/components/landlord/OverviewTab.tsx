@@ -153,7 +153,7 @@ export default function OverviewTab(props: OverviewTabProps) {
             key={label}
             type="button"
             onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
-            className={`group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-950 hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-500 finance-highlight`}
+            className={`group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-950 hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-500 ${label === 'Collected this month' ? 'finance-highlight' : 'stat-tint'}`}
           >
             <div className="flex items-center justify-between">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
