@@ -4,40 +4,40 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border text-sm font-semibold whitespace-nowrap transition-all duration-150 outline-none select-none focus-visible:ring-2 focus-visible:ring-emerald-700/25 focus-visible:border-emerald-700 active:scale-[0.985] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 cursor-pointer",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border text-sm font-semibold whitespace-nowrap transition-all duration-150 outline-none select-none focus-visible:ring-2 focus-visible:ring-violet-600/25 focus-visible:border-violet-600 active:scale-[0.985] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 cursor-pointer",
   {
     variants: {
       variant: {
-        // Primary — Signature Deep Emerald (single primary brand accent)
+        // Primary — Signature Royal Purple Gradient
         default:
-          "bg-emerald-700 dark:bg-emerald-600 text-white border-emerald-700 dark:border-emerald-600 shadow-2xs hover:bg-emerald-800 dark:hover:bg-emerald-500 active:bg-emerald-900",
+          "bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white border-transparent shadow-xs shadow-violet-700/20 hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700 active:brightness-95",
 
         // Outlined — Crisp White / Hairline Neutral Border
         outline:
-          "bg-white dark:bg-[#1A1D21] text-[#1C2B33] dark:text-slate-200 border-[#D0D5DD] dark:border-white/12 shadow-2xs hover:bg-[#F7F8FA] dark:hover:bg-white/5 hover:border-[#98A2B3] dark:hover:border-white/20",
+          "bg-white dark:bg-[#181922] text-[#161426] dark:text-slate-200 border-[#D5D2E3] dark:border-white/12 shadow-2xs hover:bg-[#F8F7FC] dark:hover:bg-white/5 hover:border-violet-300 dark:hover:border-violet-400/35",
 
-        // Secondary — Calm Meta Neutral Pill
+        // Secondary — Soft Lavender-Neutral Pill
         secondary:
-          "bg-[#E4E6EB]/75 dark:bg-white/10 text-[#1C2B33] dark:text-slate-100 border-transparent hover:bg-[#E4E6EB] dark:hover:bg-white/15",
+          "bg-violet-50/90 dark:bg-violet-500/15 text-violet-900 dark:text-violet-200 border-violet-200/60 dark:border-violet-500/20 hover:bg-violet-100/90 dark:hover:bg-violet-500/25",
 
         // Ghost — Minimal Transparent
         ghost:
-          "bg-transparent border-transparent text-[#5F6C7B] dark:text-slate-400 hover:bg-[#1C2B33]/[0.05] dark:hover:bg-white/8 hover:text-[#1C2B33] dark:hover:text-slate-100",
+          "bg-transparent border-transparent text-[#5D5A73] dark:text-slate-400 hover:bg-violet-600/[0.06] dark:hover:bg-white/8 hover:text-[#161426] dark:hover:text-slate-100",
 
         // Destructive — Crisp Red
         destructive:
           "bg-rose-600 dark:bg-rose-600 text-white border-rose-600 shadow-2xs hover:bg-rose-700 dark:hover:bg-rose-700 focus-visible:ring-rose-500/30",
 
-        // Success — Crisp Emerald
+        // Success — Royal Violet Gradient
         success:
-          "bg-emerald-600 text-white border-emerald-600 shadow-2xs hover:bg-emerald-700 focus-visible:ring-emerald-500/30",
+          "bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white border-transparent shadow-2xs hover:from-indigo-700 hover:via-violet-700 hover:to-purple-700 focus-visible:ring-violet-500/30",
 
         // Indigo / Brand
         indigo:
-          "bg-indigo-600 text-white border-indigo-600 shadow-2xs hover:bg-indigo-700 focus-visible:ring-indigo-500/30",
+          "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-2xs hover:from-indigo-700 hover:to-violet-700 focus-visible:ring-indigo-500/30",
 
         // Link — Minimal Text
-        link: "bg-transparent border-transparent text-emerald-700 dark:text-emerald-400 underline-offset-4 hover:underline",
+        link: "bg-transparent border-transparent text-violet-700 dark:text-violet-400 underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 gap-2 px-3.5",

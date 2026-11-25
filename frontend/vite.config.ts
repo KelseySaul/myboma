@@ -25,6 +25,28 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
+    target: 'es2020',
+    cssCodeSplit: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/');
+          if (!normalized.includes('/node_modules/')) return;
+          if (
+            normalized.includes('/node_modules/react/') ||
+            normalized.includes('/node_modules/react-dom/') ||
+            normalized.includes('/node_modules/scheduler/')
+          ) {
+            return 'react-vendor';
+          }
+          if (normalized.includes('/node_modules/@tanstack/react-query')) return 'query-vendor';
+          if (normalized.includes('/node_modules/lucide-react/')) return 'icons-lucide';
+          if (normalized.includes('/node_modules/@fortawesome/')) return 'icons-fa';
+          if (normalized.includes('/node_modules/leaflet/')) return 'maps-leaflet';
+          if (normalized.includes('/node_modules/better-auth/')) return 'auth-vendor';
+        },
+      },
+    },
   },
   server: {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.

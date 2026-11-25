@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Banknote, BellRing, Building2, Home, Mail, Plus, UserPlus, Wrench } from 'lucide-react';
 import type { LandlordTab, MaintenanceRequest, Property, RentPayment } from './types';
 import { ActionButton, EmptyBlock, Panel, Skeleton, StatusPill, daysLate, isLate, kes } from './ui';
+import UnitRentBoard from './UnitRentBoard';
 
 interface OverviewTabProps {
   firstName: string;
@@ -19,7 +20,9 @@ interface OverviewTabProps {
   isBusy: (key: string) => boolean;
   onOpenTab: (tab: LandlordTab) => void;
   onRemind: (payment: RentPayment) => void;
+  onRemindAll: (payments: RentPayment[]) => void;
   onRecordCash: (payment: RentPayment) => void;
+  onAssignProperty: (property: Property) => void;
   onAddProperty: () => void;
   onInviteTenant: () => void;
   onUpgrade: () => void;
@@ -153,7 +156,7 @@ export default function OverviewTab(props: OverviewTabProps) {
         </div>
       </div>
 
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-3.5">
         {stats.map(({ label, value, note, tab, icon: Icon }) => {
           const isRevenue = label === 'Collected this month';
           return (
@@ -161,31 +164,45 @@ export default function OverviewTab(props: OverviewTabProps) {
               key={label}
               type="button"
               onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
-              className={`group rounded-xl border p-4 text-left transition sm:p-5 ${isRevenue ? 'finance-highlight' : 'stat-tint'}`}
+              className={`group rounded-xl border p-3.5 text-left transition sm:p-5 ${isRevenue ? 'finance-highlight' : 'stat-tint'}`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[#5F6C7B] sm:text-[13px] dark:text-slate-400">{label}</span>
+                <span className="truncate text-[11px] font-medium text-[#5D5A73] sm:text-[13px] dark:text-slate-400">{label}</span>
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-8 sm:w-8 ${
                     isRevenue
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                      : 'bg-[#F0F2F5] text-[#5F6C7B] dark:bg-white/8 dark:text-slate-300'
+                      ? 'bg-gradient-to-br from-violet-600/15 to-fuchsia-600/15 text-violet-700 dark:from-violet-500/25 dark:to-fuchsia-500/20 dark:text-violet-300'
+                      : 'bg-[#F4F3F8] text-[#5D5A73] dark:bg-white/8 dark:text-slate-300'
                   }`}
                 >
-                  <Icon className="h-4 w-4" strokeWidth={1.85} />
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={1.85} />
                 </span>
               </div>
-              <p className="mt-3 text-2xl font-semibold tabular-nums tracking-[-0.03em] text-[#1C2B33] dark:text-white">{value}</p>
-              <p className="mt-1 text-xs text-[#5F6C7B] dark:text-slate-400">{note}</p>
+              <p className="mt-2.5 text-xl font-semibold tabular-nums tracking-[-0.03em] text-[#161426] sm:mt-3 sm:text-2xl dark:text-white">{value}</p>
+              <p className="mt-1 truncate text-[11px] text-[#5D5A73] sm:text-xs dark:text-slate-400">{note}</p>
               {isRevenue && month.expected > 0 && (
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-950/60">
-                  <div className="h-full rounded-full bg-emerald-600 transition-all duration-700 dark:bg-emerald-400" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-violet-100 dark:bg-violet-950/60">
+                  <div className="h-full rounded-full bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-500 transition-all duration-700" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
                 </div>
               )}
             </button>
           );
         })}
       </div>
+
+      {/* At-a-Glance Unit-by-Unit Rent Status Board */}
+      <UnitRentBoard
+        compact
+        properties={properties}
+        payments={payments}
+        tenantName={props.tenantName}
+        isBusy={props.isBusy}
+        onRemind={props.onRemind}
+        onRemindAll={props.onRemindAll}
+        onRecordCash={props.onRecordCash}
+        onAssign={props.onAssignProperty}
+        onViewAll={() => props.onOpenTab('finances')}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Panel
@@ -303,8 +320,12 @@ function RentChart({ months }: { months: { label: string; total: number; count: 
               )}
               <div
                 className={`w-full rounded-t-lg transition-all duration-500 ${
-                  hovered === index ? 'bg-gradient-to-t from-emerald-800 to-emerald-500' : 'bg-teal-300/75 dark:bg-teal-800'
-                } ${index === months.length - 1 && hovered === null ? '!bg-teal-600' : ''}`}
+                  hovered === index
+                    ? 'bg-gradient-to-t from-violet-800 via-purple-600 to-fuchsia-500'
+                    : index === months.length - 1 && hovered === null
+                      ? 'bg-gradient-to-t from-violet-700 to-purple-500'
+                      : 'bg-violet-300/65 dark:bg-violet-800/70'
+                }`}
                 style={{ height: `${height}%` }}
               />
             </div>

@@ -50,13 +50,13 @@ export default function Footer({ variant = 'app' }: FooterProps) {
   ];
 
   return (
-    <footer className="relative isolate mt-auto w-full overflow-hidden bg-zinc-950 text-white">
+    <footer className="relative isolate mt-auto w-full overflow-hidden bg-[#120926] text-white">
       <div
         aria-hidden
-        className="absolute inset-0 -z-20 bg-cover bg-center opacity-70"
+        className="absolute inset-0 -z-20 bg-cover bg-center opacity-50"
         style={{ backgroundImage: "url('/hero/hero-1.webp')" }}
       />
-      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-black via-black/80 to-black/45" />
+      <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-[#0D061D] via-[#1B0E38]/90 to-[#120926]/70" />
 
       <div className="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 sm:pt-20">
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1.2fr]">

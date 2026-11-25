@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { uploadFile } from '../../lib/api';
+import PhotoCaptureControl from '../PhotoCaptureControl';
 import type { Building, Property, PropertyStatus, PropertyType } from './types';
 import { ActionButton, Field, inputClass } from './ui';
 
@@ -59,7 +60,6 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -70,12 +70,12 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
 
   const set = <K extends keyof PropertyFormValues>(key: K, value: PropertyFormValues[K]) => setValues((v) => ({ ...v, [key]: value }));
 
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const onFiles = async (files: File[]) => {
+    if (!files.length) return;
     setUploading(true);
     try {
       const urls: string[] = [];
-      for (const file of Array.from(files).slice(0, 8)) {
+      for (const file of files.slice(0, 8)) {
         if (!file.type.startsWith('image/')) continue;
         if (file.size > 15 * 1024 * 1024) {
           toast.error(`${file.name} is larger than 15 MB`);
@@ -85,12 +85,14 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
         const { url } = await uploadFile(file, file.name);
         urls.push(url);
       }
-      setValues((v) => ({ ...v, images: [...v.images, ...urls] }));
+      if (urls.length > 0) {
+        setValues((v) => ({ ...v, images: [...v.images, ...urls] }));
+        toast.success(urls.length === 1 ? 'Photo added' : `${urls.length} photos added`);
+      }
     } catch (err: any) {
       toast.error(err.message || 'Could not upload the photo');
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   };
 
@@ -178,34 +180,40 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
             <input className={inputClass} value={values.amenities} onChange={(e) => set('amenities', e.target.value)} placeholder="Parking, Borehole, Backup generator" />
           </Field>
 
-          <div className="grid gap-2">
-            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Photos</span>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {values.images.map((url, index) => (
-                <div key={url + index} className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                  <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  <button
-                    type="button"
-                    aria-label="Remove photo"
-                    onClick={() => set('images', values.images.filter((_, i) => i !== index))}
-                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  {index === 0 && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">Cover</span>}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-zinc-300 text-xs text-zinc-500 transition hover:border-zinc-950 hover:text-zinc-950 disabled:opacity-60 dark:border-zinc-700"
-              >
-                <ImagePlus className="h-5 w-5" />
-                {uploading ? 'Uploading…' : 'Add photos'}
-              </button>
+          <div className="grid gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Photos</span>
+              {values.images.length > 0 && (
+                <span className="text-xs font-medium text-zinc-500">{values.images.length} attached</span>
+              )}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+            {values.images.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {values.images.map((url, index) => (
+                  <div key={url + index} className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800">
+                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                    <button
+                      type="button"
+                      aria-label="Remove photo"
+                      onClick={() => set('images', values.images.filter((_, i) => i !== index))}
+                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    {index === 0 && <span className="absolute bottom-1.5 left-1.5 rounded-full bg-black/65 px-2 py-0.5 text-[11px] text-white">Cover</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <PhotoCaptureControl
+              variant="tile"
+              multiple
+              defaultFacingMode="environment"
+              uploading={uploading}
+              uploadLabel={values.images.length > 0 ? 'Upload more' : 'Upload photos'}
+              captureLabel="Take photo"
+              onFiles={onFiles}
+            />
           </div>
 
           {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300" role="alert">{error}</p>}

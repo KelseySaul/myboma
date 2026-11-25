@@ -242,14 +242,14 @@ export default function CommandPalette({ profile, currentRole, onNavigate, onHel
                       onClick={item.action}
                       className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
                         active
-                          ? 'bg-emerald-700/[0.09] font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
-                          : 'text-[#1C2B33] hover:bg-[#F7F8FA] dark:text-slate-200 dark:hover:bg-white/[0.04]'
+                          ? 'bg-violet-600/[0.09] font-medium text-violet-800 dark:bg-violet-500/15 dark:text-violet-300'
+                          : 'text-[#161426] hover:bg-[#F8F7FC] dark:text-slate-200 dark:hover:bg-white/[0.04]'
                       }`}
                     >
-                      <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-emerald-700 dark:text-emerald-400' : 'text-[#5F6C7B] dark:text-slate-400'}`} />
+                      <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-violet-700 dark:text-violet-400' : 'text-[#5D5A73] dark:text-slate-400'}`} />
                       <span className="flex-1 truncate">{item.label}</span>
                       {active && (
-                        <kbd className="rounded border border-emerald-700/20 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        <kbd className="rounded border border-violet-600/20 bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800 dark:border-violet-400/20 dark:bg-violet-950/60 dark:text-violet-300">
                           ↵
                         </kbd>
                       )}

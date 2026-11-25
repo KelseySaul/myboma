@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import LandlordSubscriptionPay from './LandlordSubscriptionPay';
+import PhotoCaptureControl from './PhotoCaptureControl';
 
 /** Profile columns the API returns that the shared UserProfile type doesn't list. */
 type SettingsProfile = UserProfile & {
@@ -115,12 +116,12 @@ export default function SettingsPage({ profile: baseProfile }: { profile: UserPr
 
   return (
     <div className="db w-full min-w-0 pb-24 animate-in fade-in duration-300 sm:pb-10">
-      <header className="border-b border-zinc-200 bg-white px-5 py-6 dark:border-zinc-800 dark:bg-zinc-900 md:px-8">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white md:text-3xl">Settings</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Your profile, password and account preferences.</p>
+      <header className="border-b border-[#221844]/[0.08] bg-white px-4 py-5 dark:border-white/[0.08] dark:bg-[#181922] sm:px-6 md:px-8">
+        <h1 className="text-xl font-bold tracking-tight text-[#161426] dark:text-white sm:text-2xl md:text-3xl">Settings</h1>
+        <p className="mt-1 text-xs text-[#5D5A73] dark:text-slate-400 sm:text-sm">Your profile, password and account preferences.</p>
       </header>
 
-      <div className="mx-auto grid w-full max-w-5xl gap-4 px-5 pt-6 md:px-8 lg:grid-cols-2 lg:items-start">
+      <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 pt-5 sm:px-6 md:px-8 lg:grid-cols-2 lg:items-start">
         <ProfileSection profile={profile} />
         <PasswordSection />
         {isLandlord && <PayoutSection profile={profile} />}
@@ -155,9 +156,8 @@ function ProfileSection({ profile }: { profile: SettingsProfile }) {
   const phoneError = form.phone.trim() && !PHONE.test(form.phone.trim()) ? 'Use digits only, e.g. 0712 345 678.' : '';
   const initials = (form.displayName || profile.email).trim().slice(0, 1).toUpperCase();
 
-  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const uploadAvatarFile = async (files: File[]) => {
+    const file = files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Choose an image file.');
@@ -200,12 +200,12 @@ function ProfileSection({ profile }: { profile: SettingsProfile }) {
 
   return (
     <Section title="Profile" description="How you appear to landlords, tenants and our team.">
-      <div className="flex items-center gap-4">
-        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">
+      <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:gap-4">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-violet-50 ring-1 ring-violet-200/70 dark:bg-violet-500/15 dark:ring-violet-500/20">
           {form.avatarUrl ? (
             <img src={form.avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="flex h-full w-full items-center justify-center text-xl font-bold text-zinc-500">{initials}</span>
+            <span className="flex h-full w-full items-center justify-center text-xl font-bold text-violet-700 dark:text-violet-300">{initials}</span>
           )}
           {uploading && (
             <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white">
@@ -213,12 +213,15 @@ function ProfileSection({ profile }: { profile: SettingsProfile }) {
             </span>
           )}
         </div>
-        <div>
-          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-zinc-200 px-4 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
-            <Camera className="h-4 w-4" /> {form.avatarUrl ? 'Change photo' : 'Add photo'}
-            <input type="file" accept="image/*" className="sr-only" onChange={uploadAvatar} disabled={uploading} />
-          </label>
-          <p className="mt-1 text-xs text-zinc-500">JPG, PNG or WebP, up to 8 MB.</p>
+        <div className="min-w-0 flex-1">
+          <PhotoCaptureControl
+            defaultFacingMode="user"
+            uploading={uploading}
+            uploadLabel={form.avatarUrl ? 'Upload photo' : 'Upload photo'}
+            captureLabel="Take photo"
+            onFiles={uploadAvatarFile}
+          />
+          <p className="mt-1.5 text-xs text-zinc-500">JPG, PNG or WebP, up to 8 MB.</p>
         </div>
       </div>
 
@@ -361,8 +364,8 @@ function PayoutSection({ profile }: { profile: SettingsProfile }) {
             onClick={() => setMethod(option.id)}
             className={`rounded-xl border p-3 text-left transition ${
               method === option.id
-                ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950'
-                : 'border-zinc-200 hover:border-zinc-400 dark:border-zinc-700'
+                ? 'border-transparent bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-sm shadow-violet-700/20'
+                : 'border-zinc-200 hover:border-violet-300 dark:border-zinc-700'
             }`}
           >
             <span className="block text-sm font-semibold">{option.label}</span>
@@ -635,9 +638,8 @@ function BrandingSection({ profile }: { profile: SettingsProfile }) {
 
   const hexError = (value: string) => (value && !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? 'Use a colour code like #111111.' : '');
 
-  const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+  const uploadLogoFile = async (files: File[]) => {
+    const file = files[0];
     if (!file || !profile.platformId) return;
     setUploading(true);
     try {
@@ -678,14 +680,17 @@ function BrandingSection({ profile }: { profile: SettingsProfile }) {
               <Input id="brand-name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} className="h-11" />
             </Field>
             <Field label="Logo" htmlFor="brand-logo">
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : form.brandLogoUrl ? <img src={form.brandLogoUrl} alt="" className="h-full w-full object-contain p-1" /> : <Camera className="h-4 w-4 text-zinc-400" />}
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin text-violet-600" /> : form.brandLogoUrl ? <img src={form.brandLogoUrl} alt="" className="h-full w-full object-contain p-1" /> : <Camera className="h-4 w-4 text-zinc-400" />}
                 </span>
-                <label className="inline-flex h-11 cursor-pointer items-center rounded-xl border border-zinc-200 px-4 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-800">
-                  Upload logo
-                  <input id="brand-logo" type="file" accept="image/*" className="sr-only" onChange={uploadLogo} disabled={uploading} />
-                </label>
+                <PhotoCaptureControl
+                  defaultFacingMode="environment"
+                  uploading={uploading}
+                  uploadLabel="Upload logo"
+                  captureLabel="Take photo"
+                  onFiles={uploadLogoFile}
+                />
               </div>
             </Field>
             {(['brandPrimaryColor', 'brandSecondaryColor'] as const).map((key) => (

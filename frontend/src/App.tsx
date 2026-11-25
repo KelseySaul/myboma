@@ -9,20 +9,21 @@ import Sidebar from './components/Sidebar';
 import CommandPalette from './components/CommandPalette';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
-import PublicLegalPage from './components/PublicLegalPage';
-import AboutPage from './components/AboutPage';
-import InvitePage from './components/InvitePage';
-import ResetPasswordPage from './components/ResetPasswordPage';
 import AuthDialog, { type AuthIntent } from './components/auth/AuthDialog';
 import { tenantConfig } from './config/tenant';
 
-// Role dashboards are code-split: a tenant never downloads the 2,500-line admin/landlord
-// bundles, and the landing page loads without any dashboard code at all.
+// Role dashboards and secondary routes are code-split so initial load stays fast and lean.
 const LandlordDashboard = lazy(() => import('./components/LandlordDashboard'));
 const TenantDashboard = lazy(() => import('./components/TenantDashboard'));
 const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
+const AboutPage = lazy(() => import('./components/AboutPage'));
+const PublicLegalPage = lazy(() => import('./components/PublicLegalPage'));
+const InvitePage = lazy(() => import('./components/InvitePage'));
+const ResetPasswordPage = lazy(() => import('./components/ResetPasswordPage'));
+const OnboardingTour = lazy(() => import('./components/OnboardingTour'));
+const LandlordSubscriptionGate = lazy(() => import('./components/LandlordSubscriptionGate'));
 
 const DashboardFallback = () => (
   <div className="space-y-6 p-6 md:p-8" role="status" aria-live="polite" aria-label="Loading workspace">
@@ -63,9 +64,15 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import OnboardingTour, { shouldShowOnboarding } from './components/OnboardingTour';
-import LandlordSubscriptionGate from './components/LandlordSubscriptionGate';
 import { initializeOneSignal, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
+
+const shouldShowOnboarding = (role: UserRole): boolean => {
+  try {
+    return localStorage.getItem(`myboma_onboarding_done_v2_${role}`) !== 'true';
+  } catch {
+    return false;
+  }
+};
 import {
   isLandlordSubscriptionActive,
   PENDING_LANDLORD_SUBSCRIPTION_KEY,
@@ -466,7 +473,17 @@ export default function App() {
           }}
           overHero={false}
         />
-        <main><InvitePage /></main>
+        <main>
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-200 border-t-violet-700" />
+              </div>
+            }
+          >
+            <InvitePage />
+          </Suspense>
+        </main>
         <Footer variant="public" />
         <AuthDialog
           open={isAuthOpen}
@@ -481,7 +498,7 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />
@@ -509,15 +526,23 @@ export default function App() {
       <div className="db app-shell app-shell-public min-h-screen bg-white">
         <PublicNavbar onLoginClick={() => openAuth({ mode: 'signin' })} overHero={!legalPageType && !isResetPage} />
         <main>
-          {legalPageType ? (
-            <PublicLegalPage type={legalPageType} />
-          ) : isAboutPage ? (
-            <AboutPage onSignUp={() => openAuth({ mode: 'signup', role: 'landlord' })} />
-          ) : isResetPage ? (
-            <ResetPasswordPage onSignIn={() => openAuth({ mode: 'signin' })} />
-          ) : (
-            <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
-          )}
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-200 border-t-violet-700" />
+              </div>
+            }
+          >
+            {legalPageType ? (
+              <PublicLegalPage type={legalPageType} />
+            ) : isAboutPage ? (
+              <AboutPage onSignUp={() => openAuth({ mode: 'signup', role: 'landlord' })} />
+            ) : isResetPage ? (
+              <ResetPasswordPage onSignIn={() => openAuth({ mode: 'signin' })} />
+            ) : (
+              <LandingPage isAuthOpen={isAuthOpen} setIsAuthOpen={setIsAuthOpen} />
+            )}
+          </Suspense>
         </main>
         <Footer variant="public" />
         {!isLanding && (
@@ -535,7 +560,7 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />
@@ -627,7 +652,7 @@ export default function App() {
 
   return (
     <div 
-      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#F0F2F5] dark:bg-[#111315] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
+      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#F4F3F8] dark:bg-[#0F1016] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
     >
       {/* Desktop Fixed Sidebar — only when logged in */}
       {activeProfile && (
@@ -766,14 +791,16 @@ export default function App() {
       {currentRole === 'admin' && (
         <>
           {/* Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
             <div className="flex items-center justify-around h-15 px-1">
               {[
                 { id: 'dashboard',   label: 'Home',      icon: faChartPie },
                 { id: 'registered',  label: 'Users',     icon: faUsers },
                 { id: 'pending',     label: 'Pending',   icon: faLink },
                 { id: 'properties',  label: 'Properties', icon: faBuilding },
-              ].map(t => (
+              ].map(t => {
+                const isActive = (activeTab || 'dashboard') === t.id;
+                return (
                 <button
                   key={t.id}
                   onClick={() => {
@@ -781,21 +808,21 @@ export default function App() {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
-                    activeTab === t.id
-                      ? 'text-slate-900 dark:text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-700'
+                    isActive
+                      ? 'text-violet-700 dark:text-violet-300 font-bold'
+                      : 'text-[#8A86A1] hover:text-[#161426]'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
-                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
                   </div>
                   <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
                   }`}>{t.label}</span>
                 </button>
-              ))}
+              );})}
               {(() => {
                 const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'platforms', 'audit', 'settings'].includes(activeTab);
                 return (
@@ -803,17 +830,17 @@ export default function App() {
                     onClick={() => setIsMobileMenuOpen(true)}
                     className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                       isAdminMenuTabActive
-                        ? 'text-slate-900 dark:text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-700'
+                        ? 'text-violet-700 dark:text-violet-300 font-bold'
+                        : 'text-[#8A86A1] hover:text-[#161426]'
                     }`}
                   >
-                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
-                      isAdminMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                    <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                      isAdminMenuTabActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
                     }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isAdminMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isAdminMenuTabActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
                     </div>
                     <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                      isAdminMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                      isAdminMenuTabActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
                     }`}>Menu</span>
                   </button>
                 );
@@ -824,23 +851,23 @@ export default function App() {
           {/* Mobile Drawer Slide-out Menu (Right to Left) */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
+              className="fixed inset-0 bg-[#120926]/45 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
               onClick={() => setIsMobileMenuOpen(false)}
             />
           )}
           
           <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-[#181922] shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-[#221844]/[0.08] dark:border-white/[0.08] ${
               isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">Operations Menu</span>
+            <div className="flex items-center justify-between border-b border-[#221844]/[0.07] dark:border-white/[0.07] pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#161426] dark:text-white">Operations Menu</span>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
+                className="h-8 w-8 rounded-lg bg-[#F4F3F8] dark:bg-white/10 flex items-center justify-center hover:bg-violet-100 text-[#5D5A73] cursor-pointer"
               >
-                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
+                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
               </button>
             </div>
             
@@ -867,12 +894,12 @@ export default function App() {
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
+                        ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white font-semibold shadow-sm'
+                        : 'text-[#5D5A73] dark:text-slate-300 hover:bg-[#F4F3F8] dark:hover:bg-white/[0.06] font-medium'
                     }`}
                   >
                     <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      isActive ? 'bg-white/20 text-white' : 'bg-[#F4F3F8] dark:bg-white/8 text-[#5D5A73]'
                     }`}>
                       <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
                     </div>
@@ -890,14 +917,16 @@ export default function App() {
       {currentRole === 'landlord' && (
         <>
           {/* Landlord Mobile Bottom Navigation Bar */}
-          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+          <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
             <div className="flex items-center justify-around h-15 px-1">
               {[
                 { id: 'dashboard',   label: 'Home',     icon: faChartPie },
                 { id: 'properties',  label: 'Properties', icon: faHome },
                 { id: 'finances',    label: 'Payments', icon: faWallet },
                 { id: 'tenants',     label: 'Tenants',  icon: faUsers },
-              ].map(t => (
+              ].map(t => {
+                const isActive = (activeTab || 'dashboard') === t.id;
+                return (
                 <button
                   key={t.id}
                   onClick={() => {
@@ -905,21 +934,21 @@ export default function App() {
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                   className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
-                    activeTab === t.id
-                      ? 'text-slate-900 dark:text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-700'
+                    isActive
+                      ? 'text-violet-700 dark:text-violet-300 font-bold'
+                      : 'text-[#8A86A1] hover:text-[#161426]'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
-                    activeTab === t.id ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${activeTab === t.id ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
                   </div>
                   <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    activeTab === t.id ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
                   }`}>{t.label}</span>
                 </button>
-              ))}
+              );})}
               {(() => {
                 const isMenuTabActive = ['pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
                 return (
@@ -927,17 +956,17 @@ export default function App() {
                     onClick={() => setIsMobileMenuOpen(true)}
                     className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                       isMenuTabActive
-                        ? 'text-slate-900 dark:text-white font-bold'
-                        : 'text-slate-400 hover:text-slate-700'
+                        ? 'text-violet-700 dark:text-violet-300 font-bold'
+                        : 'text-[#8A86A1] hover:text-[#161426]'
                     }`}
                   >
-                    <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
-                      isMenuTabActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                    <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                      isMenuTabActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
                     }`}>
-                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isMenuTabActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                      <FontAwesomeIcon icon={faBars} className={`text-xs ${isMenuTabActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
                     </div>
                     <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                      isMenuTabActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                      isMenuTabActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
                     }`}>Menu</span>
                   </button>
                 );
@@ -948,23 +977,23 @@ export default function App() {
           {/* Mobile Drawer Slide-out Menu (Right to Left) */}
           {isMobileMenuOpen && (
             <div 
-              className="fixed inset-0 bg-slate-950/40 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
+              className="fixed inset-0 bg-[#120926]/45 z-50 sm:hidden transition-opacity backdrop-blur-xs animate-in fade-in duration-200"
               onClick={() => setIsMobileMenuOpen(false)}
             />
           )}
           
           <div 
-            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-slate-900 shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-slate-200 dark:border-slate-800 ${
+            className={`fixed inset-y-0 right-0 z-50 w-72 bg-white dark:bg-[#181922] shadow-2xl p-5 sm:hidden transition-transform duration-200 ease-in-out border-l border-[#221844]/[0.08] dark:border-white/[0.08] ${
               isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
             }`}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">More Options</span>
+            <div className="flex items-center justify-between border-b border-[#221844]/[0.07] dark:border-white/[0.07] pb-3 mb-4">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#161426] dark:text-white">More Options</span>
               <button 
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="h-7 w-7 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center hover:bg-slate-200 text-slate-500 cursor-pointer"
+                className="h-8 w-8 rounded-lg bg-[#F4F3F8] dark:bg-white/10 flex items-center justify-center hover:bg-violet-100 text-[#5D5A73] cursor-pointer"
               >
-                <FontAwesomeIcon icon={faTimes} className="h-3 w-3" />
+                <FontAwesomeIcon icon={faTimes} className="h-3.5 w-3.5" />
               </button>
             </div>
             
@@ -986,12 +1015,12 @@ export default function App() {
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-slate-900 text-white dark:bg-slate-50 dark:text-slate-900 font-semibold'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
+                        ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white font-semibold shadow-sm'
+                        : 'text-[#5D5A73] dark:text-slate-300 hover:bg-[#F4F3F8] dark:hover:bg-white/[0.06] font-medium'
                     }`}
                   >
                     <div className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
-                      isActive ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      isActive ? 'bg-white/20 text-white' : 'bg-[#F4F3F8] dark:bg-white/8 text-[#5D5A73]'
                     }`}>
                       <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
                     </div>
@@ -1024,7 +1053,7 @@ export default function App() {
       )}
 
       {currentRole === 'tenant' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
           <div className="flex items-center justify-around h-15 px-1">
             {[
               { id: 'dashboard',   label: 'Home', icon: faChartPie },
@@ -1043,17 +1072,17 @@ export default function App() {
                   }}
                   className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
                     isActive
-                      ? 'text-slate-900 dark:text-white font-bold'
-                      : 'text-slate-400 hover:text-slate-700'
+                      ? 'text-violet-700 dark:text-violet-300 font-bold'
+                      : 'text-[#8A86A1] hover:text-[#161426]'
                   }`}
                 >
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-lg transition-all ${
-                    isActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
                   }`}>
-                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`} />
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
                   </div>
                   <span className={`text-[9px] uppercase tracking-wide leading-none ${
-                    isActive ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-400'
+                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
                   }`}>{t.label}</span>
                 </button>
               );
@@ -1067,15 +1096,17 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30 ring-2 ring-white dark:ring-[#181922]">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />
       {showOnboarding && !impersonatedProfile && profile && (
-        <OnboardingTour
-          role={profile.role}
-          onComplete={() => setShowOnboarding(false)}
-        />
+        <Suspense fallback={null}>
+          <OnboardingTour
+            role={profile.role}
+            onComplete={() => setShowOnboarding(false)}
+          />
+        </Suspense>
       )}
 
     </div>

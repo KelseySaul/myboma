@@ -35,10 +35,10 @@ export function useBusy() {
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-emerald-700 text-white hover:bg-emerald-800 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 shadow-2xs',
-  secondary: 'border border-[#D0D5DD] bg-white text-[#1C2B33] hover:bg-[#F7F8FA] dark:border-white/12 dark:bg-[#1A1D21] dark:text-slate-100 dark:hover:bg-white/5 shadow-2xs',
-  ghost: 'text-[#5F6C7B] hover:bg-[#1C2B33]/[0.05] hover:text-[#1C2B33] dark:text-slate-300 dark:hover:bg-white/8 dark:hover:text-white',
-  danger: 'border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-[#1A1D21] dark:text-rose-400',
+  primary: 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700 shadow-xs shadow-violet-700/20',
+  secondary: 'border border-[#D5D2E3] bg-white text-[#161426] hover:border-violet-300 hover:bg-[#F8F7FC] dark:border-white/12 dark:bg-[#181922] dark:text-slate-100 dark:hover:bg-white/5 shadow-2xs',
+  ghost: 'text-[#5D5A73] hover:bg-violet-600/[0.06] hover:text-[#161426] dark:text-slate-300 dark:hover:bg-white/8 dark:hover:text-white',
+  danger: 'border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:bg-[#181922] dark:text-rose-400',
 };
 
 interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -80,29 +80,32 @@ export function Panel({ title, action, children, className = '' }: { title?: Rea
 }
 
 const PILL_STYLES: Record<string, string> = {
-  paid: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
-  active: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
-  rented: 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/15 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-400/20',
-  resolved: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
+  paid: 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/25',
+  active: 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/25',
+  rented: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-indigo-400/25',
+  resolved: 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/25',
   booked: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20',
-  available: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
+  available: 'bg-purple-50 text-purple-700 ring-1 ring-purple-600/20 dark:bg-purple-500/15 dark:text-purple-300 dark:ring-purple-400/25',
   pending: 'bg-slate-100 text-slate-700 ring-1 ring-slate-300/60 dark:bg-white/10 dark:text-slate-300 dark:ring-white/10',
-  invited: 'bg-slate-100 text-slate-700 ring-1 ring-slate-300/60 dark:bg-white/10 dark:text-slate-300 dark:ring-white/10',
-  verifying: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20',
+  'due-soon': 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/25',
+  invited: 'bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-600/15 dark:bg-fuchsia-500/15 dark:text-fuchsia-300 dark:ring-fuchsia-400/25',
+  verifying: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/25',
   'in-progress': 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/15 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-400/20',
   'no-unit': 'bg-slate-100 text-slate-500 dark:bg-white/8 dark:text-slate-400',
-  overdue: 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/15 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/20',
-  urgent: 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/15 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/20',
+  overdue: 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/25',
+  urgent: 'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/25',
   high: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20',
 };
 
 const PILL_DOT: Record<string, string> = {
-  paid: 'bg-emerald-500',
-  active: 'bg-emerald-500',
-  available: 'bg-emerald-500',
-  resolved: 'bg-emerald-500',
-  rented: 'bg-sky-500',
+  paid: 'bg-violet-600',
+  active: 'bg-violet-600',
+  available: 'bg-purple-500',
+  resolved: 'bg-violet-600',
+  rented: 'bg-indigo-500',
   'in-progress': 'bg-sky-500',
+  'due-soon': 'bg-amber-500',
+  invited: 'bg-fuchsia-500',
   booked: 'bg-amber-500',
   verifying: 'bg-amber-500',
   high: 'bg-amber-500',
@@ -114,10 +117,11 @@ const PILL_LABELS: Record<string, string> = {
   available: 'Vacant',
   rented: 'Occupied',
   booked: 'Booked',
+  'due-soon': 'Due soon',
   'in-progress': 'In progress',
   'no-unit': 'No unit yet',
   invited: 'Invite sent',
-  verifying: 'Checking payment',
+  verifying: 'Confirm payment',
 };
 
 export function StatusPill({ status }: { status: PropertyStatus | string }) {
@@ -149,14 +153,14 @@ export function SearchInput({ value, onChange, placeholder }: { value: string; o
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="h-9.5 w-full rounded-lg border border-[#D0D5DD] bg-white px-3.5 text-sm text-[#1C2B33] placeholder:text-[#8A94A6] focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15 focus:outline-none dark:border-white/12 dark:bg-[#16191D] dark:text-white sm:max-w-xs"
+      className="h-10 w-full rounded-xl border border-[#D5D2E3] bg-white px-3.5 text-sm text-[#161426] placeholder:text-[#8A86A1] focus:border-violet-600 focus:ring-2 focus:ring-violet-600/15 focus:outline-none dark:border-white/12 dark:bg-[#161722] dark:text-white sm:h-9.5 sm:max-w-xs sm:rounded-lg"
     />
   );
 }
 
 export function FilterChips<T extends string>({ options, value, onChange }: { options: { id: NoInfer<T>; label: string; count?: number }[]; value: T; onChange: (value: NoInfer<T>) => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5" role="tablist">
+    <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5 sm:flex-wrap sm:overflow-visible" role="tablist">
       {options.map((option) => (
         <button
           key={option.id}
@@ -164,14 +168,14 @@ export function FilterChips<T extends string>({ options, value, onChange }: { op
           role="tab"
           aria-selected={value === option.id}
           onClick={() => onChange(option.id)}
-          className={`h-8.5 rounded-lg px-3 text-xs font-semibold transition ${
+          className={`h-9 shrink-0 rounded-lg px-3 text-xs font-semibold transition sm:h-8.5 ${
             value === option.id
-              ? 'bg-emerald-700/[0.10] text-emerald-800 ring-1 ring-emerald-700/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/25'
-              : 'border border-[#1C2B33]/[0.09] bg-white text-[#5F6C7B] hover:bg-[#F7F8FA] hover:text-[#1C2B33] dark:border-white/[0.08] dark:bg-[#1A1D21] dark:text-slate-300'
+              ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20'
+              : 'border border-[#221844]/[0.09] bg-white text-[#5D5A73] hover:border-violet-300 hover:bg-[#F8F7FC] hover:text-[#161426] dark:border-white/[0.08] dark:bg-[#181922] dark:text-slate-300'
           }`}
         >
           {option.label}
-          {option.count !== undefined && <span className="ml-1.5 tabular-nums opacity-70">{option.count}</span>}
+          {option.count !== undefined && <span className={`ml-1.5 tabular-nums ${value === option.id ? 'opacity-85' : 'opacity-70'}`}>{option.count}</span>}
         </button>
       ))}
     </div>

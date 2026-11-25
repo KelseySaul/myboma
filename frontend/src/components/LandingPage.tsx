@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
-import HunterDashboard from './HunterDashboard';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { GetStarted, LandingHero, LandlordFeatures, ListingsSection } from './landing/LandingSections';
 import { SEARCH_EVENT } from './search/SiteSearch';
@@ -7,6 +6,20 @@ import AuthDialog, { type AuthIntent } from './auth/AuthDialog';
 import {unsubscribeFromWaitlist} from '../lib/waitlist';
 import { Capacitor } from '@capacitor/core';
 import { tenantConfig } from '../config/tenant';
+
+const HunterDashboard = lazy(() => import('./HunterDashboard'));
+
+const ListingsSkeleton = () => (
+  <div className="grid grid-cols-2 gap-4 px-2 py-8 sm:grid-cols-3 lg:grid-cols-4">
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="space-y-2.5">
+        <div className="aspect-[4/3] animate-pulse rounded-2xl bg-violet-100/60" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-violet-100/60" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-violet-100/40" />
+      </div>
+    ))}
+  </div>
+);
 
 // Move PWA prompt to module level so it persists across renders
 let _pwaPromptEvent: any = null;
@@ -129,30 +142,42 @@ export default function LandingPage({ isAuthOpen, setIsAuthOpen }: LandingPagePr
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-zinc-200">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white selection:bg-violet-200 selection:text-violet-950">
       {isNative ? (
         <section className="container mx-auto px-2 py-4 pt-safe sm:px-4">
-          <HunterDashboard
-            profile={null}
-            onLoginRequired={() => setIsAuthOpen(true)}
-            activeTab={propertyFilter}
-            setActiveTab={setPropertyFilter}
-            variant="embedded"
-          />
-        </section>
-      ) : (
-        <>
-          <LandingHero onBrowse={scrollToHomes} onStartLandlord={() => openLandlordSignup()} />
-          <ListingsSection activeType={propertyFilter} onTypeChange={setPropertyFilter}>
+          <Suspense fallback={<ListingsSkeleton />}>
             <HunterDashboard
               profile={null}
               onLoginRequired={() => setIsAuthOpen(true)}
               activeTab={propertyFilter}
               setActiveTab={setPropertyFilter}
-              externalSearchTerm={listingSearch}
-              onExternalSearchChange={setListingSearch}
               variant="embedded"
             />
+          </Suspense>
+        </section>
+      ) : (
+        <>
+          <LandingHero
+            onBrowse={scrollToHomes}
+            onStartLandlord={() => openLandlordSignup()}
+            onSearch={(query) => {
+              setListingSearch(query);
+              setPropertyFilter('all');
+              requestAnimationFrame(() => scrollToHomes());
+            }}
+          />
+          <ListingsSection activeType={propertyFilter} onTypeChange={setPropertyFilter}>
+            <Suspense fallback={<ListingsSkeleton />}>
+              <HunterDashboard
+                profile={null}
+                onLoginRequired={() => setIsAuthOpen(true)}
+                activeTab={propertyFilter}
+                setActiveTab={setPropertyFilter}
+                externalSearchTerm={listingSearch}
+                onExternalSearchChange={setListingSearch}
+                variant="embedded"
+              />
+            </Suspense>
           </ListingsSection>
           <LandlordFeatures onStartLandlord={() => openLandlordSignup()} />
           <GetStarted onStartLandlord={() => openLandlordSignup()} onSignIn={openSignIn} />

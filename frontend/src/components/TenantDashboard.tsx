@@ -197,14 +197,14 @@ export default function TenantDashboard({ profile, activeTab, setActiveTab }: Te
 function Shell({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="db w-full min-w-0 pb-24 animate-in fade-in duration-300 sm:pb-10">
-      <header className="flex flex-col gap-4 border-b border-zinc-200 bg-white px-5 py-6 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-end sm:justify-between md:px-8">
+      <header className="flex flex-col gap-3 border-b border-[#221844]/[0.08] bg-white px-4 py-5 dark:border-white/[0.08] dark:bg-[#181922] sm:flex-row sm:items-end sm:justify-between sm:px-6 md:px-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white md:text-3xl">{title}</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{subtitle}</p>
+          <h1 className="text-xl font-bold tracking-tight text-[#161426] dark:text-white sm:text-2xl md:text-3xl">{title}</h1>
+          <p className="mt-1 text-xs text-[#5D5A73] dark:text-slate-400 sm:text-sm">{subtitle}</p>
         </div>
         {action}
       </header>
-      <div className="mx-auto w-full max-w-6xl px-5 pt-6 md:px-8">{children}</div>
+      <div className="mx-auto w-full max-w-6xl px-4 pt-5 sm:px-6 md:px-8">{children}</div>
     </div>
   );
 }
@@ -395,10 +395,10 @@ function RentCard({
 
   if (state.kind === 'paid' || state.kind === 'verifying') {
     return (
-      <Card className="flex flex-col justify-center bg-zinc-950 text-white dark:bg-zinc-900">
-        <CheckCircle2 className="h-7 w-7" />
+      <Card className="flex flex-col justify-center !border-transparent !bg-gradient-to-br from-[#1A0D36] via-[#4C1D95] to-[#7E22CE] text-white shadow-lg shadow-violet-900/20">
+        <CheckCircle2 className="h-7 w-7 text-fuchsia-300" />
         <h2 className="mt-3 text-2xl font-bold">{state.kind === 'paid' ? 'You are all paid up' : 'Payment being checked'}</h2>
-        <p className="mt-1 text-sm text-zinc-300">
+        <p className="mt-1 text-sm text-violet-100/85">
           {state.kind === 'paid'
             ? 'Nothing is due right now. We will remind you before your next rent is due.'
             : `Your landlord is confirming your payment of ${formatMoney(state.payment.amount)}.`}
@@ -477,7 +477,7 @@ function PaymentRow({
         <span
           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
             payment.status === 'paid'
-              ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950'
+              ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-500/20 dark:text-violet-300'
               : late
                 ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
                 : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'

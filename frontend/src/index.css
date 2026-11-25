@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,ital,wght@6..96,0,500;6..96,0,600;6..96,0,700;6..96,0,800;6..96,1,600;6..96,1,700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -103,7 +102,7 @@
     --accent-foreground: oklch(0.205 0 0);
     --destructive: oklch(0.6 0.15 20); /* Adjusted to a deeper red */
     --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.65 0.15 150); /* Green */
+    --success: oklch(0.54 0.22 293); /* Violet */
     --success-foreground: oklch(0.985 0 0);
     --warning: oklch(0.75 0.15 80); /* Amber/Yellow */
     --warning-foreground: oklch(0.145 0 0);
@@ -145,7 +144,7 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.4 0.15 20); /* Dark mode red */
     --destructive-foreground: oklch(0.985 0 0);
-    --success: oklch(0.45 0.15 150); /* Dark mode green */
+    --success: oklch(0.66 0.2 293); /* Dark mode violet */
     --success-foreground: oklch(0.985 0 0);
     --warning: oklch(0.55 0.15 80); /* Dark mode amber */
     --warning-foreground: oklch(0.985 0 0);
@@ -452,15 +451,15 @@ body {
   gap: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #047857;
+  color: #6D28D9;
 }
 
 .status-pulse {
   width: 7px;
   height: 7px;
-  background: #10b981;
+  background: #8B5CF6;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
@@ -633,7 +632,7 @@ body {
 
 .bar-blue   { background: #3b82f6; }
 .bar-amber  { background: #f59e0b; }
-.bar-teal   { background: #10b981; }
+.bar-teal   { background: #7c3aed; }
 .bar-red    { background: #ef4444; }
 .bar-purple { background: #a855f7; }
 .bar-indigo { background: #6366f1; }
@@ -951,37 +950,41 @@ aside[class*="sticky"] {
   }
 }
 /* ============================================
-   MYBOMA — Meta-Grade Layered Surface System
-   Clean #F0F2F5 canvas + crisp #FFFFFF surfaces + #1C2B33 ink + Deep Emerald accent.
+   MYBOMA — Aesthetic Purple Gradient Layered Surface System
+   Clean #F4F3F8 canvas + crisp #FFFFFF surfaces + #161426 ink + Royal Violet -> Amethyst gradient.
    ============================================ */
 .app-shell:not(.app-shell-public) {
-  --meta-canvas: #F0F2F5;
+  --meta-canvas: #F4F3F8;
   --meta-surface: #FFFFFF;
-  --meta-surface-subtle: #F7F8FA;
-  --meta-border: rgba(28, 43, 51, 0.09);
-  --meta-border-strong: rgba(28, 43, 51, 0.14);
-  --meta-ink: #1C2B33;
-  --meta-ink-secondary: #5F6C7B;
-  --meta-ink-muted: #8A94A6;
-  --meta-accent: #047857;
-  --meta-accent-hover: #065F46;
-  --meta-accent-soft: rgba(4, 120, 87, 0.10);
+  --meta-surface-subtle: #F8F7FC;
+  --meta-border: rgba(34, 24, 68, 0.09);
+  --meta-border-strong: rgba(34, 24, 68, 0.15);
+  --meta-ink: #161426;
+  --meta-ink-secondary: #5D5A73;
+  --meta-ink-muted: #8A86A1;
+  --meta-accent: #6D28D9;
+  --meta-accent-hover: #5B21B6;
+  --meta-accent-soft: rgba(124, 58, 237, 0.10);
+  --brand-gradient: linear-gradient(135deg, #5B21B6 0%, #7C3AED 55%, #A855F7 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #9333EA 100%);
   background: var(--meta-canvas);
   color: var(--meta-ink);
 }
 
 .dark .app-shell:not(.app-shell-public) {
-  --meta-canvas: #111315;
-  --meta-surface: #1A1D21;
-  --meta-surface-subtle: #20242A;
+  --meta-canvas: #0F1016;
+  --meta-surface: #181922;
+  --meta-surface-subtle: #1F202D;
   --meta-border: rgba(255, 255, 255, 0.08);
-  --meta-border-strong: rgba(255, 255, 255, 0.14);
-  --meta-ink: #F1F5F9;
-  --meta-ink-secondary: #94A3B8;
-  --meta-ink-muted: #64748B;
-  --meta-accent: #10B981;
-  --meta-accent-hover: #059669;
-  --meta-accent-soft: rgba(16, 185, 129, 0.14);
+  --meta-border-strong: rgba(255, 255, 255, 0.15);
+  --meta-ink: #F5F3FF;
+  --meta-ink-secondary: #A5A1BE;
+  --meta-ink-muted: #706B8C;
+  --meta-accent: #8B5CF6;
+  --meta-accent-hover: #7C3AED;
+  --meta-accent-soft: rgba(139, 92, 246, 0.16);
+  --brand-gradient: linear-gradient(135deg, #6D28D9 0%, #7C3AED 55%, #C084FC 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #5B21B6 0%, #6D28D9 55%, #A855F7 100%);
   background: var(--meta-canvas);
   color: var(--meta-ink);
 }
@@ -1004,7 +1007,7 @@ aside[class*="sticky"] {
 .app-shell:not(.app-shell-public) main section.rounded-xl {
   background: var(--meta-surface);
   border-color: var(--meta-border);
-  box-shadow: 0 1px 2px rgba(28, 43, 51, 0.05), 0 0 0 1px rgba(28, 43, 51, 0.02);
+  box-shadow: 0 1px 2px rgba(22, 20, 38, 0.05), 0 0 0 1px rgba(109, 40, 217, 0.02);
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
@@ -1012,7 +1015,7 @@ aside[class*="sticky"] {
 .dark .app-shell:not(.app-shell-public) .stat-card,
 .dark .app-shell:not(.app-shell-public) main section.rounded-2xl,
 .dark .app-shell:not(.app-shell-public) main section.rounded-xl {
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .app-shell:not(.app-shell-public) main button.group.stat-tint,
@@ -1021,39 +1024,51 @@ aside[class*="sticky"] {
 .app-shell:not(.app-shell-public) main .finance-highlight {
   background: var(--meta-surface);
   border-color: var(--meta-border);
-  box-shadow: 0 1px 2px rgba(28, 43, 51, 0.05);
+  box-shadow: 0 1px 2px rgba(22, 20, 38, 0.05);
   transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
 .app-shell:not(.app-shell-public) main button.group.stat-tint:hover,
 .app-shell:not(.app-shell-public) main button.group.finance-highlight:hover,
 .app-shell:not(.app-shell-public) .stat-card:hover {
-  border-color: rgba(4, 120, 87, 0.35);
-  box-shadow: 0 4px 12px rgba(28, 43, 51, 0.08);
+  border-color: rgba(124, 58, 237, 0.38);
+  box-shadow: 0 6px 18px rgba(109, 40, 217, 0.10);
   transform: translateY(-1px);
 }
 
-/* Subtle executive top accent for revenue KPI card */
+/* Signature aesthetic purple gradient accent for revenue KPI card */
 .app-shell:not(.app-shell-public) main .finance-highlight,
 .app-shell:not(.app-shell-public) main button.group.finance-highlight {
   position: relative;
   overflow: hidden;
-  border-color: rgba(4, 120, 87, 0.22);
-  background: linear-gradient(180deg, rgba(4, 120, 87, 0.045) 0%, var(--meta-surface) 48%);
+  border-color: rgba(124, 58, 237, 0.24);
+  background: linear-gradient(155deg, rgba(124, 58, 237, 0.07) 0%, rgba(168, 85, 247, 0.03) 45%, var(--meta-surface) 100%);
 }
 
 .dark .app-shell:not(.app-shell-public) main .finance-highlight,
 .dark .app-shell:not(.app-shell-public) main button.group.finance-highlight {
-  border-color: rgba(16, 185, 129, 0.28);
-  background: linear-gradient(180deg, rgba(16, 185, 129, 0.09) 0%, var(--meta-surface) 52%);
+  border-color: rgba(167, 139, 250, 0.28);
+  background: linear-gradient(155deg, rgba(124, 58, 237, 0.18) 0%, rgba(168, 85, 247, 0.07) 48%, var(--meta-surface) 100%);
 }
 
+.brand-gradient,
 .finance-cta {
-  background: #047857;
+  background: linear-gradient(135deg, #5B21B6 0%, #7C3AED 55%, #A855F7 100%);
   color: #ffffff;
+  border-color: transparent;
 }
+.brand-gradient:hover,
 .finance-cta:hover {
-  background: #065F46;
+  background: linear-gradient(135deg, #4C1D95 0%, #6D28D9 55%, #9333EA 100%);
+}
+
+/* Mobile-first smooth horizontal chip scrollers without visual scrollbar clutter */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Crisp borderless tables inside cards */

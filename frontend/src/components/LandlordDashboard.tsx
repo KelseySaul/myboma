@@ -22,6 +22,7 @@ import {
   markRentPaymentManual,
   provisionUser,
   resendLandlordInvitation,
+  sendBulkRentReminders,
   sendRentReminder,
   syncRentInvoices,
   unassignTenant,
@@ -279,19 +280,49 @@ export default function LandlordDashboard({
       }
     });
 
-  const recordCash = (payment: RentPayment) =>
+  const remindAll = (targets: RentPayment[]) => {
+    if (!targets.length) return;
     setConfirm({
-      title: 'Record cash payment',
-      body: `Mark ${tenantName(payment.tenantId)}'s invoice of KES ${Number(payment.amount).toLocaleString('en-KE')} as paid in cash? They will get a receipt.`,
-      confirmLabel: 'Mark as paid',
+      title: `Send ${targets.length} rent ${targets.length === 1 ? 'reminder' : 'reminders'}?`,
+      body: `MyBoma will notify ${targets.length} ${targets.length === 1 ? 'tenant' : 'tenants'} with unpaid or upcoming rent by email, push and in-app notice.`,
+      confirmLabel: `Send ${targets.length} ${targets.length === 1 ? 'reminder' : 'reminders'}`,
       action: async () => {
-        await markRentPaymentManual(payment.id, 'Landlord recorded a cash payment');
-        logAudit('PAYMENT_MARK_PAID', 'rentPayment', payment.id, { provider: 'manual' });
-        await syncRentInvoices().catch(() => undefined);
-        await refresh();
-        toast.success('Payment recorded');
+        await run('remind-bulk', async () => {
+          const result = await sendBulkRentReminders(targets.map((p) => p.id));
+          toast.success(result.sent > 0 ? `Sent ${result.sent} rent ${result.sent === 1 ? 'reminder' : 'reminders'}` : 'No reminders were sent');
+        });
       },
     });
+  };
+
+  const recordCash = (payment: RentPayment) => {
+    const submittedReceipt =
+      typeof payment.paymentMetadata?.submittedReceipt === 'string'
+        ? payment.paymentMetadata.submittedReceipt
+        : null;
+    const isVerifying = payment.status === 'verifying';
+    setConfirm({
+      title: isVerifying ? 'Confirm tenant payment' : 'Mark rent as paid',
+      body: isVerifying
+        ? `Confirm ${tenantName(payment.tenantId)}'s payment of KES ${Number(payment.amount).toLocaleString('en-KE')}${submittedReceipt ? ` (${submittedReceipt})` : ''}? They will receive a receipt immediately.`
+        : `Mark ${tenantName(payment.tenantId)}'s invoice of KES ${Number(payment.amount).toLocaleString('en-KE')} as paid? They will get a receipt.`,
+      confirmLabel: isVerifying ? 'Confirm paid' : 'Mark as paid',
+      action: async () => {
+        await run(`cash-${payment.id}`, async () => {
+          await markRentPaymentManual(
+            payment.id,
+            isVerifying
+              ? `Confirmed tenant payment${submittedReceipt ? ` (${submittedReceipt})` : ''}`
+              : 'Landlord recorded a cash payment',
+          );
+          logAudit('PAYMENT_MARK_PAID', 'rentPayment', payment.id, { provider: 'manual' });
+          await syncRentInvoices().catch(() => undefined);
+          await refresh();
+          toast.success(isVerifying ? 'Payment confirmed' : 'Payment recorded');
+        });
+      },
+    });
+  };
 
   const inviteTenant = async (values: { email: string; name: string; phone: string; propertyId: string }) => {
     const targetLandlordId = isSuperAdminScoped && selectedAccountIds.length === 1 ? selectedAccountIds[0] : profile.uid;
@@ -530,7 +561,9 @@ export default function LandlordDashboard({
               isBusy={isBusy}
               onOpenTab={(next) => setActiveTab(next)}
               onRemind={remind}
+              onRemindAll={remindAll}
               onRecordCash={recordCash}
+              onAssignProperty={openAssignForProperty}
               onAddProperty={openAddProperty}
               onInviteTenant={() => setInviteOpen(true)}
               onUpgrade={() => setUpgradeOpen(true)}
@@ -582,6 +615,7 @@ export default function LandlordDashboard({
 
           {tab === 'finances' && (
             <PaymentsTab
+              properties={properties}
               payments={payments}
               expenses={expenses}
               bookings={bookings}
@@ -589,7 +623,9 @@ export default function LandlordDashboard({
               propertyName={propertyName}
               isBusy={isBusy}
               onRemind={remind}
+              onRemindAll={remindAll}
               onRecordCash={recordCash}
+              onAssignProperty={openAssignForProperty}
               onRecordExpense={() => setExpenseOpen(true)}
             />
           )}

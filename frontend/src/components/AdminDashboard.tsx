@@ -87,6 +87,7 @@ import {
 import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSuperAdminAccounts } from '../lib/queries';
 import AdminOverview from './admin/AdminOverview';
 import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
+import PhotoCaptureControl from './PhotoCaptureControl';
 
 const formatKes = (amount: number | string | null | undefined) =>
   `KES ${Math.round(Number(amount) || 0).toLocaleString('en-KE')}`;
@@ -128,7 +129,7 @@ interface AuditLog {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  LOGIN:                   'bg-emerald-100 text-emerald-700',
+  LOGIN:                   'bg-violet-100 text-violet-700',
   LOGOUT:                  'bg-zinc-100 text-zinc-600',
   PROPERTY_CREATE:         'bg-blue-100 text-blue-700',
   PROPERTY_UPDATE:         'bg-sky-100 text-sky-700',
@@ -138,7 +139,7 @@ const ACTION_COLORS: Record<string, string> = {
   BOOKING_CANCEL:          'bg-orange-100 text-orange-700',
   MAINTENANCE_CREATE:      'bg-amber-100 text-amber-700',
   MAINTENANCE_UPDATE:      'bg-yellow-100 text-yellow-700',
-  PAYMENT_MARK_PAID:       'bg-teal-100 text-teal-700',
+  PAYMENT_MARK_PAID:       'bg-purple-100 text-purple-700',
   TENANT_INVITE:           'bg-pink-100 text-pink-700',
   BUILDING_CREATE:         'bg-cyan-100 text-cyan-700',
   PROFILE_UPDATE:          'bg-purple-100 text-purple-700',
@@ -649,43 +650,43 @@ export default function AdminDashboard({
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleImageUploadFiles = async (files: File[]) => {
+    if (!files.length) return;
 
     setIsUploading(true);
     const uploadedUrls: string[] = [];
-    
+
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const { url } = await uploadFile(file, `${Date.now()}-${i}.${file.name.split('.').pop()}`);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const { url } = await uploadFile(file, `${Date.now()}-${i}.${ext}`);
         uploadedUrls.push(url);
       }
 
       setPropertyForm(prev => ({
         ...prev,
-        images: [...(prev.images || '').split(',').filter(x => x), ...uploadedUrls].join(', ')
+        images: [...(prev.images || '').split(',').map((x) => x.trim()).filter(Boolean), ...uploadedUrls].join(', ')
       }));
-      toast.success("Images uploaded successfully!");
-    } catch (error) {
-      toast.error("Upload failed");
+      toast.success(uploadedUrls.length === 1 ? 'Photo uploaded' : `${uploadedUrls.length} photos uploaded`);
+    } catch {
+      toast.error('Upload failed');
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const handleEditImageUploadFiles = async (files: File[]) => {
+    if (!files.length) return;
 
     setIsUploading(true);
     const uploadedUrls: string[] = [];
-    
+
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const { url } = await uploadFile(file, `${Date.now()}-${i}.${file.name.split('.').pop()}`);
+        const ext = file.name.split('.').pop() || 'jpg';
+        const { url } = await uploadFile(file, `${Date.now()}-${i}.${ext}`);
         uploadedUrls.push(url);
       }
 
@@ -693,12 +694,12 @@ export default function AdminDashboard({
         if (!prev) return null;
         return {
           ...prev,
-          images: [...(prev.images || []), ...uploadedUrls]
+          images: [...parseImageList(prev.images), ...uploadedUrls]
         };
       });
-      toast.success("Images uploaded successfully!");
-    } catch (error) {
-      toast.error("Upload failed");
+      toast.success(uploadedUrls.length === 1 ? 'Photo uploaded' : `${uploadedUrls.length} photos uploaded`);
+    } catch {
+      toast.error('Upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -800,16 +801,16 @@ export default function AdminDashboard({
     }
   };
 
-  // File storage is still on Supabase pending the Cloudflare R2 migration (Phase 6).
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleAvatarUploadFiles = async (files: File[]) => {
+    const file = files[0];
     if (!file) return;
     setIsUploading(true);
     try {
       const { url } = await uploadFile(file, file.name, 'avatar');
-      setAdminProfile({ ...adminProfile, avatarUrl: url });
-    } catch (error) {
-      toast.error("Failed to upload profile picture");
+      setAdminProfile((prev) => ({ ...prev, avatarUrl: url }));
+      toast.success('Photo ready — save changes to update');
+    } catch {
+      toast.error('Failed to upload profile picture');
     } finally {
       setIsUploading(false);
     }
@@ -991,14 +992,14 @@ export default function AdminDashboard({
             </p>
           </div>
 
-          <div className="hidden flex-wrap items-center gap-2 sm:flex">
+          <div className="flex flex-wrap items-center gap-2">
             {profile.isSuperAdmin && (
               <>
                 <div className="relative flex items-center">
-                  <Globe className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[#8A94A6]" />
+                  <Globe className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[#8A86A1]" />
                   <select
                     aria-label="Filter by platform"
-                    className="h-8.5 cursor-pointer appearance-none rounded-lg border border-[#D0D5DD] bg-white pl-8 pr-7 text-xs font-medium text-[#1C2B33] shadow-2xs outline-none transition hover:border-[#98A2B3] focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15 dark:border-white/12 dark:bg-[#16191D] dark:text-slate-200"
+                    className="h-8.5 cursor-pointer appearance-none rounded-lg border border-[#D5D2E3] bg-white pl-8 pr-7 text-xs font-medium text-[#161426] shadow-2xs outline-none transition hover:border-violet-300 focus:border-violet-600 focus:ring-2 focus:ring-violet-600/15 dark:border-white/12 dark:bg-[#161722] dark:text-slate-200"
                     value={selectedPlatformId}
                     onChange={(e) => setSelectedPlatformId(e.target.value)}
                   >
@@ -1150,7 +1151,7 @@ export default function AdminDashboard({
                   <DialogContent className="sm:max-w-lg p-0 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
                     <div className="bg-slate-900 text-white p-6 relative">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                        <div className="h-10 w-10 rounded-xl bg-violet-500/20 text-violet-300 border border-violet-500/30 flex items-center justify-center shrink-0">
                           <FontAwesomeIcon icon={faCheckCircle} className="h-5 w-5" />
                         </div>
                         <div>
@@ -1707,10 +1708,10 @@ export default function AdminDashboard({
                           setAdminPropertyStatusFilter(chip.id);
                           setAdminPropertyPage(1);
                         }}
-                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+                        className={`inline-flex h-8.5 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
                           active
-                            ? 'bg-emerald-700/[0.10] text-emerald-800 ring-1 ring-emerald-700/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/25'
-                            : 'text-[#5F6C7B] hover:bg-[#F0F2F5] hover:text-[#1C2B33] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white'
+                            ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20'
+                            : 'text-[#5D5A73] hover:bg-[#F4F3F8] hover:text-[#161426] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white'
                         }`}
                       >
                         {chip.label}
@@ -1935,8 +1936,8 @@ export default function AdminDashboard({
                                     onClick={() => setPropertyForm({ ...propertyForm, type: opt.id })}
                                     className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                                       selected
-                                        ? 'border-emerald-700 bg-emerald-700/[0.08] text-emerald-800 dark:border-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-300'
-                                        : 'border-[#D0D5DD] bg-white text-[#5F6C7B] hover:bg-[#F7F8FA] hover:text-[#1C2B33] dark:border-white/12 dark:bg-[#16191D] dark:text-slate-400'
+                                        ? 'border-violet-600 bg-violet-600/[0.09] text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-300'
+                                        : 'border-[#D5D2E3] bg-white text-[#5D5A73] hover:bg-[#F8F7FC] hover:text-[#161426] dark:border-white/12 dark:bg-[#161722] dark:text-slate-400'
                                     }`}
                                   >
                                     <Icon className="h-3.5 w-3.5" />
@@ -2020,48 +2021,39 @@ export default function AdminDashboard({
                                 </span>
                               )}
                             </div>
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                              {parseImageList(propertyForm.images).map((url, idx) => (
-                                <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/10 dark:bg-white/5">
-                                  <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                                  <button
-                                    type="button"
-                                    aria-label="Remove photo"
-                                    onClick={() => {
-                                      const next = parseImageList(propertyForm.images).filter((_, i) => i !== idx);
-                                      setPropertyForm({ ...propertyForm, images: next.join(', ') });
-                                    }}
-                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                  {idx === 0 && (
-                                    <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                      Cover
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => addImageInputRef.current?.click()}
-                                disabled={isUploading}
-                                className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#D0D5DD] bg-[#F7F8FA]/70 text-xs font-medium text-[#5F6C7B] transition hover:border-emerald-700 hover:bg-emerald-50/40 hover:text-emerald-800 disabled:opacity-60 dark:border-white/15 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-emerald-500 ${
-                                  parseImageList(propertyForm.images).length === 0 ? 'col-span-3 sm:col-span-4 py-6' : 'aspect-[4/3]'
-                                }`}
-                              >
-                                <ImagePlus className="h-4 w-4" />
-                                <span>{isUploading ? 'Uploading…' : parseImageList(propertyForm.images).length === 0 ? 'Click to upload property photos' : 'Add more'}</span>
-                              </button>
-                            </div>
-                            <input
-                              ref={addImageInputRef}
-                              type="file"
+                            {parseImageList(propertyForm.images).length > 0 && (
+                              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                                {parseImageList(propertyForm.images).map((url, idx) => (
+                                  <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#221844]/[0.08] bg-[#F8F7FC] dark:border-white/10 dark:bg-white/5">
+                                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                                    <button
+                                      type="button"
+                                      aria-label="Remove photo"
+                                      onClick={() => {
+                                        const next = parseImageList(propertyForm.images).filter((_, i) => i !== idx);
+                                        setPropertyForm({ ...propertyForm, images: next.join(', ') });
+                                      }}
+                                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                    {idx === 0 && (
+                                      <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                        Cover
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <PhotoCaptureControl
+                              variant="tile"
                               multiple
-                              accept="image/*"
-                              hidden
-                              onChange={handleImageUpload}
-                              disabled={isUploading}
+                              defaultFacingMode="environment"
+                              uploading={isUploading}
+                              uploadLabel={parseImageList(propertyForm.images).length > 0 ? 'Upload more' : 'Upload photos'}
+                              captureLabel="Take photo"
+                              onFiles={handleImageUploadFiles}
                             />
                           </div>
                         </div>
@@ -2115,14 +2107,28 @@ export default function AdminDashboard({
                               )}
                             </div>
                             <div className="min-w-0">
-                              <p className="max-w-[12rem] truncate text-[13.5px] font-semibold text-[#1C2B33] group-hover:text-emerald-800 sm:max-w-xs dark:text-white dark:group-hover:text-emerald-300">
+                              <p className="max-w-[12rem] truncate text-[13.5px] font-semibold text-[#161426] group-hover:text-violet-700 sm:max-w-xs dark:text-white dark:group-hover:text-violet-300">
                                 {p.title}
                               </p>
-                              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[#5F6C7B] dark:text-slate-400">
+                              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[#5D5A73] dark:text-slate-400">
                                 <span className="truncate">{p.location || 'No area'}</span>
                                 <span className="text-[#CBD5E1] dark:text-slate-600">·</span>
                                 <span className="shrink-0">{typeInfo.label}</span>
                               </p>
+                              <div className="mt-1 flex items-center gap-2 md:hidden">
+                                <span className="text-xs font-semibold tabular-nums text-[#161426] dark:text-white">
+                                  {formatKes(p.price)}{typeInfo.suffix}
+                                </span>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.2 text-[10px] font-semibold sm:hidden ${
+                                  p.status === 'available'
+                                    ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+                                    : p.status === 'rented'
+                                      ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                                      : 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
+                                }`}>
+                                  {p.status === 'available' ? 'Available' : p.status === 'rented' ? 'Rented' : 'Booked'}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </TableCell>
@@ -2150,18 +2156,18 @@ export default function AdminDashboard({
                           <span
                             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium ${
                               p.status === 'available'
-                                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300'
+                                ? 'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-500/15 dark:text-violet-300'
                                 : p.status === 'rented'
-                                  ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/15 dark:bg-sky-500/15 dark:text-sky-300'
+                                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 dark:bg-indigo-500/15 dark:text-indigo-300'
                                   : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 dark:bg-amber-500/15 dark:text-amber-300'
                             }`}
                           >
                             <span
                               className={`h-1.5 w-1.5 rounded-full ${
                                 p.status === 'available'
-                                  ? 'bg-emerald-500'
+                                  ? 'bg-violet-600'
                                   : p.status === 'rented'
-                                    ? 'bg-sky-500'
+                                    ? 'bg-indigo-500'
                                     : 'bg-amber-500'
                               }`}
                             />
@@ -2640,13 +2646,13 @@ export default function AdminDashboard({
                   <span
                     className={`absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-sm backdrop-blur-md ${
                       p.status === 'available'
-                        ? 'bg-white/95 text-emerald-700'
+                        ? 'bg-white/95 text-violet-700'
                         : p.status === 'rented'
-                          ? 'bg-white/95 text-sky-700'
+                          ? 'bg-white/95 text-indigo-700'
                           : 'bg-white/95 text-amber-700'
                     }`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${p.status === 'available' ? 'bg-emerald-500' : p.status === 'rented' ? 'bg-sky-500' : 'bg-amber-500'}`} />
+                    <span className={`h-1.5 w-1.5 rounded-full ${p.status === 'available' ? 'bg-violet-600' : p.status === 'rented' ? 'bg-indigo-500' : 'bg-amber-500'}`} />
                     {p.status === 'available' ? 'Available' : p.status === 'rented' ? 'Rented' : 'Booked'}
                   </span>
                 </div>
@@ -2672,8 +2678,8 @@ export default function AdminDashboard({
                   </div>
                   <div className="rounded-xl border border-[#1C2B33]/[0.08] bg-[#F7F8FA] p-3.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
                     <p className="text-[11px] font-medium text-[#5F6C7B] dark:text-slate-400">Category</p>
-                    <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[#1C2B33] dark:text-white">
-                      <TypeIcon className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                    <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[#161426] dark:text-white">
+                      <TypeIcon className="h-4 w-4 text-violet-700 dark:text-violet-400" />
                       {typeInfo.label}
                     </p>
                   </div>
@@ -2757,15 +2763,18 @@ export default function AdminDashboard({
             <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Update your personal details and profile photo.</DialogDescription>
           </div>
           <div className="p-6 space-y-4">
-            <div className="flex flex-col items-center gap-2.5">
-              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-[#F0F2F5] dark:bg-white/10 ring-2 ring-[#1C2B33]/[0.08]">
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-violet-50 dark:bg-white/10 ring-2 ring-violet-500/20">
                 <img src={adminProfile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                  <Pencil className="h-4 w-4" />
-                  <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={isUploading} />
-                </label>
               </div>
-              {isUploading && <p className="text-xs font-medium text-emerald-700 animate-pulse">Uploading photo…</p>}
+              <PhotoCaptureControl
+                defaultFacingMode="user"
+                uploading={isUploading}
+                uploadLabel="Upload photo"
+                captureLabel="Take photo"
+                onFiles={handleAvatarUploadFiles}
+              />
+              {isUploading && <p className="text-xs font-medium text-violet-700 animate-pulse">Uploading photo…</p>}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Display name</label>
@@ -2849,8 +2858,8 @@ export default function AdminDashboard({
                         onClick={() => setEditingProperty({ ...editingProperty, type: opt.id })}
                         className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                           selected
-                            ? 'border-emerald-700 bg-emerald-700/[0.08] text-emerald-800 dark:border-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-300'
-                            : 'border-[#D0D5DD] bg-white text-[#5F6C7B] hover:bg-[#F7F8FA] hover:text-[#1C2B33] dark:border-white/12 dark:bg-[#16191D] dark:text-slate-400'
+                            ? 'border-violet-600 bg-violet-600/[0.09] text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-300'
+                            : 'border-[#D5D2E3] bg-white text-[#5D5A73] hover:bg-[#F8F7FC] hover:text-[#161426] dark:border-white/12 dark:bg-[#161722] dark:text-slate-400'
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />
@@ -2928,48 +2937,39 @@ export default function AdminDashboard({
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {parseImageList(editingProperty.images).map((url, idx) => (
-                    <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/10 dark:bg-white/5">
-                      <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      <button
-                        type="button"
-                        aria-label="Remove photo"
-                        onClick={() => {
-                          const next = parseImageList(editingProperty.images).filter((_, i) => i !== idx);
-                          setEditingProperty({ ...editingProperty, images: next });
-                        }}
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                      {idx === 0 && (
-                        <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                          Cover
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => editImageInputRef.current?.click()}
-                    disabled={isUploading}
-                    className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#D0D5DD] bg-[#F7F8FA]/70 text-xs font-medium text-[#5F6C7B] transition hover:border-emerald-700 hover:bg-emerald-50/40 hover:text-emerald-800 disabled:opacity-60 dark:border-white/15 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-emerald-500 ${
-                      parseImageList(editingProperty.images).length === 0 ? 'col-span-3 sm:col-span-4 py-6' : 'aspect-[4/3]'
-                    }`}
-                  >
-                    <ImagePlus className="h-4 w-4" />
-                    <span>{isUploading ? 'Uploading…' : parseImageList(editingProperty.images).length === 0 ? 'Click to upload property photos' : 'Add more'}</span>
-                  </button>
-                </div>
-                <input
-                  ref={editImageInputRef}
-                  type="file"
+                {parseImageList(editingProperty.images).length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {parseImageList(editingProperty.images).map((url, idx) => (
+                      <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#221844]/[0.08] bg-[#F8F7FC] dark:border-white/10 dark:bg-white/5">
+                        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                        <button
+                          type="button"
+                          aria-label="Remove photo"
+                          onClick={() => {
+                            const next = parseImageList(editingProperty.images).filter((_, i) => i !== idx);
+                            setEditingProperty({ ...editingProperty, images: next });
+                          }}
+                          className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                        {idx === 0 && (
+                          <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                            Cover
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <PhotoCaptureControl
+                  variant="tile"
                   multiple
-                  accept="image/*"
-                  hidden
-                  onChange={handleEditImageUpload}
-                  disabled={isUploading}
+                  defaultFacingMode="environment"
+                  uploading={isUploading}
+                  uploadLabel={parseImageList(editingProperty.images).length > 0 ? 'Upload more' : 'Upload photos'}
+                  captureLabel="Take photo"
+                  onFiles={handleEditImageUploadFiles}
                 />
               </div>
             </div>

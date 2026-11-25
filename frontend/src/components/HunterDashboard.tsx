@@ -95,10 +95,10 @@ export default function HunterDashboard({
           key={f.id}
           type="button"
           onClick={() => setFilterType(f.id)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+          className={`flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer ${
             filterType === f.id
-              ? 'bg-slate-900 text-white shadow-xs dark:bg-white dark:text-slate-900'
-              : 'bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
+              ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/25'
+              : 'bg-white dark:bg-[#181922] border border-[#D5D2E3] dark:border-white/12 text-[#5D5A73] dark:text-slate-300 hover:border-violet-300 hover:bg-[#F8F7FC]'
           }`}
         >
           <FontAwesomeIcon icon={f.icon} className="h-3 w-3" />
@@ -189,8 +189,8 @@ export default function HunterDashboard({
 
       {/* Mobile Bottom Navigation Bar */}
       {profile && variant !== 'embedded' && (
-        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800">
-          <div className="flex items-center justify-around h-16 px-2">
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
+          <div className="flex items-center justify-around h-15 px-2">
             {PROPERTY_FILTERS.map(f => (
               <button
                 key={f.id}
@@ -198,13 +198,15 @@ export default function HunterDashboard({
                   setFilterType(f.id);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
-                className={`flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-xl transition-all ${
+                className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all ${
                   filterType === f.id
-                    ? 'text-slate-900 dark:text-white font-bold'
-                    : 'text-slate-400 hover:text-slate-600'
+                    ? 'text-violet-700 dark:text-violet-300 font-bold'
+                    : 'text-[#8A86A1] hover:text-[#161426]'
                 }`}
               >
-                <FontAwesomeIcon icon={f.icon} className="text-sm" />
+                <span className={`flex h-7 w-9 items-center justify-center rounded-xl transition ${filterType === f.id ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''}`}>
+                  <FontAwesomeIcon icon={f.icon} className="text-xs" />
+                </span>
                 <span className="text-[10px] font-semibold">{f.label}</span>
               </button>
             ))}

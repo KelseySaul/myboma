@@ -121,7 +121,7 @@ export default function PendingInvitesTab({
                     className="grid gap-3 px-5 py-3.5 transition-colors hover:bg-[#F7F8FA]/80 md:grid-cols-[1.6fr_1.1fr_0.9fr_0.8fr_auto] md:items-center md:gap-4 dark:hover:bg-white/[0.03]"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-700/10 text-xs font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-600/15 to-fuchsia-600/15 text-xs font-semibold text-violet-800 dark:from-violet-500/25 dark:to-fuchsia-500/20 dark:text-violet-200">
                         {(inv.displayName || inv.email).charAt(0).toUpperCase()}
                       </span>
                       <div className="min-w-0">

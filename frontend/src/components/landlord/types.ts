@@ -51,7 +51,9 @@ export interface RentPayment {
   status: 'paid' | 'pending' | 'overdue' | 'verifying';
   dueDate: string;
   paidAt?: string | null;
+  createdAt?: string | null;
   paymentProvider?: string | null;
+  paymentMetadata?: Record<string, unknown> | null;
 }
 
 export interface Booking {

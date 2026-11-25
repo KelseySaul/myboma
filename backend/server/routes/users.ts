@@ -13,7 +13,7 @@ import {
   provisionUserSchema,
   suspendUserSchema,
 } from '../adminHandlers.ts';
-import {handleSendRentReminder} from '../notificationHandlers.ts';
+import {handleSendBulkRentReminders, handleSendRentReminder} from '../notificationHandlers.ts';
 import {buildObjectKey, uploadObject} from '../storage.ts';
 import {toActor} from '../types.ts';
 import {appBaseUrl} from '../http/config.ts';
@@ -351,6 +351,15 @@ export function registerUserRoutes(bffRouter: Router) {
     validateBody(z.object({ rentPaymentId: uuidSchema })),
     asyncHandler(async (req, res) => {
       await handleSendRentReminder(req, res, { sendEmail, insertNotification });
+    }),
+  );
+
+  bffRouter.post(
+    '/notifications/remind-rent/bulk',
+    requireAuth,
+    validateBody(z.object({ rentPaymentIds: z.array(uuidSchema).min(1).max(50) }).strict()),
+    asyncHandler(async (req, res) => {
+      await handleSendBulkRentReminders(req, res, { sendEmail, insertNotification });
     }),
   );
 }

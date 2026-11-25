@@ -54,8 +54,8 @@ export function OccupancyDonutChart({ data }: { data: OccupancyData }) {
   const safeTotal = safeAvailable + safeRented + safeBooked;
 
   const segments = [
-    { label: 'Available', value: safeAvailable, color: '#10b981', hoverColor: '#34d399', bgLight: 'bg-emerald-50 text-emerald-600' },
-    { label: 'Rented', value: safeRented, color: '#3b82f6', hoverColor: '#60a5fa', bgLight: 'bg-blue-50 text-blue-600' },
+    { label: 'Available', value: safeAvailable, color: '#7c3aed', hoverColor: '#a855f7', bgLight: 'bg-violet-50 text-violet-700' },
+    { label: 'Rented', value: safeRented, color: '#4f46e5', hoverColor: '#818cf8', bgLight: 'bg-indigo-50 text-indigo-700' },
     { label: 'Booked', value: safeBooked, color: '#f59e0b', hoverColor: '#fbbf24', bgLight: 'bg-amber-50 text-amber-600' },
   ];
 
@@ -176,7 +176,7 @@ export function RentCollectionBarChart({ data }: { data: RentData }) {
   const total = collected + pending + overdue;
 
   const bars = [
-    { label: 'Collected', value: collected, color: 'url(#gradient-green)', strokeColor: '#10b981', hoverColor: '#34d399', bgLight: 'bg-emerald-50 text-emerald-600' },
+    { label: 'Collected', value: collected, color: 'url(#gradient-purple)', strokeColor: '#7c3aed', hoverColor: '#a855f7', bgLight: 'bg-violet-50 text-violet-700' },
     { label: 'Pending', value: pending, color: 'url(#gradient-blue)', strokeColor: '#3b82f6', hoverColor: '#60a5fa', bgLight: 'bg-blue-50 text-blue-600' },
     { label: 'Overdue', value: overdue, color: 'url(#gradient-red)', strokeColor: '#ef4444', hoverColor: '#f87171', bgLight: 'bg-rose-50 text-rose-600' },
   ];
@@ -199,9 +199,9 @@ export function RentCollectionBarChart({ data }: { data: RentData }) {
       <div className="relative w-full flex justify-center h-[200px] mb-4">
         <svg viewBox={`0 0 ${chartWidth} 200`} className="w-full h-full">
           <defs>
-            <linearGradient id="gradient-green" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#059669" />
+            <linearGradient id="gradient-purple" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#a855f7" />
+              <stop offset="100%" stopColor="#6d28d9" />
             </linearGradient>
             <linearGradient id="gradient-blue" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#3b82f6" />

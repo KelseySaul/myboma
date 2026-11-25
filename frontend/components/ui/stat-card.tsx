@@ -31,7 +31,7 @@ export function StatCard({
   const accentClasses = {
     blue: 'border-l-4 border-l-blue-500',
     amber: 'border-l-4 border-l-amber-500',
-    emerald: 'border-l-4 border-l-emerald-500',
+    emerald: 'border-l-4 border-l-violet-600',
     rose: 'border-l-4 border-l-rose-500',
     purple: 'border-l-4 border-l-purple-500',
     indigo: 'border-l-4 border-l-indigo-500',
@@ -72,7 +72,7 @@ export function StatCard({
             className={cn(
               'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums',
               trend.value >= 0
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                ? 'bg-violet-50 text-violet-700 border border-violet-200/60 dark:bg-violet-950/40 dark:text-violet-300'
                 : 'bg-rose-50 text-rose-700 border border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-300'
             )}
           >

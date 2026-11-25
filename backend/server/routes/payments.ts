@@ -2,13 +2,15 @@ import {eq} from 'drizzle-orm';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
+import {canManageProperty} from '../../db/authz.ts';
 import {manualRentPaidSchema} from '../adminHandlers.ts';
 import {
   activateFreeLandlordPlan,
   landlordFreePlanSchema,
   landlordSubscriptionCheckoutSchema,
 } from '../landlordSubscriptionHandlers.ts';
-import type {RentPaymentRecord} from '../types.ts';
+import {insertNotification} from '../services/notify.ts';
+import {toActor, type RentPaymentRecord} from '../types.ts';
 import {asyncHandler, getValidatedBody, paymentLimiter, recordAudit, requireAuth, validateBody} from '../http/middleware.ts';
 import {
   assertTenantCanPay,
@@ -90,18 +92,27 @@ export function registerPaymentRoutes(bffRouter: Router) {
       const isOwner = rentPayment.landlordId === actor.uid;
       const isTenant = assertTenantCanPay(actor, rentPayment);
       // A platform admin is scoped to their own (non-null) platform; only super admins
-      // reach across platforms.
+      // reach across platforms. Property managers can also record/confirm rent for units they manage.
       const isPlatformAdmin =
         Boolean(actor.isSuperAdmin) ||
         (Boolean(actor.isAdmin) && Boolean(actor.platformId) && rentPayment.platformId === actor.platformId);
+      const isPropertyManager =
+        !isOwner &&
+        !isPlatformAdmin &&
+        (await canManageProperty(toActor(actor), {
+          id: rentPayment.propertyId,
+          landlordId: rentPayment.landlordId,
+          platformId: rentPayment.platformId ?? null,
+        }));
+      const canSettle = isOwner || isPlatformAdmin || isPropertyManager;
 
-      if (!isOwner && !isTenant && !actor.isSuperAdmin && !isPlatformAdmin) {
+      if (!canSettle && !isTenant) {
         console.warn(`[Manual Payment] Unauthorized attempt by ${actor.email} to mark payment ${paymentId} as paid.`);
         res.status(403).json({error: 'You cannot access this payment'});
         return;
       }
 
-      if (isTenant && !isOwner && !actor.isSuperAdmin && !isPlatformAdmin) {
+      if (isTenant && !canSettle) {
         // Tenant is submitting receipt for verification
         const existingMeta = (payment.paymentMetadata as Record<string, unknown>) || {};
         await db
@@ -115,6 +126,24 @@ export function registerPaymentRoutes(bffRouter: Router) {
             },
           })
           .where(eq(schema.rentPayments.id, paymentId));
+
+        // Notify landlord so they can confirm the payment immediately from their dashboard
+        try {
+          const {landlord, property} = await fetchPaymentContext(rentPayment.id);
+          if (landlord?.email) {
+            await insertNotification({
+              recipientEmail: landlord.email.toLowerCase(),
+              platformId: rentPayment.platformId ?? null,
+              type: 'payment',
+              title: 'Rent payment awaiting confirmation',
+              message: `${actor.displayName || actor.email} submitted ${note || 'a payment receipt'} for KES ${Number(rentPayment.amount).toLocaleString('en-KE')} (${property?.title || 'unit'}). Open Rent & payments to confirm.`,
+              propertyId: rentPayment.propertyId,
+              read: false,
+            });
+          }
+        } catch {
+          // Notification failure should never block receipt submission
+        }
 
         console.log(`[Manual Payment] Tenant ${actor.email} submitted payment ${paymentId} for verification`);
         res.json({status: 'verifying', paymentId: rentPayment.id});

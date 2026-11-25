@@ -322,9 +322,15 @@ export const markRentPaymentManual = (paymentId: string, note?: string) =>
   });
 
 export const sendRentReminder = (rentPaymentId: string) =>
-  bffRequest<{status: string}>('/notifications/remind-rent', {
+  bffRequest<{status?: string; success?: boolean; message?: string}>('/notifications/remind-rent', {
     method: 'POST',
     body: {rentPaymentId},
+  });
+
+export const sendBulkRentReminders = (rentPaymentIds: string[]) =>
+  bffRequest<{success: boolean; sent: number; skipped: number; failed: number; message: string}>('/notifications/remind-rent/bulk', {
+    method: 'POST',
+    body: {rentPaymentIds},
   });
 
 export const initPlatform = () => bffRequest<{status: string}>('/admin/init-platform', {method: 'POST'});

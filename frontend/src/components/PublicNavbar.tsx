@@ -114,8 +114,10 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           <button
             type="button"
             onClick={onLoginClick}
-            className={`ml-1 h-9 rounded-xl px-4 text-sm font-semibold transition-colors ${
-              dark ? 'bg-white text-zinc-950 hover:bg-zinc-200' : 'bg-zinc-950 text-white hover:bg-zinc-800'
+            className={`ml-1 h-9 rounded-xl px-4 text-sm font-semibold transition ${
+              dark
+                ? 'bg-white text-[#161426] hover:bg-violet-50'
+                : 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/25 hover:brightness-110'
             }`}
           >
             Sign in
@@ -173,7 +175,11 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
                 setMobileMenuOpen(false);
                 onLoginClick();
               }}
-              className={`mt-1 h-11 w-full rounded-xl text-sm font-semibold ${dark ? 'bg-white text-zinc-950' : 'bg-zinc-950 text-white'}`}
+              className={`mt-1 h-11 w-full rounded-xl text-sm font-semibold ${
+                dark
+                  ? 'bg-white text-[#161426]'
+                  : 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white'
+              }`}
             >
               Sign in
             </button>

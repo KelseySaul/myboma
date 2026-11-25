@@ -73,13 +73,13 @@ const actionMeta = (action: string) => {
     return { icon: Trash2, tone: 'bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400' };
   }
   if (key.includes('INVITE') || key.includes('PROVISION')) {
-    return { icon: UserPlus, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' };
+    return { icon: UserPlus, tone: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300' };
   }
   if (key.includes('PROPERTY') || key.includes('BUILDING')) {
-    return { icon: Building2, tone: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400' };
+    return { icon: Building2, tone: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' };
   }
   if (key.includes('RENT') || key.includes('PAYMENT') || key.includes('PLAN')) {
-    return { icon: Wallet, tone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400' };
+    return { icon: Wallet, tone: 'bg-purple-50 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300' };
   }
   if (key.includes('ROLE') || key.includes('IMPERSONATE')) {
     return { icon: Shield, tone: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400' };
@@ -120,7 +120,7 @@ export default function AdminOverview({
         <button
           type="button"
           onClick={() => refetch()}
-          className="mt-4 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-800"
+          className="mt-4 rounded-lg bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 px-4 py-2 text-sm font-semibold text-white transition hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700"
         >
           Try again
         </button>
@@ -205,7 +205,7 @@ function OverviewContent({
       value: compactKes(collectedThisMonth),
       hint: `${compactKes(collectedLastMonth)} last month`,
       icon: Wallet,
-      iconTone: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+      iconTone: 'bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300',
       tab: 'finances',
       highlight: true,
       delta: change,
@@ -253,7 +253,7 @@ function OverviewContent({
                 <span
                   className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
                     delta >= 0
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                      ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300'
                       : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'
                   }`}
                 >
@@ -302,7 +302,7 @@ function OverviewContent({
               <button
                 type="button"
                 onClick={() => onNavigate('audit')}
-                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+                className="text-xs font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300"
               >
                 See all
               </button>
@@ -397,8 +397,8 @@ function QuickAction({
       onClick={onClick}
       className={`inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-xs font-semibold transition active:scale-[0.985] ${
         primary
-          ? 'bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500'
-          : 'border border-[#D0D5DD] bg-white text-[#1C2B33] shadow-2xs hover:bg-[#F7F8FA] dark:border-white/12 dark:bg-[#1A1D21] dark:text-slate-100 dark:hover:bg-white/5'
+          ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20 hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700'
+          : 'border border-[#D5D2E3] bg-white text-[#161426] shadow-2xs hover:border-violet-300 hover:bg-[#F8F7FC] dark:border-white/12 dark:bg-[#181922] dark:text-slate-100 dark:hover:bg-white/5'
       }`}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2} />
@@ -528,7 +528,7 @@ function TrendChart({ trend, onOpenFinances }: { trend: Overview['trend']; onOpe
               <button
                 type="button"
                 onClick={onOpenFinances}
-                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400"
               >
                 Open rent &amp; payments <ArrowRight className="h-3 w-3" />
               </button>
@@ -566,8 +566,8 @@ function TrendChart({ trend, onOpenFinances }: { trend: Overview['trend']; onOpe
                   <span
                     className={`w-full max-w-11 rounded-t-md transition-all duration-300 ${
                       active
-                        ? 'bg-emerald-700 dark:bg-emerald-500'
-                        : 'bg-emerald-700/20 group-hover:bg-emerald-700/40 dark:bg-emerald-500/25 dark:group-hover:bg-emerald-500/45'
+                        ? 'bg-gradient-to-t from-violet-700 via-purple-600 to-fuchsia-500'
+                        : 'bg-violet-600/20 group-hover:bg-violet-600/40 dark:bg-violet-500/25 dark:group-hover:bg-violet-500/45'
                     }`}
                     style={{ height: `${Math.max((value / max) * 100, value > 0 ? 6 : 2)}%` }}
                   />
@@ -608,7 +608,7 @@ function PropertyBreakdown({
   }, [properties]);
   const grandTotal = byType.reduce((sum, [, t]) => sum + t.total, 0);
   const [selected, setSelected] = useState<string | null>(null);
-  const colors = ['#047857', '#0D9488', '#64748B', '#CBD5E1'];
+  const colors = ['#6D28D9', '#9333EA', '#C084FC', '#DDD6FE'];
   let offset = 0;
   const segments = byType.map(([, value], index) => {
     const start = offset;
@@ -618,13 +618,13 @@ function PropertyBreakdown({
   const selectedEntry = byType.find(([type]) => type === selected);
 
   return (
-    <section className="rounded-xl border border-[#1C2B33]/[0.09] bg-white p-5 dark:border-white/[0.08] dark:bg-[#1A1D21]">
+    <section className="rounded-xl border border-[#221844]/[0.09] bg-white p-5 dark:border-white/[0.08] dark:bg-[#181922]">
       <div className="flex items-center justify-between">
-        <h3 className="text-[15px] font-semibold text-[#1C2B33] dark:text-white">Properties</h3>
+        <h3 className="text-[15px] font-semibold text-[#161426] dark:text-white">Properties</h3>
         <button
           type="button"
           onClick={() => onNavigate('properties')}
-          className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
+          className="text-xs font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400 dark:hover:text-violet-300"
         >
           View all
         </button>

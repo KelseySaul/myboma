@@ -84,63 +84,48 @@ async function findRentPaymentWithProperty(rentPaymentId: string) {
   return row;
 }
 
-export const handleSendRentReminder = async (
-  req: AuthenticatedRequest,
-  res: any,
-  deps: NotificationDependencies
-) => {
-  const {rentPaymentId} = req.validatedBody as {rentPaymentId: string};
+async function dispatchRentReminderForPayment(
+  rentPaymentId: string,
+  actor: ReturnType<typeof toActor>,
+  deps: NotificationDependencies,
+): Promise<{ok: true; tenantEmail: string} | {ok: false; status: number; error: string}> {
   const {sendEmail, insertNotification} = deps;
-  const actor = toActor(req.profile!);
-
-  // 1. Fetch the payment and ensure the user is the landlord, a property manager, or an admin
   const row = await findRentPaymentWithProperty(rentPaymentId);
   if (!row) {
-    return res.status(404).json({error: 'Rent payment not found.'});
+    return {ok: false, status: 404, error: 'Rent payment not found.'};
   }
   const payment = row.payment;
 
   if (!(await canViewRentPayment(actor, payment))) {
-    return res.status(403).json({error: 'You do not have permission to send reminders for this property.'});
-  }
-
-  // 2. Ensure landlord has pro or proplus plan (or is admin)
-  if (!isAdmin(actor)) {
-    const landlord = await db.query.users.findFirst({
-      where: eq(schema.users.uid, payment.landlordId),
-      columns: {subscriptionPlan: true},
-    });
-
-    const plan = landlord?.subscriptionPlan || '';
-    if (!plan.includes('pro') && !plan.includes('proplus')) {
-      return res.status(403).json({error: 'Automated and manual reminders are only available on Pro and Pro Plus plans.'});
-    }
+    return {ok: false, status: 403, error: 'You do not have permission to send reminders for this property.'};
   }
 
   if (payment.status === 'paid') {
-    return res.status(400).json({error: 'This rent payment is already paid.'});
+    return {ok: false, status: 400, error: 'This rent payment is already paid.'};
   }
 
-  // 3. Fetch tenant info (tenantId historically holds either an email or a uid)
+  // Fetch tenant info (tenantId historically holds either an email or a uid)
   const tenantId = String(payment.tenantId);
   const tenant = tenantId.includes('@')
     ? await db.query.users.findFirst({where: sql`lower(${schema.users.email}) = ${tenantId.toLowerCase()}`, columns: {email: true}})
     : await db.query.users.findFirst({where: eq(schema.users.uid, tenantId), columns: {email: true}});
 
   const tenantEmail = tenant?.email || payment.tenantId;
-
   if (!tenantEmail || !tenantEmail.includes('@')) {
-    return res.status(422).json({error: 'Tenant email not found or invalid.'});
+    return {ok: false, status: 422, error: 'Tenant email not found or invalid.'};
   }
 
   const amount = Number(payment.amount).toLocaleString('en-KE');
   const propertyLabel = row.propertyTitle || row.propertyUnitNumber || 'your unit';
-  const dueDateStr = new Date(payment.dueDate).toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
-  const title = 'Rent Reminder';
-  const message = `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
+  const dueDateStr = new Date(payment.dueDate).toLocaleDateString('en-KE', {weekday: 'short', month: 'short', day: 'numeric'});
+  const todayIso = new Date().toISOString().split('T')[0];
+  const isOverdue = payment.status === 'overdue' || payment.dueDate < todayIso;
+  const title = isOverdue ? 'Overdue Rent Reminder' : 'Rent Reminder';
+  const message = isOverdue
+    ? `Reminder: Your rent payment of KES ${amount} for ${propertyLabel} was due on ${dueDateStr} and is now overdue. Please pay promptly via MyBoma.`
+    : `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
 
-  // 4. Send notifications
-  const promises = [
+  await Promise.allSettled([
     insertNotification({
       recipientEmail: tenantEmail.toLowerCase(),
       platformId: payment.platformId,
@@ -156,11 +141,58 @@ export const handleSendRentReminder = async (
       text: message,
     }),
     sendOneSignalPushNotification(tenantEmail, title, message),
-  ];
+  ]);
 
-  await Promise.allSettled(promises);
+  return {ok: true, tenantEmail: tenantEmail.toLowerCase()};
+}
 
+export const handleSendRentReminder = async (
+  req: AuthenticatedRequest,
+  res: any,
+  deps: NotificationDependencies
+) => {
+  const {rentPaymentId} = req.validatedBody as {rentPaymentId: string};
+  const actor = toActor(req.profile!);
+  const result = await dispatchRentReminderForPayment(rentPaymentId, actor, deps);
+  if ('error' in result) {
+    return res.status(result.status).json({error: result.error});
+  }
   return res.json({success: true, message: 'Reminder sent successfully.'});
+};
+
+export const handleSendBulkRentReminders = async (
+  req: AuthenticatedRequest,
+  res: any,
+  deps: NotificationDependencies
+) => {
+  const {rentPaymentIds} = req.validatedBody as {rentPaymentIds: string[]};
+  const actor = toActor(req.profile!);
+  const uniqueIds = [...new Set(rentPaymentIds)].slice(0, 50);
+
+  let sent = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  await Promise.all(
+    uniqueIds.map(async (id) => {
+      try {
+        const result = await dispatchRentReminderForPayment(id, actor, deps);
+        if (!('error' in result)) sent += 1;
+        else if (result.status === 400 || result.status === 403 || result.status === 404) skipped += 1;
+        else failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }),
+  );
+
+  return res.json({
+    success: true,
+    sent,
+    skipped,
+    failed,
+    message: sent === 1 ? '1 reminder sent.' : `${sent} reminders sent.`,
+  });
 };
 
 export const processAutomatedRentReminders = async (deps: NotificationDependencies) => {

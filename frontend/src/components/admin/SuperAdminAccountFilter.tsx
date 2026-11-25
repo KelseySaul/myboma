@@ -100,20 +100,20 @@ export function SuperAdminAccountFilterBar({
     <div className="mb-5 rounded-xl border border-[#1C2B33]/[0.09] bg-white px-4 py-3 shadow-[0_1px_2px_rgba(28,43,51,0.05)] dark:border-white/[0.08] dark:bg-[#1A1D21]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5F6C7B] dark:text-slate-400">
-            <Filter className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#5D5A73] dark:text-slate-400">
+            <Filter className="h-3.5 w-3.5 text-violet-700 dark:text-violet-400" />
             <span>Account filter</span>
-            {contextLabel && <span className="hidden text-[#8A94A6] md:inline">· {contextLabel}</span>}
+            {contextLabel && <span className="hidden text-[#8A86A1] md:inline">· {contextLabel}</span>}
           </span>
 
           {/* Quick toggle for "My own account" */}
           <button
             type="button"
             onClick={toggleMyAccount}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+            className={`inline-flex h-8.5 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
               includesMe
-                ? 'bg-emerald-700 text-white shadow-2xs hover:bg-emerald-800 dark:bg-emerald-600'
-                : 'border border-[#D0D5DD] bg-white text-[#1C2B33] hover:bg-[#F7F8FA] dark:border-white/12 dark:bg-[#16191D] dark:text-slate-200 dark:hover:bg-white/5'
+                ? 'bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 text-white shadow-xs shadow-violet-700/20 hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700'
+                : 'border border-[#D5D2E3] bg-white text-[#161426] hover:border-violet-300 hover:bg-[#F8F7FC] dark:border-white/12 dark:bg-[#181922] dark:text-slate-200 dark:hover:bg-white/5'
             }`}
           >
             <UserCheck className="h-3.5 w-3.5" />
@@ -150,7 +150,7 @@ export function SuperAdminAccountFilterBar({
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search accounts by name or email…"
                       autoFocus
-                      className="h-8.5 w-full rounded-lg border border-[#D0D5DD] bg-[#F7F8FA] pl-8 pr-3 text-xs text-[#1C2B33] placeholder:text-[#8A94A6] outline-none focus:border-emerald-700 focus:bg-white dark:border-white/12 dark:bg-[#16191D] dark:text-slate-100"
+                      className="h-8.5 w-full rounded-lg border border-[#D5D2E3] bg-[#F8F7FC] pl-8 pr-3 text-xs text-[#161426] placeholder:text-[#8A86A1] outline-none focus:border-violet-600 focus:bg-white dark:border-white/12 dark:bg-[#161722] dark:text-slate-100"
                     />
                   </div>
                   <div className="mt-2 flex gap-1">
@@ -168,8 +168,8 @@ export function SuperAdminAccountFilterBar({
                         onClick={() => setRoleTab(t.id)}
                         className={`rounded-md px-2 py-1 text-[11px] font-semibold transition ${
                           roleTab === t.id
-                            ? 'bg-emerald-700/10 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
-                            : 'text-[#5F6C7B] hover:bg-[#F0F2F5] dark:text-slate-400 dark:hover:bg-white/5'
+                            ? 'bg-violet-600/12 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300'
+                            : 'text-[#5D5A73] hover:bg-[#F4F3F8] dark:text-slate-400 dark:hover:bg-white/5'
                         }`}
                       >
                         {t.label}
@@ -180,9 +180,9 @@ export function SuperAdminAccountFilterBar({
 
                 <div className="max-h-64 overflow-y-auto p-1.5">
                   {isPending ? (
-                    <p className="py-6 text-center text-xs text-[#8A94A6]">Loading accounts…</p>
+                    <p className="py-6 text-center text-xs text-[#8A86A1]">Loading accounts…</p>
                   ) : filteredAccounts.length === 0 ? (
-                    <p className="py-6 text-center text-xs text-[#8A94A6]">No matching accounts.</p>
+                    <p className="py-6 text-center text-xs text-[#8A86A1]">No matching accounts.</p>
                   ) : (
                     filteredAccounts.map((acc) => {
                       const checked = selectedSet.has(acc.uid);
@@ -194,34 +194,34 @@ export function SuperAdminAccountFilterBar({
                           onClick={() => toggleId(acc.uid)}
                           className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${
                             checked
-                              ? 'bg-emerald-700/[0.08] dark:bg-emerald-500/15'
-                              : 'hover:bg-[#F7F8FA] dark:hover:bg-white/[0.04]'
+                              ? 'bg-violet-600/[0.08] dark:bg-violet-500/15'
+                              : 'hover:bg-[#F8F7FC] dark:hover:bg-white/[0.04]'
                           }`}
                         >
                           <span
                             className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
                               checked
-                                ? 'border-emerald-700 bg-emerald-700 text-white dark:border-emerald-500 dark:bg-emerald-500'
+                                ? 'border-transparent bg-gradient-to-br from-violet-700 to-fuchsia-600 text-white'
                                 : 'border-[#CBD5E1] bg-white dark:border-white/20 dark:bg-transparent'
                             }`}
                           >
                             {checked && <Check className="h-3 w-3" strokeWidth={2.5} />}
                           </span>
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F0F2F5] text-[11px] font-semibold text-[#1C2B33] dark:bg-white/10 dark:text-slate-200">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-50 text-[11px] font-semibold text-violet-800 dark:bg-violet-500/20 dark:text-violet-200">
                             {(acc.displayName || acc.email).charAt(0).toUpperCase()}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-1.5">
-                              <span className="truncate text-xs font-semibold text-[#1C2B33] dark:text-white">
+                              <span className="truncate text-xs font-semibold text-[#161426] dark:text-white">
                                 {acc.displayName || acc.email}
                               </span>
                               {isSelf && (
-                                <span className="rounded bg-emerald-50 px-1.5 py-0.2 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                <span className="rounded bg-violet-100 px-1.5 py-0.2 text-[10px] font-semibold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
                                   You
                                 </span>
                               )}
                             </span>
-                            <span className="block truncate text-[11px] text-[#5F6C7B] dark:text-slate-400">
+                            <span className="block truncate text-[11px] text-[#5D5A73] dark:text-slate-400">
                               {acc.email} · {acc.isSuperAdmin ? 'Super admin' : (ROLE_LABELS[acc.role] ?? acc.role)}
                             </span>
                           </span>
@@ -231,18 +231,18 @@ export function SuperAdminAccountFilterBar({
                   )}
                 </div>
 
-                <div className="flex items-center justify-between border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] px-3 py-2 text-[11px] dark:border-white/[0.08] dark:bg-[#16191D]">
+                <div className="flex items-center justify-between border-t border-[#221844]/[0.08] bg-[#F8F7FC] px-3 py-2 text-[11px] dark:border-white/[0.08] dark:bg-[#161722]">
                   <button
                     type="button"
                     onClick={() => onChange([profile.uid])}
-                    className="font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                    className="font-semibold text-violet-700 hover:text-violet-800 dark:text-violet-400"
                   >
                     Only my account
                   </button>
                   <button
                     type="button"
                     onClick={() => onChange([])}
-                    className="font-medium text-[#5F6C7B] hover:text-[#1C2B33] dark:text-slate-400 dark:hover:text-white"
+                    className="font-medium text-[#5D5A73] hover:text-[#161426] dark:text-slate-400 dark:hover:text-white"
                   >
                     Clear selection
                   </button>
@@ -256,7 +256,7 @@ export function SuperAdminAccountFilterBar({
           <button
             type="button"
             onClick={() => onChange([])}
-            className="text-xs font-medium text-[#5F6C7B] transition hover:text-[#1C2B33] dark:text-slate-400 dark:hover:text-white"
+            className="text-xs font-medium text-[#5D5A73] transition hover:text-[#161426] dark:text-slate-400 dark:hover:text-white"
           >
             Clear filter
           </button>
@@ -265,18 +265,18 @@ export function SuperAdminAccountFilterBar({
 
       {/* Selected account removable pills */}
       {selectedIds.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#1C2B33]/[0.06] pt-2.5 dark:border-white/[0.06]">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#221844]/[0.06] pt-2.5 dark:border-white/[0.06]">
           {selectedIds.map((uid) => (
             <span
               key={uid}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700/[0.08] py-0.5 pl-2.5 pr-1.5 text-xs font-medium text-emerald-900 dark:bg-emerald-500/15 dark:text-emerald-200"
+              className="inline-flex items-center gap-1.5 rounded-full bg-violet-600/[0.10] py-0.5 pl-2.5 pr-1.5 text-xs font-medium text-violet-900 dark:bg-violet-500/20 dark:text-violet-200"
             >
               <span className="max-w-[14rem] truncate">{labelFor(uid)}</span>
               <button
                 type="button"
                 onClick={() => toggleId(uid)}
                 aria-label={`Remove ${labelFor(uid)}`}
-                className="flex h-4 w-4 items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-700/15 dark:text-emerald-300"
+                className="flex h-4 w-4 items-center justify-center rounded-full text-violet-700 transition hover:bg-violet-600/15 dark:text-violet-300"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -308,14 +308,14 @@ export function SuperAdminAccountGate({ profile, pageLabel, onSelectIds }: Super
   }, [accounts, profile.uid]);
 
   return (
-    <div className="rounded-xl border border-[#1C2B33]/[0.09] bg-white px-6 py-12 text-center shadow-[0_1px_2px_rgba(28,43,51,0.05)] dark:border-white/[0.08] dark:bg-[#1A1D21]">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-700/10 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+    <div className="rounded-xl border border-[#221844]/[0.09] bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(22,20,38,0.05)] dark:border-white/[0.08] dark:bg-[#181922] sm:px-6 sm:py-12">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600/15 to-fuchsia-600/15 text-violet-700 dark:from-violet-500/25 dark:to-fuchsia-500/20 dark:text-violet-300">
         <ShieldCheck className="h-6 w-6" strokeWidth={1.75} />
       </div>
-      <h2 className="mt-4 text-base font-semibold text-[#1C2B33] dark:text-white">
+      <h2 className="mt-4 text-base font-semibold text-[#161426] dark:text-white">
         Select an account to view {pageLabel}
       </h2>
-      <p className="mx-auto mt-1.5 max-w-md text-sm text-[#5F6C7B] dark:text-slate-400">
+      <p className="mx-auto mt-1.5 max-w-md text-sm text-[#5D5A73] dark:text-slate-400">
         Super admin view stays clear until you choose a specific account, multiple accounts, or your own account in the filter bar above.
       </p>
 
@@ -323,7 +323,7 @@ export function SuperAdminAccountGate({ profile, pageLabel, onSelectIds }: Super
         <button
           type="button"
           onClick={() => onSelectIds([profile.uid])}
-          className="inline-flex h-9.5 items-center gap-2 rounded-lg bg-emerald-700 px-4 text-xs font-semibold text-white shadow-2xs transition hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 via-purple-600 to-fuchsia-600 px-5 text-xs font-semibold text-white shadow-sm shadow-violet-700/25 transition hover:from-violet-800 hover:via-purple-700 hover:to-fuchsia-700"
         >
           <UserCheck className="h-4 w-4" />
           View my own account
@@ -331,8 +331,8 @@ export function SuperAdminAccountGate({ profile, pageLabel, onSelectIds }: Super
       </div>
 
       {suggestedAccounts.length > 0 && (
-        <div className="mx-auto mt-7 max-w-xl border-t border-[#1C2B33]/[0.07] pt-5 dark:border-white/[0.07]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8A94A6]">
+        <div className="mx-auto mt-7 max-w-xl border-t border-[#221844]/[0.07] pt-5 dark:border-white/[0.07]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8A86A1]">
             Or jump straight into an account
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -341,7 +341,7 @@ export function SuperAdminAccountGate({ profile, pageLabel, onSelectIds }: Super
                 key={acc.uid}
                 type="button"
                 onClick={() => onSelectIds([acc.uid])}
-                className="inline-flex items-center gap-2 rounded-lg border border-[#1C2B33]/[0.09] bg-[#F7F8FA] px-3 py-1.5 text-xs font-medium text-[#1C2B33] transition hover:border-emerald-700/40 hover:bg-emerald-50/50 hover:text-emerald-800 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-emerald-500/40"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#221844]/[0.09] bg-[#F8F7FC] px-3 py-1.5 text-xs font-medium text-[#161426] transition hover:border-violet-500/40 hover:bg-violet-50 hover:text-violet-800 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-200 dark:hover:border-violet-400/40"
               >
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-[10px] font-semibold text-[#1C2B33] shadow-2xs dark:bg-white/10 dark:text-white">
                   {(acc.displayName || acc.email).charAt(0).toUpperCase()}
