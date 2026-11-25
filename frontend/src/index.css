@@ -998,8 +998,9 @@ aside[class*="sticky"] {
 
 /* Revenue surfaces use the slate-to-emerald finance palette. */
 .app-shell main .finance-highlight,
+.app-shell main button.group.finance-highlight,
 .dark .app-shell main button.group.finance-highlight {
-  background: linear-gradient(135deg, #0F172A 0%, #065F46 60%, #10B981 100%);
+  background: linear-gradient(135deg, #0F172A 0%, #065F46 72%, #08795a 100%);
   border-color: rgba(16, 185, 129, .35);
   box-shadow: 0 12px 28px rgba(6, 95, 70, .18), inset 0 1px rgba(255, 255, 255, .16);
 }
