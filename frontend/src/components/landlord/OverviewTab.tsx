@@ -286,8 +286,8 @@ function RentChart({ months }: { months: { label: string; total: number; count: 
               )}
               <div
                 className={`w-full rounded-t-lg transition-all duration-500 ${
-                  hovered === index ? 'bg-zinc-950 dark:bg-white' : 'bg-zinc-300 dark:bg-zinc-600'
-                } ${index === months.length - 1 && hovered === null ? '!bg-zinc-950 dark:!bg-white' : ''}`}
+                  hovered === index ? 'bg-gradient-to-t from-indigo-600 to-violet-400' : 'bg-indigo-300/75 dark:bg-indigo-800'
+                } ${index === months.length - 1 && hovered === null ? '!bg-indigo-500' : ''}`}
                 style={{ height: `${height}%` }}
               />
             </div>

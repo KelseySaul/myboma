@@ -988,3 +988,37 @@ aside[class*="sticky"] {
   .app-shell .stat-card, .app-shell main button.group.rounded-2xl { transition: none; }
   .app-shell .stat-card:hover, .app-shell main button.group.rounded-2xl:hover { transform: none; }
 }
+/* Layered colour behind clear, frosted surfaces. */
+.app-shell {
+  background-color: #e8f1f5;
+  background-image: radial-gradient(ellipse at 12% 15%, rgba(62, 197, 191, .38), transparent 38%),
+    radial-gradient(ellipse at 85% 12%, rgba(127, 122, 229, .36), transparent 40%),
+    radial-gradient(ellipse at 76% 90%, rgba(255, 183, 140, .34), transparent 38%),
+    linear-gradient(135deg, #dceff1, #e6e9fb 60%, #f6e9e7);
+}
+.dark .app-shell {
+  background-image: radial-gradient(ellipse at 12% 15%, rgba(13, 148, 136, .30), transparent 38%),
+    radial-gradient(ellipse at 85% 12%, rgba(99, 102, 241, .32), transparent 40%),
+    radial-gradient(ellipse at 76% 90%, rgba(190, 85, 80, .18), transparent 38%),
+    linear-gradient(135deg, #071c28, #161b38 60%, #241827);
+}
+.app-shell [data-slot="card"], .app-shell .stat-card,
+.app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl {
+  background: linear-gradient(140deg, rgba(255,255,255,.57), rgba(255,255,255,.28));
+  border: 1px solid rgba(255,255,255,.72);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 12px 32px rgba(48,68,98,.1);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+.dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
+.dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl {
+  background: linear-gradient(140deg, rgba(32,42,66,.68), rgba(20,28,49,.48));
+  border-color: rgba(214,225,255,.18);
+  box-shadow: inset 0 1px rgba(255,255,255,.12), 0 12px 32px rgba(0,0,0,.2);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell [data-slot="card"], .app-shell .stat-card,
+  .app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl { background: #f7f9ff; }
+  .dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
+  .dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl { background: #202943; }
+}
