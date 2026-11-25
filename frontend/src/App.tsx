@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { authClient } from './lib/auth-client';
 import { getSession, completePasswordReset, bffRequest, setImpersonatedUser, activateFreeLandlordPlan } from './lib/api';
 import LandingPage from './components/LandingPage';
-import Navbar from './components/Navbar';
+import AccountMenu from './components/AccountMenu';
+import { getPlatformBranding } from './lib/api';
 import PublicNavbar from './components/PublicNavbar';
 import Sidebar from './components/Sidebar';
 import Footer from './components/Footer';
@@ -140,8 +141,6 @@ export default function App() {
   // Lifted tab state — shared between Sidebar and the active dashboard
   const [activeTab, setActiveTab] = useState<string>('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [contentScroller, setContentScroller] = useState<HTMLElement | null>(null);
-  const [mobileNavbarVisible, setMobileNavbarVisible] = useState(true);
 
   useEffect(() => {
     // Patch history.replaceState to dispatch a custom event
@@ -152,36 +151,13 @@ export default function App() {
     };
   }, []);
 
-  // The dashboard scrolls inside <main>, rather than on window. Hide the phone header on
-  // intentional downward movement and bring it straight back when the user reverses direction.
   useEffect(() => {
-    if (!contentScroller) return;
-    let previousTop = contentScroller.scrollTop;
-    let frame = 0;
-    setMobileNavbarVisible(true);
-
-    const onScroll = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(() => {
-        const currentTop = contentScroller.scrollTop;
-        const difference = currentTop - previousTop;
-        if (currentTop < 24) {
-          setMobileNavbarVisible(true);
-          previousTop = currentTop;
-        } else if (Math.abs(difference) >= 8) {
-          setMobileNavbarVisible(difference < 0);
-          previousTop = currentTop;
-        }
-        frame = 0;
-      });
-    };
-
-    contentScroller.addEventListener('scroll', onScroll, {passive: true});
-    return () => {
-      contentScroller.removeEventListener('scroll', onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, [contentScroller]);
+    if (!profile?.platformId) return;
+    getPlatformBranding(profile.platformId).then((data) => {
+      if (data.brandPrimaryColor) document.documentElement.style.setProperty('--brand-primary', data.brandPrimaryColor);
+      if (data.brandSecondaryColor) document.documentElement.style.setProperty('--brand-secondary', data.brandSecondaryColor);
+    }).catch(() => undefined);
+  }, [profile?.platformId]);
 
   // Forced password reset state
   const [newPassword, setNewPassword] = useState('');
@@ -484,7 +460,15 @@ export default function App() {
             if (!open) setPublicAuthIntent({ mode: 'signin' });
           }}
         />
-        <Toaster />
+        {profile && (
+        <div className="fixed bottom-20 right-4 z-40 sm:hidden">
+          <AccountMenu profile={profile} activeView={activeView}
+            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+            setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+        </div>
+      )}
+      <Toaster />
       </div>
     );
   }
@@ -530,7 +514,15 @@ export default function App() {
             }}
           />
         )}
-        <Toaster />
+        {profile && (
+        <div className="fixed bottom-20 right-4 z-40 sm:hidden">
+          <AccountMenu profile={profile} activeView={activeView}
+            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+            setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+        </div>
+      )}
+      <Toaster />
       </div>
     );
   }
@@ -643,21 +635,8 @@ export default function App() {
           </div>
         )}
         
-        <div className={`shrink-0 z-40 w-full overflow-hidden transition-[max-height,opacity] duration-200 sm:max-h-none sm:opacity-100 ${mobileNavbarVisible ? 'max-h-[var(--topbar-height)] opacity-100' : 'max-h-0 opacity-0'}`}>
-          <Navbar 
-            user={user} 
-            profile={profile} 
-            activeView={activeView} 
-            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
-            setActiveTab={setActiveTab}
-            onLoginClick={() => setIsAuthOpen(true)} 
-            isImpersonating={Boolean(impersonatedProfile)}
-            onHelpClick={() => setShowOnboarding(true)}
-          />
-        </div>
-
         {/* Independent Scrollable Content Area */}
-        <main ref={setContentScroller} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full flex flex-col justify-between">
           <div className="flex-1 min-w-0 w-full">
             {error ? (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
@@ -1046,6 +1025,14 @@ export default function App() {
         </nav>
       )}
 
+      {profile && (
+        <div className="fixed bottom-20 right-4 z-40 sm:hidden">
+          <AccountMenu profile={profile} activeView={activeView}
+            setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
+            setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+        </div>
+      )}
       <Toaster />
       {showOnboarding && !impersonatedProfile && profile && (
         <OnboardingTour

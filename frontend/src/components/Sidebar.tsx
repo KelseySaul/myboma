@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -6,7 +6,6 @@ import {
   faBell,
   faBuilding,
   faChartPie,
-  faChevronLeft,
   faChevronRight,
   faClipboardList,
   faGlobe,
@@ -134,13 +133,10 @@ export default function Sidebar({
   setActiveView,
   onHelpClick,
 }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('myboma-sidebar-collapsed') === 'true');
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = !expanded;
   const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
   const { data: unreadCount = 0 } = useUnreadCount(profile.email);
-
-  useEffect(() => {
-    localStorage.setItem('myboma-sidebar-collapsed', String(collapsed));
-  }, [collapsed]);
 
   const handleNavClick = (id: string) => {
     setActiveTab(id);
@@ -160,13 +156,13 @@ export default function Sidebar({
           collapsed ? 'justify-center px-2' : 'gap-3 px-3'
         } ${
           isActive
-            ? 'bg-zinc-950 font-semibold text-white dark:bg-white dark:text-zinc-950'
+            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold text-white shadow-lg shadow-indigo-500/20'
             : 'font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
         }`}
       >
         <span
           className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-            isActive ? 'text-white dark:text-zinc-950' : 'text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
+            isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
           }`}
         >
           <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
@@ -180,6 +176,10 @@ export default function Sidebar({
 
   return (
     <aside
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      onFocus={() => setExpanded(true)}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false); }}
       className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-zinc-200/80 bg-white transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950 sm:flex ${
         collapsed ? 'w-[4.75rem]' : 'w-64'
       }`}
@@ -188,15 +188,6 @@ export default function Sidebar({
         <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-between px-2' : 'gap-2.5 px-4'}`}>
           <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
           {!collapsed && <span className="min-w-0 flex-1 truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>}
-          <button
-            type="button"
-            onClick={() => setCollapsed((value) => !value)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <FontAwesomeIcon icon={collapsed ? faChevronRight : faChevronLeft} className="h-3 w-3" />
-          </button>
         </div>
 
         <nav className={`space-y-4 overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">

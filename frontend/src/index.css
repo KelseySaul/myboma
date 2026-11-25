@@ -948,3 +948,43 @@ aside[class*="sticky"] {
     scroll-behavior: smooth;
   }
 }
+/* A soft, translucent workspace surface, scoped to signed-in screens. */
+.app-shell {
+  background: radial-gradient(ellipse at 5% 0%, rgba(165, 180, 252, .32), transparent 40%),
+    radial-gradient(ellipse at 95% 15%, rgba(196, 181, 253, .3), transparent 38%),
+    linear-gradient(145deg, #f6f8ff, #f1f5ff 52%, #faf5ff);
+}
+.dark .app-shell {
+  background: radial-gradient(ellipse at 10% 0%, rgba(79, 70, 229, .24), transparent 42%),
+    radial-gradient(ellipse at 100% 20%, rgba(126, 34, 206, .18), transparent 40%),
+    linear-gradient(145deg, #0b1022, #11152c 55%, #1b1028);
+}
+.app-shell aside {
+  background: rgba(255, 255, 255, .72);
+  backdrop-filter: blur(22px);
+  border-color: rgba(165, 180, 252, .35);
+}
+.dark .app-shell aside { background: rgba(15, 20, 42, .8); border-color: rgba(165, 180, 252, .15); }
+.app-shell [data-slot="card"], .app-shell .stat-card,
+.app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl {
+  background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(239,242,255,.65));
+  border-color: rgba(165,180,252,.38);
+  box-shadow: 0 8px 30px rgba(74, 74, 140, .07), inset 0 1px rgba(255,255,255,.85);
+  backdrop-filter: blur(16px);
+  transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
+}
+.app-shell main button.group.rounded-2xl:hover, .app-shell .stat-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(129,140,248,.7);
+  box-shadow: 0 14px 32px rgba(79,70,229,.15);
+}
+.dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
+.dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl {
+  background: linear-gradient(145deg, rgba(35,40,70,.88), rgba(26,28,52,.75));
+  border-color: rgba(165,180,252,.16);
+  box-shadow: 0 8px 30px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.06);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .stat-card, .app-shell main button.group.rounded-2xl { transition: none; }
+  .app-shell .stat-card:hover, .app-shell main button.group.rounded-2xl:hover { transform: none; }
+}
