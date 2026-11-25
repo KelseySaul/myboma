@@ -147,27 +147,38 @@ export default function OverviewTab(props: OverviewTabProps) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, note, tab, icon: Icon }) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
-            className={`group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-950 hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-500 ${label === 'Collected this month' ? 'finance-highlight' : 'stat-tint'}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
-              <Icon className="h-4 w-4 text-zinc-400 transition group-hover:text-zinc-950 dark:group-hover:text-white" />
-            </div>
-            <p className="mt-3 text-2xl font-bold tabular-nums tracking-tight text-zinc-950 dark:text-white">{value}</p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{note}</p>
-            {label === 'Collected this month' && month.expected > 0 && (
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                <div className="h-full rounded-full bg-emerald-400 transition-all duration-700" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(({ label, value, note, tab, icon: Icon }) => {
+          const isRevenue = label === 'Collected this month';
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
+              className={`group rounded-xl border p-4 text-left transition sm:p-5 ${isRevenue ? 'finance-highlight' : 'stat-tint'}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-[#5F6C7B] sm:text-[13px] dark:text-slate-400">{label}</span>
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                    isRevenue
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+                      : 'bg-[#F0F2F5] text-[#5F6C7B] dark:bg-white/8 dark:text-slate-300'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" strokeWidth={1.85} />
+                </span>
               </div>
-            )}
-          </button>
-        ))}
+              <p className="mt-3 text-2xl font-semibold tabular-nums tracking-[-0.03em] text-[#1C2B33] dark:text-white">{value}</p>
+              <p className="mt-1 text-xs text-[#5F6C7B] dark:text-slate-400">{note}</p>
+              {isRevenue && month.expected > 0 && (
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-950/60">
+                  <div className="h-full rounded-full bg-emerald-600 transition-all duration-700 dark:bg-emerald-400" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">

@@ -6,6 +6,7 @@ import AccountMenu from './components/AccountMenu';
 import { getPlatformBranding } from './lib/api';
 import PublicNavbar from './components/PublicNavbar';
 import Sidebar from './components/Sidebar';
+import CommandPalette from './components/CommandPalette';
 import Footer from './components/Footer';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import PublicLegalPage from './components/PublicLegalPage';
@@ -24,8 +25,17 @@ const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
 
 const DashboardFallback = () => (
-  <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
-    <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Loading…</p>
+  <div className="space-y-6 p-6 md:p-8" role="status" aria-live="polite" aria-label="Loading workspace">
+    <div className="h-8 w-56 animate-pulse rounded-lg bg-[#1C2B33]/[0.07] dark:bg-white/[0.07]" />
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="h-28 animate-pulse rounded-xl bg-white shadow-2xs dark:bg-[#1A1D21]" />
+      ))}
+    </div>
+    <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+      <div className="h-64 animate-pulse rounded-xl bg-white shadow-2xs dark:bg-[#1A1D21]" />
+      <div className="h-64 animate-pulse rounded-xl bg-white shadow-2xs dark:bg-[#1A1D21]" />
+    </div>
   </div>
 );
 
@@ -611,7 +621,7 @@ export default function App() {
 
   return (
     <div 
-      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#f8fafc] dark:bg-[#090d16] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
+      className={`db app-shell h-screen h-dvh w-screen overflow-hidden bg-[#F0F2F5] dark:bg-[#111315] transition-colors duration-200 flex ${impersonatedProfile ? 'app-shell-impersonating' : ''}`}
     >
       {/* Desktop Fixed Sidebar — only when logged in */}
       {activeProfile && (
@@ -624,6 +634,14 @@ export default function App() {
           setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
           onHelpClick={() => setShowOnboarding(true)}
           isImpersonating={Boolean(impersonatedProfile)}
+        />
+      )}
+      {activeProfile && (
+        <CommandPalette
+          profile={activeProfile}
+          currentRole={currentRole as UserRole}
+          onNavigate={setActiveTab}
+          onHelpClick={() => setShowOnboarding(true)}
         />
       )}
 

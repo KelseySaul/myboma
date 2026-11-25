@@ -63,8 +63,46 @@ import MapPicker from './MapPicker';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  BedDouble,
+  Briefcase,
+  Building2,
+  ChevronDown,
+  Eye,
+  Globe,
+  Home,
+  ImagePlus,
+  Layers,
+  MapPin,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  User,
+  UserCheck,
+  X,
+} from 'lucide-react';
 import { useAdminDashboard, useAuditLogs } from '../lib/queries';
 import AdminOverview from './admin/AdminOverview';
+
+const formatKes = (amount: number | string | null | undefined) =>
+  `KES ${Math.round(Number(amount) || 0).toLocaleString('en-KE')}`;
+
+const PROPERTY_TYPE_OPTIONS = [
+  { id: 'residential', label: 'Home', suffix: '/mo', icon: Home },
+  { id: 'commercial', label: 'Commercial', suffix: '/mo', icon: Briefcase },
+  { id: 'bnb', label: 'Short stay', suffix: '/night', icon: BedDouble },
+] as const;
+
+const propertyTypeMeta = (type?: string) =>
+  PROPERTY_TYPE_OPTIONS.find((item) => item.id === type) ?? PROPERTY_TYPE_OPTIONS[0];
+
+const parseImageList = (images: unknown): string[] => {
+  if (Array.isArray(images)) return images.filter((u): u is string => typeof u === 'string' && Boolean(u.trim()));
+  if (typeof images === 'string') return images.split(',').map((u) => u.trim()).filter(Boolean);
+  return [];
+};
 
 interface Platform {
   id: string;
@@ -159,7 +197,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   const [inviteSearch, setInviteSearch] = useState('');
   const [invitePage, setInvitePage] = useState(1);
   const [adminPropertySearch, setAdminPropertySearch] = useState('');
+  const [adminPropertyStatusFilter, setAdminPropertyStatusFilter] = useState<'all' | 'available' | 'rented' | 'booked'>('all');
   const [adminPropertyPage, setAdminPropertyPage] = useState(1);
+  const [inspectingProperty, setInspectingProperty] = useState<any | null>(null);
+  const addImageInputRef = useRef<HTMLInputElement>(null);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
   const [platformSearch, setPlatformSearch] = useState('');
   const [platformPage, setPlatformPage] = useState(1);
   const [auditSearch, setAuditSearch] = useState('');
@@ -836,14 +878,24 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   );
 
   // Pagination calculations - Properties Assets
+  const propertyStatusCounts = {
+    all: properties.length,
+    available: properties.filter((p) => p.status === 'available').length,
+    rented: properties.filter((p) => p.status === 'rented').length,
+    booked: properties.filter((p) => p.status === 'booked').length,
+  };
   const filteredProps = properties.filter(p => {
+    if (adminPropertyStatusFilter !== 'all' && p.status !== adminPropertyStatusFilter) return false;
     const search = adminPropertySearch.toLowerCase();
-    const platName = platforms.find(plat => plat.id === p.platformId)?.name || 'No platform';
+    if (!search) return true;
+    const platName = platforms.find(plat => plat.id === p.platformId)?.name || '';
+    const landlordName = users.find(u => u.uid === p.landlordId)?.displayName || '';
     return (
       (p.title || '').toLowerCase().includes(search) ||
       (p.location || '').toLowerCase().includes(search) ||
       String(p.price || '').includes(search) ||
       (p.status || '').toLowerCase().includes(search) ||
+      landlordName.toLowerCase().includes(search) ||
       platName.toLowerCase().includes(search)
     );
   });
@@ -887,34 +939,26 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
   return (
     <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
-      {/* ── Page header ─────────────────────────── */}
-      <div className="border-b border-teal-900/10 bg-white/35 px-4 py-4 backdrop-blur-md dark:border-white/10 dark:bg-teal-950/30 sm:px-6 sm:py-5 md:px-8">
+      {/* ── Workspace Top Bar (Meta Business Suite style) ── */}
+      <div className="sticky top-0 z-30 border-b border-[#1C2B33]/[0.08] bg-white/95 px-4 py-3.5 backdrop-blur-md dark:border-white/[0.08] dark:bg-[#1A1D21]/95 sm:px-6 md:px-8">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center sm:gap-4">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#1C2B33] sm:text-xl dark:text-white">
               {TAB_TITLES[activeTab || 'dashboard']?.title ?? 'Overview'}
             </h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+            <p className="mt-0.5 truncate text-xs text-[#5F6C7B] dark:text-slate-400">
               {TAB_TITLES[activeTab || 'dashboard']?.description ?? ''}
             </p>
           </div>
 
-          <div className="hidden flex-wrap items-center gap-2.5 sm:flex">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl text-xs font-semibold"
-              onClick={() => setIsProfileOpen(true)}
-            >
-              <FontAwesomeIcon icon={faUser} className="mr-1.5 h-3 w-3 text-slate-400" />
-              My profile
-            </Button>
-
+          <div className="hidden flex-wrap items-center gap-2 sm:flex">
             {profile.isSuperAdmin && (
               <>
-                <div className="relative">
+                <div className="relative flex items-center">
+                  <Globe className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-[#8A94A6]" />
                   <select
-                    className="h-9 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 pl-3 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer shadow-2xs appearance-none"
+                    aria-label="Filter by platform"
+                    className="h-8.5 cursor-pointer appearance-none rounded-lg border border-[#D0D5DD] bg-white pl-8 pr-7 text-xs font-medium text-[#1C2B33] shadow-2xs outline-none transition hover:border-[#98A2B3] focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/15 dark:border-white/12 dark:bg-[#16191D] dark:text-slate-200"
                     value={selectedPlatformId}
                     onChange={(e) => setSelectedPlatformId(e.target.value)}
                   >
@@ -923,14 +967,14 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
-                  <FontAwesomeIcon icon={faChevronDown} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-[10px]" />
+                  <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-[#8A94A6]" />
                 </div>
 
                 {/* Provision New Platform Modal (Section 11) */}
                 <Dialog open={isAddPlatformOpen} onOpenChange={setIsAddPlatformOpen}>
                   <DialogTrigger render={
-                    <Button size="sm" className="rounded-xl font-bold text-xs shadow-xs gap-1.5">
-                      <FontAwesomeIcon icon={faPlus} className="h-3 w-3" />
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <Plus className="h-3.5 w-3.5" />
                       Add platform
                     </Button>
                   } />
@@ -1124,6 +1168,16 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                 </Dialog>
               </>
             )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-[#5F6C7B] hover:text-[#1C2B33]"
+              onClick={() => setIsProfileOpen(true)}
+            >
+              <User className="h-3.5 w-3.5" />
+              Profile
+            </Button>
           </div>
         </div>
       </div>
@@ -1149,17 +1203,16 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
       )}
 
       {/* Tab Panels */}
-      <div className="mt-3 px-3 sm:mt-4 sm:px-6">
+      <div className="mt-5 px-4 sm:px-6 md:px-8">
         {/* ── USERS TAB ── */}
         {activeTab === 'registered' && (
-          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
-            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="max-sm:hidden">
-                  <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Users</CardTitle>
-                  <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Search by name or email, filter by role, and manage access.
-                  </CardDescription>
+          <Card className="overflow-hidden py-0 gap-0">
+            <CardHeader className="p-4 sm:px-5 sm:py-3.5 border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07]">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="hidden items-center gap-2 md:flex">
+                  <span className="text-xs font-semibold text-[#5F6C7B] dark:text-slate-400">
+                    Showing <strong className="tabular-nums text-[#1C2B33] dark:text-white">{filteredUsers.length}</strong> {filteredUsers.length === 1 ? 'account' : 'accounts'}
+                  </span>
                 </div>
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
                   <div className="flex w-full items-stretch gap-2 sm:w-auto sm:items-center">
@@ -1435,14 +1488,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── PENDING TAB ── */}
         {activeTab === 'pending' && (
-          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
-            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="max-sm:hidden">
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Pending invites</CardTitle>
-                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  They have an invitation email but haven't set up their account. Links expire after 7 days.
-                </CardDescription>
-              </div>
+          <Card className="overflow-hidden py-0 gap-0">
+            <CardHeader className="p-4 sm:px-5 sm:py-3.5 border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="hidden text-xs font-semibold text-[#5F6C7B] sm:inline dark:text-slate-400">
+                <strong className="tabular-nums text-[#1C2B33] dark:text-white">{filteredInvs.length}</strong> pending {filteredInvs.length === 1 ? 'invitation' : 'invitations'} · links expire after 7 days
+              </span>
               <div className="relative w-full sm:max-w-xs shrink-0">
                 <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input 
@@ -1532,41 +1582,72 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── ASSETS TAB ── */}
         {activeTab === 'properties' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
-              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                <div className="max-sm:hidden">
-                  <CardTitle className="text-xl font-black">Properties</CardTitle>
-                  <CardDescription className="font-medium text-zinc-500">Every unit with its landlord, price and status.</CardDescription>
+          <div className="space-y-5 animate-in fade-in duration-300">
+          <Card className="overflow-hidden py-0 gap-0">
+            <CardHeader className="border-b border-[#1C2B33]/[0.07] px-4 py-3.5 dark:border-white/[0.07] sm:px-5">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                {/* Status filter pills (Ads Manager style) */}
+                <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Filter properties by status">
+                  {(
+                    [
+                      { id: 'all', label: 'All', count: propertyStatusCounts.all },
+                      { id: 'available', label: 'Available', count: propertyStatusCounts.available },
+                      { id: 'rented', label: 'Rented', count: propertyStatusCounts.rented },
+                      { id: 'booked', label: 'Booked', count: propertyStatusCounts.booked },
+                    ] as const
+                  ).map((chip) => {
+                    const active = adminPropertyStatusFilter === chip.id;
+                    return (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => {
+                          setAdminPropertyStatusFilter(chip.id);
+                          setAdminPropertyPage(1);
+                        }}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+                          active
+                            ? 'bg-emerald-700/[0.10] text-emerald-800 ring-1 ring-emerald-700/20 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/25'
+                            : 'text-[#5F6C7B] hover:bg-[#F0F2F5] hover:text-[#1C2B33] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white'
+                        }`}
+                      >
+                        {chip.label}
+                        <span className="tabular-nums opacity-70">{chip.count}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
-                  <div className="relative w-full sm:max-w-xs shrink-0">
-                    <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-zinc-400" />
-                    <Input 
-                      placeholder="Search properties..." 
-                      className="h-9 pl-8 text-xs font-bold rounded-xl border-zinc-200" 
-                      value={adminPropertySearch} 
-                      onChange={(e) => { setAdminPropertySearch(e.target.value); setAdminPropertyPage(1); }} 
+
+                {/* Search + Action toolbar */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="relative w-full sm:w-60">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8A94A6]" />
+                    <Input
+                      placeholder="Search properties, areas…"
+                      className="h-8.5 pl-8.5 text-xs"
+                      value={adminPropertySearch}
+                      onChange={(e) => { setAdminPropertySearch(e.target.value); setAdminPropertyPage(1); }}
                     />
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Dialog open={isBulkAddOpen} onOpenChange={setIsBulkAddOpen}>
-                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-100 px-2 font-bold text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 sm:gap-2 sm:px-3" />}>
-                        <FontAwesomeIcon icon={faTools} className="h-3 w-3 sm:mr-2" />
-                        <span className="sm:hidden">Bulk</span><span className="hidden sm:inline">Bulk Add</span>
+                      <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5" />}>
+                        <Layers className="h-3.5 w-3.5 text-[#5F6C7B]" />
+                        <span className="sm:hidden">Bulk</span><span className="hidden sm:inline">Bulk add</span>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-[700px] p-0 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-zinc-100 dark:border-zinc-800">
-                          <DialogTitle className="text-xl font-black">Bulk Add Units</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Add several units to a building at once.</DialogDescription>
+                      <DialogContent className="sm:max-w-[640px] p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+                          <DialogTitle className="text-base font-semibold">Bulk add units</DialogTitle>
+                          <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Generate multiple numbered units inside an existing building.</DialogDescription>
                         </div>
-                        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                        <div className="p-6 overflow-y-auto space-y-5 flex-1">
                           <div className="grid sm:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Landlord *</label>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Landlord <span className="text-rose-500">*</span></label>
                               <Select value={bulkAddForm.landlordId} onValueChange={(val) => setBulkAddForm({ ...bulkAddForm, landlordId: val })}>
-                                <SelectTrigger className="h-12 rounded-xl">
+                                <SelectTrigger className="h-9.5 rounded-lg">
                                   <SelectValue placeholder="Select landlord" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1577,295 +1658,503 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Building</label>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Building</label>
                               <Select value={bulkAddForm.buildingId} onValueChange={(val) => setBulkAddForm({ ...bulkAddForm, buildingId: val })}>
-                                <SelectTrigger className="h-12 rounded-xl">
+                                <SelectTrigger className="h-9.5 rounded-lg">
                                   <SelectValue placeholder="Select building" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="none">No Building (Standalone)</SelectItem>
+                                  <SelectItem value="none">No building (standalone)</SelectItem>
                                   {buildings.map(b => (
                                     <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Unit Type</label>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Unit type</label>
                               <Select value={bulkAddForm.type} onValueChange={(val: any) => setBulkAddForm({ ...bulkAddForm, type: val })}>
-                                <SelectTrigger className="h-12 rounded-xl">
+                                <SelectTrigger className="h-9.5 rounded-lg">
                                   <SelectValue placeholder="Type" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="residential">Residential</SelectItem>
-                                  <SelectItem value="commercial">Commercial</SelectItem>
-                                  <SelectItem value="bnb">BNB / Daily</SelectItem>
+                                  <SelectItem value="residential">Home (monthly)</SelectItem>
+                                  <SelectItem value="commercial">Commercial (monthly)</SelectItem>
+                                  <SelectItem value="bnb">Short stay (daily)</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Base Price (Ksh)</label>
-                              <Input type="number" className="h-12 rounded-xl" value={bulkAddForm.price} onChange={e => setBulkAddForm({...bulkAddForm, price: e.target.value})} placeholder="e.g. 50000" />
-                            </div>
-                          </div>
-                          
-                          <div className="grid sm:grid-cols-3 gap-4 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950">
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Prefix</label>
-                              <Input className="h-12 rounded-xl" value={bulkAddForm.prefix} onChange={e => setBulkAddForm({...bulkAddForm, prefix: e.target.value})} placeholder="A-" />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Start #</label>
-                              <Input type="number" className="h-12 rounded-xl" value={bulkAddForm.startNumber} onChange={e => setBulkAddForm({...bulkAddForm, startNumber: parseInt(e.target.value) || 1})} placeholder="101" />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Count</label>
-                              <Input type="number" className="h-12 rounded-xl" value={bulkAddForm.count} onChange={e => setBulkAddForm({...bulkAddForm, count: parseInt(e.target.value) || 10})} placeholder="10" />
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Base rent (KES)</label>
+                              <div className="relative">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8A94A6]">KES</span>
+                                <Input type="number" className="pl-11 tabular-nums" value={bulkAddForm.price} onChange={e => setBulkAddForm({...bulkAddForm, price: e.target.value})} placeholder="50,000" />
+                              </div>
                             </div>
                           </div>
 
-                          <div className="space-y-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Shared Amenities (comma separated)</label>
-                            <Input className="h-12 rounded-xl" value={bulkAddForm.amenities} onChange={e => setBulkAddForm({...bulkAddForm, amenities: e.target.value})} placeholder="e.g. WiFi, Desk, AC" />
+                          <div className="grid sm:grid-cols-3 gap-3.5 p-4 rounded-xl bg-[#F7F8FA] border border-[#1C2B33]/[0.06] dark:bg-white/[0.03] dark:border-white/[0.06]">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Unit prefix</label>
+                              <Input value={bulkAddForm.prefix} onChange={e => setBulkAddForm({...bulkAddForm, prefix: e.target.value})} placeholder="A-" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Start number</label>
+                              <Input type="number" className="tabular-nums" value={bulkAddForm.startNumber} onChange={e => setBulkAddForm({...bulkAddForm, startNumber: parseInt(e.target.value) || 1})} placeholder="101" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Total units</label>
+                              <Input type="number" className="tabular-nums" value={bulkAddForm.count} onChange={e => setBulkAddForm({...bulkAddForm, count: parseInt(e.target.value) || 10})} placeholder="10" />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Shared amenities</label>
+                            <Input value={bulkAddForm.amenities} onChange={e => setBulkAddForm({...bulkAddForm, amenities: e.target.value})} placeholder="WiFi, Borehole, Backup generator, Parking" />
                           </div>
                         </div>
-                        <div className="p-6 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 flex justify-end gap-3">
-                          <Button variant="ghost" onClick={() => setIsBulkAddOpen(false)}>Cancel</Button>
-                          <Button onClick={handleBulkAddProperties} disabled={busyAction !== null} className="bg-zinc-950 text-white hover:bg-zinc-800">Generate {bulkAddForm.count} Units</Button>
+                        <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setIsBulkAddOpen(false)}>Cancel</Button>
+                          <Button size="sm" onClick={handleBulkAddProperties} disabled={busyAction !== null}>Generate {bulkAddForm.count} units</Button>
                         </div>
                       </DialogContent>
                     </Dialog>
 
                     <Dialog open={isAddBuildingOpen} onOpenChange={setIsAddBuildingOpen}>
-                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-100 px-2 font-bold text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 sm:gap-2 sm:px-3" />}>
-                        <FontAwesomeIcon icon={faPlus} className="h-3 w-3 sm:mr-2" />
+                      <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5" />}>
+                        <Building2 className="h-3.5 w-3.5 text-[#5F6C7B]" />
                         Building
                       </DialogTrigger>
-                      <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-black">Add New Building</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Group units under one building.</DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Building Name</label>
-                            <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={buildingForm.name} onChange={e => setBuildingForm({...buildingForm, name: e.target.value})} placeholder="Sunset Apartments" />
+                      <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+                          <DialogTitle className="text-base font-semibold">Add new building</DialogTitle>
+                          <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Group multiple units under one physical building.</DialogDescription>
+                        </div>
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Building name <span className="text-rose-500">*</span></label>
+                            <Input value={buildingForm.name} onChange={e => setBuildingForm({...buildingForm, name: e.target.value})} placeholder="e.g. Sunset Apartments" />
                           </div>
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address</label>
-                            <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={buildingForm.address} onChange={e => setBuildingForm({...buildingForm, address: e.target.value})} placeholder="123 Main St" />
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Address / Area</label>
+                            <Input value={buildingForm.address} onChange={e => setBuildingForm({...buildingForm, address: e.target.value})} placeholder="e.g. Kilimani, Nairobi" />
                           </div>
                           <MapPicker
                             value={buildingForm.latitude === null || buildingForm.longitude === null ? null : { latitude: buildingForm.latitude, longitude: buildingForm.longitude }}
                             onChange={({ latitude, longitude }) => setBuildingForm({ ...buildingForm, latitude, longitude })}
                             onClear={() => setBuildingForm({ ...buildingForm, latitude: null, longitude: null })}
                           />
-<div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Assign Landlord</label>
-                            <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={buildingForm.landlordId} onChange={e => setBuildingForm({...buildingForm, landlordId: e.target.value})}>
-                              <option value="">Select a Landlord...</option>
-                              <option value={profile.uid}>Self ({profile.displayName})</option>
-                              {users.filter(u => u.role === 'landlord').map(u => (
-                                <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
-                              ))}
-                            </select>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Assign landlord</label>
+                            <Select value={buildingForm.landlordId} onValueChange={(val) => setBuildingForm({ ...buildingForm, landlordId: val })}>
+                              <SelectTrigger className="h-9.5 rounded-lg">
+                                <SelectValue placeholder="Select a landlord…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={profile.uid}>Self ({profile.displayName})</SelectItem>
+                                {users.filter(u => u.role === 'landlord').map(u => (
+                                  <SelectItem key={u.uid} value={u.uid}>{u.displayName} ({u.email})</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
-                        <DialogFooter>
-                            <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsAddBuildingOpen(false)}>Cancel</Button>
-                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddBuilding} disabled={busyAction !== null}>Add Building</Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                        <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setIsAddBuildingOpen(false)}>Cancel</Button>
+                          <Button size="sm" onClick={handleAddBuilding} disabled={busyAction !== null}>Add building</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
 
-                      <Dialog open={isEditBuildingOpen} onOpenChange={setIsEditBuildingOpen}>
-                        <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900">
-                          <DialogHeader>
-                            <DialogTitle className="text-xl font-black">Edit building</DialogTitle>
-                            <DialogDescription className="font-medium text-zinc-500">Change the building's name or address.</DialogDescription>
-                          </DialogHeader>
-                          <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Building name *</label>
-                              <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={editBuildingForm.name} onChange={e => setEditBuildingForm({...editBuildingForm, name: e.target.value})} placeholder="e.g. Sunset Apartments" />
-                            </div>
-                            <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address / Location</label>
-                              <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={editBuildingForm.address} onChange={e => setEditBuildingForm({...editBuildingForm, address: e.target.value})} placeholder="123 Sunset Blvd" />
-                            </div>
-                            <MapPicker
-                              value={editBuildingForm.latitude === null || editBuildingForm.longitude === null ? null : { latitude: editBuildingForm.latitude, longitude: editBuildingForm.longitude }}
-                              onChange={({ latitude, longitude }) => setEditBuildingForm({ ...editBuildingForm, latitude, longitude })}
-                              onClear={() => setEditBuildingForm({ ...editBuildingForm, latitude: null, longitude: null })}
+                    <Dialog open={isEditBuildingOpen} onOpenChange={setIsEditBuildingOpen}>
+                      <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
+                        <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+                          <DialogTitle className="text-base font-semibold">Edit building</DialogTitle>
+                          <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Update the building&apos;s name, address, or map location.</DialogDescription>
+                        </div>
+                        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Building name <span className="text-rose-500">*</span></label>
+                            <Input value={editBuildingForm.name} onChange={e => setEditBuildingForm({...editBuildingForm, name: e.target.value})} placeholder="e.g. Sunset Apartments" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Address / Location</label>
+                            <Input value={editBuildingForm.address} onChange={e => setEditBuildingForm({...editBuildingForm, address: e.target.value})} placeholder="123 Sunset Blvd" />
+                          </div>
+                          <MapPicker
+                            value={editBuildingForm.latitude === null || editBuildingForm.longitude === null ? null : { latitude: editBuildingForm.latitude, longitude: editBuildingForm.longitude }}
+                            onChange={({ latitude, longitude }) => setEditBuildingForm({ ...editBuildingForm, latitude, longitude })}
+                            onClear={() => setEditBuildingForm({ ...editBuildingForm, latitude: null, longitude: null })}
+                          />
+                        </div>
+                        <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setIsEditBuildingOpen(false)}>Cancel</Button>
+                          <Button size="sm" onClick={handleUpdateBuilding} disabled={busyAction !== null}>Save changes</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
+                    {/* Meta-Grade Add New Property Dialog */}
+                    <Dialog open={isAddPropertyOpen} onOpenChange={setIsAddPropertyOpen}>
+                      <DialogTrigger render={<Button size="sm" className="gap-1.5" />}>
+                        <Plus className="h-3.5 w-3.5" />
+                        <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add property</span>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+                          <DialogTitle className="text-base font-semibold">Add new property</DialogTitle>
+                          <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">
+                            Create a single rental unit or listing. Vacant units appear automatically on public search.
+                          </DialogDescription>
+                        </div>
+
+                        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">
+                              Property title <span className="text-rose-500">*</span>
+                            </label>
+                            <Input
+                              value={propertyForm.title}
+                              onChange={e => setPropertyForm({ ...propertyForm, title: e.target.value })}
+                              placeholder="e.g. 2 Bedroom Apartment, Kilimani"
                             />
                           </div>
-                          <DialogFooter>
-                            <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsEditBuildingOpen(false)}>Cancel</Button>
-                            <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleUpdateBuilding} disabled={busyAction !== null}>Save Changes</Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
 
-                      <Dialog open={isAddPropertyOpen} onOpenChange={setIsAddPropertyOpen}>
-                      <DialogTrigger render={<Button className="gap-1 rounded-xl bg-zinc-950 px-2 font-bold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-955 sm:gap-2 sm:px-3" />}>
-                        <FontAwesomeIcon icon={faPlus} className="h-3 w-3 sm:mr-2" />
-                        <span className="sm:hidden">Add</span><span className="hidden sm:inline">Property</span>
-                      </DialogTrigger>
-                      <DialogContent className="rounded-3xl border-none shadow-2xl bg-white dark:bg-zinc-900 max-w-[500px]">
-                        <DialogHeader>
-                          <DialogTitle className="text-xl font-black">Add New Property</DialogTitle>
-                          <DialogDescription className="font-medium text-zinc-500">Add a single unit.</DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Title</label>
-                            <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={propertyForm.title} onChange={e => setPropertyForm({...propertyForm, title: e.target.value})} placeholder="Cozy 2BHK" />
-                          </div>
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Description</label>
-                            <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={propertyForm.description} onChange={e => setPropertyForm({...propertyForm, description: e.target.value})} placeholder="Spacious and sunny..." />
-                          </div>
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Location</label>
-                            <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" value={propertyForm.location} onChange={e => setPropertyForm({...propertyForm, location: e.target.value})} placeholder="Nairobi" />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Type</label>
-                              <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={propertyForm.type} onChange={e => setPropertyForm({...propertyForm, type: e.target.value})}>
-                                <option value="residential">Residential</option>
-                                <option value="commercial">Commercial</option>
-                                <option value="bnb">Airbnb</option>
-                              </select>
-                            </div>
-                            <div className="grid gap-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Price (KES)</label>
-                              <Input className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800" type="number" value={propertyForm.price} onChange={e => setPropertyForm({...propertyForm, price: e.target.value})} placeholder="25000" />
+                          {/* Segmented Property Type Picker */}
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Property type</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {PROPERTY_TYPE_OPTIONS.map((opt) => {
+                                const Icon = opt.icon;
+                                const selected = propertyForm.type === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setPropertyForm({ ...propertyForm, type: opt.id })}
+                                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                                      selected
+                                        ? 'border-emerald-700 bg-emerald-700/[0.08] text-emerald-800 dark:border-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-300'
+                                        : 'border-[#D0D5DD] bg-white text-[#5F6C7B] hover:bg-[#F7F8FA] hover:text-[#1C2B33] dark:border-white/12 dark:bg-[#16191D] dark:text-slate-400'
+                                    }`}
+                                  >
+                                    <Icon className="h-3.5 w-3.5" />
+                                    {opt.label}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Assign Landlord</label>
-                            <select className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none" value={propertyForm.landlordId} onChange={e => setPropertyForm({...propertyForm, landlordId: e.target.value})}>
-                              <option value="">Select a Landlord...</option>
-                              <option value={profile.uid}>Self ({profile.displayName})</option>
-                              {users.filter(u => u.role === 'landlord').map(u => (
-                                <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
+
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">
+                                Location <span className="text-rose-500">*</span>
+                              </label>
+                              <div className="relative">
+                                <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8A94A6]" />
+                                <Input
+                                  className="pl-8.5"
+                                  value={propertyForm.location}
+                                  onChange={e => setPropertyForm({ ...propertyForm, location: e.target.value })}
+                                  placeholder="e.g. Westlands, Nairobi"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">
+                                {propertyForm.type === 'bnb' ? 'Nightly rate' : 'Monthly rent'} <span className="text-rose-500">*</span>
+                              </label>
+                              <div className="relative">
+                                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8A94A6]">KES</span>
+                                <Input
+                                  type="number"
+                                  className="pl-11 pr-14 tabular-nums"
+                                  value={propertyForm.price}
+                                  onChange={e => setPropertyForm({ ...propertyForm, price: e.target.value })}
+                                  placeholder="25,000"
+                                />
+                                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8A94A6]">
+                                  {propertyForm.type === 'bnb' ? '/night' : '/mo'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Assign landlord</label>
+                            <Select
+                              value={propertyForm.landlordId}
+                              onValueChange={(val) => setPropertyForm({ ...propertyForm, landlordId: val })}
+                            >
+                              <SelectTrigger className="h-9.5 rounded-lg">
+                                <SelectValue placeholder="Select a landlord…" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={profile.uid}>Self ({profile.displayName})</SelectItem>
+                                {users.filter(u => u.role === 'landlord').map(u => (
+                                  <SelectItem key={u.uid} value={u.uid}>{u.displayName} ({u.email})</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Description</label>
+                            <Textarea
+                              className="min-h-[76px] rounded-lg border-[#D0D5DD] text-sm dark:border-white/12 dark:bg-[#16191D]"
+                              value={propertyForm.description}
+                              onChange={e => setPropertyForm({ ...propertyForm, description: e.target.value })}
+                              placeholder="Spacious, natural light, backup water, parking…"
+                            />
+                          </div>
+
+                          {/* Custom Drag/Click Photo Dropzone with Thumbnails */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Photos</label>
+                              {parseImageList(propertyForm.images).length > 0 && (
+                                <span className="text-[11px] font-medium text-[#5F6C7B]">
+                                  {parseImageList(propertyForm.images).length} attached
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                              {parseImageList(propertyForm.images).map((url, idx) => (
+                                <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/10 dark:bg-white/5">
+                                  <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                                  <button
+                                    type="button"
+                                    aria-label="Remove photo"
+                                    onClick={() => {
+                                      const next = parseImageList(propertyForm.images).filter((_, i) => i !== idx);
+                                      setPropertyForm({ ...propertyForm, images: next.join(', ') });
+                                    }}
+                                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                  {idx === 0 && (
+                                    <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                      Cover
+                                    </span>
+                                  )}
+                                </div>
                               ))}
-                            </select>
-                          </div>
-                          <div className="grid gap-2">
-                            <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Images</label>
-                            <Input type="file" multiple accept="image/*" onChange={handleImageUpload} disabled={isUploading} className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                            {isUploading && <p className="text-xs text-blue-500 font-bold mt-1 animate-pulse">Uploading images...</p>}
-                            {propertyForm.images && <p className="text-[10px] text-zinc-500 font-bold">{propertyForm.images.split(',').filter(x => x).length} images attached</p>}
+                              <button
+                                type="button"
+                                onClick={() => addImageInputRef.current?.click()}
+                                disabled={isUploading}
+                                className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#D0D5DD] bg-[#F7F8FA]/70 text-xs font-medium text-[#5F6C7B] transition hover:border-emerald-700 hover:bg-emerald-50/40 hover:text-emerald-800 disabled:opacity-60 dark:border-white/15 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-emerald-500 ${
+                                  parseImageList(propertyForm.images).length === 0 ? 'col-span-3 sm:col-span-4 py-6' : 'aspect-[4/3]'
+                                }`}
+                              >
+                                <ImagePlus className="h-4 w-4" />
+                                <span>{isUploading ? 'Uploading…' : parseImageList(propertyForm.images).length === 0 ? 'Click to upload property photos' : 'Add more'}</span>
+                              </button>
+                            </div>
+                            <input
+                              ref={addImageInputRef}
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              hidden
+                              onChange={handleImageUpload}
+                              disabled={isUploading}
+                            />
                           </div>
                         </div>
-                        <DialogFooter className="mt-2">
-                          <Button variant="ghost" className="font-bold rounded-xl h-12" onClick={() => setIsAddPropertyOpen(false)}>Cancel</Button>
-                          <Button className="font-black rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 h-12 px-6" onClick={handleAddProperty} disabled={busyAction !== null}>Add Property</Button>
-                        </DialogFooter>
+
+                        <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setIsAddPropertyOpen(false)}>Cancel</Button>
+                          <Button size="sm" onClick={handleAddProperty} disabled={busyAction !== null || isUploading}>
+                            Add property
+                          </Button>
+                        </div>
                       </DialogContent>
                     </Dialog>
                   </div>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent className="p-0">
-              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
+              <Table className="max-sm:[&_td]:px-3 max-sm:[&_th]:px-3">
                 <TableHeader>
-                  <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-3 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8">Property</TableHead>
-                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 md:table-cell">Coordinates</TableHead>
-                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 md:table-cell">Valuation</TableHead>
-                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Status</TableHead>
-                    {profile.isSuperAdmin && <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 lg:table-cell">Platform</TableHead>}
-                    <TableHead className="px-2 py-4 text-right font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8"><span className="sr-only">Actions</span></TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="px-4 sm:px-5">Property</TableHead>
+                    <TableHead className="hidden md:table-cell">Landlord</TableHead>
+                    <TableHead className="hidden text-right md:table-cell">Rate</TableHead>
+                    <TableHead className="hidden sm:table-cell">Status</TableHead>
+                    {profile.isSuperAdmin && <TableHead className="hidden lg:table-cell">Platform</TableHead>}
+                    <TableHead className="px-4 text-right sm:px-5"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedProps.map((p, i) => (
-                    <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                      <TableCell className="max-w-[11rem] whitespace-normal px-3 py-4 text-sm font-bold sm:max-w-none sm:whitespace-nowrap sm:px-8 sm:py-5">{p.title}</TableCell>
-                      <TableCell className="hidden text-xs font-medium md:table-cell">{p.location}</TableCell>
-                      <TableCell className="hidden text-xs font-black text-zinc-700 md:table-cell">KES {p.price?.toLocaleString()}</TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        <Badge variant="outline" className={`rounded-lg px-2 py-0.5 font-black uppercase text-[9px] border-none ${p.status === 'available' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
-                          {p.status}
-                        </Badge>
-                      </TableCell>
-                      {profile.isSuperAdmin && (
-                        <TableCell className="hidden text-[10px] font-black uppercase tracking-tighter text-zinc-400 lg:table-cell">
-                          {platforms.find(plat => plat.id === p.platformId)?.name || 'No platform'}
+                  {paginatedProps.map((p) => {
+                    const typeInfo = propertyTypeMeta(p.type);
+                    const TypeIcon = typeInfo.icon;
+                    const coverUrl = parseImageList(p.images)[0];
+                    const landlord = users.find((u) => u.uid === p.landlordId);
+                    const platformName = platforms.find((plat) => plat.id === p.platformId)?.name;
+
+                    return (
+                      <TableRow
+                        key={p.id}
+                        onClick={() => setInspectingProperty(p)}
+                        className="group cursor-pointer"
+                      >
+                        <TableCell className="px-4 py-3 sm:px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F0F2F5] text-[#5F6C7B] dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-slate-300">
+                              {coverUrl ? (
+                                <img src={coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                              ) : (
+                                <TypeIcon className="h-4 w-4" strokeWidth={1.75} />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="max-w-[12rem] truncate text-[13.5px] font-semibold text-[#1C2B33] group-hover:text-emerald-800 sm:max-w-xs dark:text-white dark:group-hover:text-emerald-300">
+                                {p.title}
+                              </p>
+                              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[#5F6C7B] dark:text-slate-400">
+                                <span className="truncate">{p.location || 'No area'}</span>
+                                <span className="text-[#CBD5E1] dark:text-slate-600">·</span>
+                                <span className="shrink-0">{typeInfo.label}</span>
+                              </p>
+                            </div>
+                          </div>
                         </TableCell>
-                      )}
-                      <TableCell className="px-2 py-4 text-right sm:px-8 sm:py-5">
-                        <div className="flex items-center justify-end gap-0 sm:gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Edit Property"
-                            onClick={() => { setEditingProperty(p); setIsEditPropertyOpen(true); }}
-                            className="h-8 w-8 rounded-xl text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                        <TableCell className="hidden md:table-cell">
+                          {landlord ? (
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#F0F2F5] text-[11px] font-semibold text-[#1C2B33] dark:bg-white/10 dark:text-slate-200">
+                                {landlord.displayName?.charAt(0).toUpperCase() || 'L'}
+                              </span>
+                              <span className="max-w-[9rem] truncate text-[13px] font-medium text-[#1C2B33] dark:text-slate-200">
+                                {landlord.displayName}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[#8A94A6]">Unassigned</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          <span className="font-semibold tabular-nums text-[#1C2B33] dark:text-white">
+                            {formatKes(p.price)}
+                          </span>
+                          <span className="ml-0.5 text-xs font-normal text-[#8A94A6]">{typeInfo.suffix}</span>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-medium ${
+                              p.status === 'available'
+                                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 dark:bg-emerald-500/15 dark:text-emerald-300'
+                                : p.status === 'rented'
+                                  ? 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/15 dark:bg-sky-500/15 dark:text-sky-300'
+                                  : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/15 dark:bg-amber-500/15 dark:text-amber-300'
+                            }`}
                           >
-                            <FontAwesomeIcon icon={faEdit} className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Assign Landlord"
-                            onClick={() => { setSelectedPropertyToAssign(p.id); setAssignLandlordId(p.landlordId || ''); setIsAssignLandlordOpen(true); }}
-                            className="h-8 w-8 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-blue-50"
-                          >
-                            <FontAwesomeIcon icon={faUserShield} className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Delete Property"
-                            onClick={() => handleDeleteProperty(p.id)}
-                            className="h-8 w-8 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50"
-                          >
-                            <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                p.status === 'available'
+                                  ? 'bg-emerald-500'
+                                  : p.status === 'rented'
+                                    ? 'bg-sky-500'
+                                    : 'bg-amber-500'
+                              }`}
+                            />
+                            {p.status === 'available' ? 'Available' : p.status === 'rented' ? 'Rented' : 'Booked'}
+                          </span>
+                        </TableCell>
+                        {profile.isSuperAdmin && (
+                          <TableCell className="hidden lg:table-cell">
+                            {platformName ? (
+                              <span className="inline-flex rounded-md bg-[#F0F2F5] px-2 py-0.5 text-xs font-medium text-[#5F6C7B] dark:bg-white/8 dark:text-slate-300">
+                                {platformName}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[#8A94A6]">—</span>
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell className="px-4 py-3 text-right sm:px-5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              title="Edit property"
+                              onClick={() => { setEditingProperty(p); setIsEditPropertyOpen(true); }}
+                              className="text-[#8A94A6] hover:text-[#1C2B33]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={
+                                <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${p.title}`} className="text-[#8A94A6] hover:text-[#1C2B33]">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              } />
+                              <DropdownMenuContent align="end" className="w-44 rounded-lg border border-[#1C2B33]/[0.10] bg-white p-1 shadow-lg dark:border-white/[0.10] dark:bg-[#1A1D21]">
+                                <DropdownMenuItem onClick={() => setInspectingProperty(p)} className="rounded-md px-2.5 py-1.5 text-xs font-medium cursor-pointer">
+                                  <Eye className="mr-2 h-3.5 w-3.5 text-[#5F6C7B]" /> Inspect details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setEditingProperty(p); setIsEditPropertyOpen(true); }} className="rounded-md px-2.5 py-1.5 text-xs font-medium cursor-pointer">
+                                  <Pencil className="mr-2 h-3.5 w-3.5 text-[#5F6C7B]" /> Edit property
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => { setSelectedPropertyToAssign(p.id); setAssignLandlordId(p.landlordId || ''); setIsAssignLandlordOpen(true); }} className="rounded-md px-2.5 py-1.5 text-xs font-medium cursor-pointer">
+                                  <UserCheck className="mr-2 h-3.5 w-3.5 text-[#5F6C7B]" /> Assign landlord
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="my-1" />
+                                <DropdownMenuItem onClick={() => handleDeleteProperty(p.id)} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30 cursor-pointer">
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete property
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                   {paginatedProps.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={profile.isSuperAdmin ? 6 : 5} className="h-40 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">
-                        No properties found.
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={profile.isSuperAdmin ? 6 : 5} className="h-44 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F0F2F5] text-[#5F6C7B] dark:bg-white/8 dark:text-slate-400">
+                            <Building2 className="h-4 w-4" />
+                          </span>
+                          <p className="text-sm font-semibold text-[#1C2B33] dark:text-white">No matching properties</p>
+                          <p className="text-xs text-[#5F6C7B] dark:text-slate-400">Try adjusting your status filter or add a new property.</p>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-              
+
               {totalAdminPropertyPages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t border-zinc-50 dark:border-zinc-800">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest pl-4">
-                    Page {adminPropertyPage} of {totalAdminPropertyPages}
+                <div className="flex items-center justify-between border-t border-[#1C2B33]/[0.07] bg-[#F7F8FA]/70 px-4 py-3 dark:border-white/[0.07] dark:bg-[#16191D]/60 sm:px-5">
+                  <span className="text-xs font-medium text-[#5F6C7B] tabular-nums">
+                    Page {adminPropertyPage} of {totalAdminPropertyPages} · {filteredProps.length} total
                   </span>
-                  <div className="flex items-center gap-2 pr-4">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
                       disabled={adminPropertyPage === 1}
                       onClick={() => setAdminPropertyPage(p => Math.max(1, p - 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
                     </Button>
-                    <span className="text-xs font-black text-zinc-600 min-w-[20px] text-center">{adminPropertyPage}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-xl h-8 w-8 p-0"
+                    <span className="min-w-[24px] text-center text-xs font-semibold tabular-nums text-[#1C2B33] dark:text-slate-200">{adminPropertyPage}</span>
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
                       disabled={adminPropertyPage === totalAdminPropertyPages}
                       onClick={() => setAdminPropertyPage(p => Math.min(totalAdminPropertyPages, p + 1))}
                     >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-3 w-3" />
+                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
                     </Button>
                   </div>
                 </div>
@@ -1873,35 +2162,42 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:bg-zinc-900 rounded-3xl overflow-hidden mt-6">
-            <CardHeader className="p-4 sm:p-8 border-b border-zinc-50 dark:border-zinc-800">
-              <CardTitle className="text-xl font-black">Buildings</CardTitle>
-              <CardDescription className="font-medium text-zinc-500">Buildings and the units inside them.</CardDescription>
+          <Card className="overflow-hidden py-0 gap-0">
+            <CardHeader className="border-b border-[#1C2B33]/[0.07] px-4 py-4 dark:border-white/[0.07] sm:px-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-[15px] font-semibold text-[#1C2B33] dark:text-white">Buildings</CardTitle>
+                  <CardDescription className="text-xs text-[#5F6C7B] mt-0.5">Multi-unit structures and the units grouped inside them.</CardDescription>
+                </div>
+                <span className="rounded-full bg-[#F0F2F5] px-2.5 py-0.5 text-xs font-semibold tabular-nums text-[#5F6C7B] dark:bg-white/8 dark:text-slate-300">
+                  {buildings.length}
+                </span>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table className="max-sm:[&_td]:px-2.5 max-sm:[&_th]:px-2.5">
+              <Table className="max-sm:[&_td]:px-3 max-sm:[&_th]:px-3">
                 <TableHeader>
-                  <TableRow className="bg-zinc-50/50 dark:bg-zinc-800/50 hover:bg-transparent border-none">
-                    <TableHead className="px-3 py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8">Building</TableHead>
-                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Location</TableHead>
-                    <TableHead className="hidden py-4 font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:table-cell">Units</TableHead>
-                    <TableHead className="px-2 py-4 text-right font-black text-[10px] uppercase tracking-widest text-zinc-400 sm:px-8"><span className="sr-only">Actions</span></TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="px-4 sm:px-5">Building</TableHead>
+                    <TableHead className="hidden sm:table-cell">Location</TableHead>
+                    <TableHead className="hidden text-right sm:table-cell">Units</TableHead>
+                    <TableHead className="px-4 text-right sm:px-5"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {buildingPager.pageItems.map((b, i) => {
+                  {buildingPager.pageItems.map((b) => {
                     const unitCount = properties.filter(p => p.buildingId === b.id).length;
                     return (
-                      <TableRow key={i} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30 transition-colors border-zinc-50 dark:border-zinc-800">
-                        <TableCell className="max-w-[13rem] whitespace-normal px-3 py-4 text-sm font-bold sm:max-w-none sm:whitespace-nowrap sm:px-8 sm:py-5">{b.name}</TableCell>
-                        <TableCell className="hidden text-xs font-medium sm:table-cell">{b.address}</TableCell>
-                        <TableCell className="hidden text-xs font-black text-zinc-700 sm:table-cell">{unitCount}</TableCell>
-                        <TableCell className="px-2 py-4 text-right sm:px-8 sm:py-5">
-                          <div className="flex items-center justify-end gap-0 sm:gap-2">
+                      <TableRow key={b.id}>
+                        <TableCell className="px-4 py-3 font-semibold text-[#1C2B33] sm:px-5 dark:text-white">{b.name}</TableCell>
+                        <TableCell className="hidden text-xs text-[#5F6C7B] sm:table-cell dark:text-slate-400">{b.address || '—'}</TableCell>
+                        <TableCell className="hidden text-right text-xs font-semibold tabular-nums text-[#1C2B33] sm:table-cell dark:text-slate-200">{unitCount}</TableCell>
+                        <TableCell className="px-4 py-3 text-right sm:px-5">
+                          <div className="flex items-center justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Edit Building"
+                              title="Edit building"
                               onClick={() => {
                                 setEditBuildingForm({
                                   id: b.id,
@@ -1912,18 +2208,18 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                                 });
                                 setIsEditBuildingOpen(true);
                               }}
-                              className="h-8 w-8 rounded-xl text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                              className="text-[#8A94A6] hover:text-[#1C2B33]"
                             >
-                              <FontAwesomeIcon icon={faEdit} className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              title="Delete Building"
+                              title="Delete building"
                               onClick={() => handleDeleteBuilding(b.id)}
-                              className="h-8 w-8 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                              className="text-[#8A94A6] hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30"
                             >
-                              <FontAwesomeIcon icon={faTrash} className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </TableCell>
@@ -1931,15 +2227,15 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
                     );
                   })}
                   {buildings.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="h-40 text-center text-zinc-400 font-bold uppercase tracking-widest text-xs">
-                        No buildings found.
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={4} className="h-32 text-center text-xs font-medium text-[#8A94A6]">
+                        No buildings added yet.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
-              <div className="px-4 pb-4 sm:px-8">
+              <div className="px-4 pb-4 sm:px-5">
                 <Pagination page={buildingPager.page} pageCount={buildingPager.pageCount} total={buildingPager.total} pageSize={buildingPager.pageSize} onPageChange={buildingPager.setPage} label="buildings" />
               </div>
             </CardContent>
@@ -1949,14 +2245,11 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
 
         {/* ── NETWORK TAB ── */}
         {activeTab === 'platforms' && profile.isSuperAdmin && (
-          <Card className="border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
-            <CardHeader className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="max-sm:hidden">
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white">Platforms</CardTitle>
-                <CardDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Agencies with their own workspace. Suspend or reactivate them here.
-                </CardDescription>
-              </div>
+          <Card className="overflow-hidden py-0 gap-0">
+            <CardHeader className="p-4 sm:px-5 sm:py-3.5 border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="hidden text-xs font-semibold text-[#5F6C7B] sm:inline dark:text-slate-400">
+                <strong className="tabular-nums text-[#1C2B33] dark:text-white">{filteredPlats.length}</strong> active agency {filteredPlats.length === 1 ? 'workspace' : 'workspaces'}
+              </span>
               <div className="relative w-full sm:max-w-xs shrink-0">
                 <FontAwesomeIcon icon={faSearch} className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input 
@@ -2202,170 +2495,389 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
         )}
       </div>
 
+      {/* Slide-Over Property Inspector Drawer (Meta Business Suite style) */}
+      {inspectingProperty && (() => {
+        const p = inspectingProperty;
+        const typeInfo = propertyTypeMeta(p.type);
+        const TypeIcon = typeInfo.icon;
+        const photos = parseImageList(p.images);
+        const landlord = users.find((u) => u.uid === p.landlordId);
+        const platformName = platforms.find((plat) => plat.id === p.platformId)?.name;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex justify-end bg-[#0F172A]/45 backdrop-blur-[2px] animate-in fade-in duration-150"
+            onClick={() => setInspectingProperty(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Inspect ${p.title}`}
+          >
+            <div
+              className="flex h-full w-full max-w-md flex-col border-l border-[#1C2B33]/[0.10] bg-white shadow-2xl animate-in slide-in-from-right duration-200 dark:border-white/[0.10] dark:bg-[#1A1D21]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-[#1C2B33]/[0.08] px-5 py-4 dark:border-white/[0.08]">
+                <div className="min-w-0 pr-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8A94A6]">Property inspector</p>
+                  <h3 className="truncate text-base font-semibold text-[#1C2B33] dark:text-white">{p.title}</h3>
+                </div>
+                <Button variant="ghost" size="icon-sm" onClick={() => setInspectingProperty(null)} aria-label="Close inspector">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex-1 space-y-5 overflow-y-auto p-5">
+                {/* Cover Preview */}
+                <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-[#1C2B33]/[0.08] bg-[#F0F2F5] dark:border-white/[0.08] dark:bg-white/[0.04]">
+                  {photos[0] ? (
+                    <img src={photos[0]} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center gap-1.5 text-[#8A94A6]">
+                      <TypeIcon className="h-7 w-7" strokeWidth={1.5} />
+                      <span className="text-xs font-medium">No cover photo</span>
+                    </div>
+                  )}
+                  <span
+                    className={`absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-sm backdrop-blur-md ${
+                      p.status === 'available'
+                        ? 'bg-white/95 text-emerald-700'
+                        : p.status === 'rented'
+                          ? 'bg-white/95 text-sky-700'
+                          : 'bg-white/95 text-amber-700'
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${p.status === 'available' ? 'bg-emerald-500' : p.status === 'rented' ? 'bg-sky-500' : 'bg-amber-500'}`} />
+                    {p.status === 'available' ? 'Available' : p.status === 'rented' ? 'Rented' : 'Booked'}
+                  </span>
+                </div>
+
+                {photos.length > 1 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {photos.slice(1, 5).map((url, idx) => (
+                      <div key={idx} className="aspect-square overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA]">
+                        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Key Metrics Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-[#1C2B33]/[0.08] bg-[#F7F8FA] p-3.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                    <p className="text-[11px] font-medium text-[#5F6C7B] dark:text-slate-400">Rate</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-[#1C2B33] dark:text-white">
+                      {formatKes(p.price)}
+                      <span className="text-xs font-normal text-[#8A94A6]">{typeInfo.suffix}</span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#1C2B33]/[0.08] bg-[#F7F8FA] p-3.5 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                    <p className="text-[11px] font-medium text-[#5F6C7B] dark:text-slate-400">Category</p>
+                    <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[#1C2B33] dark:text-white">
+                      <TypeIcon className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                      {typeInfo.label}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Metadata rows */}
+                <div className="divide-y divide-[#1C2B33]/[0.07] rounded-xl border border-[#1C2B33]/[0.08] dark:divide-white/[0.07] dark:border-white/[0.08]">
+                  <div className="flex items-center justify-between px-4 py-3 text-xs">
+                    <span className="text-[#5F6C7B] dark:text-slate-400">Location</span>
+                    <span className="font-medium text-[#1C2B33] dark:text-slate-100">{p.location || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3 text-xs">
+                    <span className="text-[#5F6C7B] dark:text-slate-400">Landlord</span>
+                    <span className="font-medium text-[#1C2B33] dark:text-slate-100">{landlord ? landlord.displayName : 'Unassigned'}</span>
+                  </div>
+                  {profile.isSuperAdmin && (
+                    <div className="flex items-center justify-between px-4 py-3 text-xs">
+                      <span className="text-[#5F6C7B] dark:text-slate-400">Platform</span>
+                      <span className="font-medium text-[#1C2B33] dark:text-slate-100">{platformName || 'Root'}</span>
+                    </div>
+                  )}
+                </div>
+
+                {p.description && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-[#1C2B33] dark:text-white">Description</p>
+                    <p className="text-xs leading-relaxed text-[#5F6C7B] dark:text-slate-400">{p.description}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] px-5 py-3.5 dark:border-white/[0.08] dark:bg-[#16191D]">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                  onClick={() => {
+                    const id = p.id;
+                    setInspectingProperty(null);
+                    handleDeleteProperty(id);
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedPropertyToAssign(p.id);
+                      setAssignLandlordId(p.landlordId || '');
+                      setInspectingProperty(null);
+                      setIsAssignLandlordOpen(true);
+                    }}
+                  >
+                    Assign landlord
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setEditingProperty(p);
+                      setInspectingProperty(null);
+                      setIsEditPropertyOpen(true);
+                    }}
+                  >
+                    Edit unit
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Profile Settings Dialog */}
       <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-        <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black text-zinc-900 dark:text-white uppercase tracking-tight">Account Settings</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-6 py-2">
-            <div className="flex flex-col items-center gap-4">
-              <div className="relative h-24 w-24 rounded-full overflow-hidden bg-zinc-100 dark:bg-zinc-800 border-4 border-white dark:border-zinc-900 shadow-lg">
+        <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+            <DialogTitle className="text-base font-semibold">Account settings</DialogTitle>
+            <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Update your personal details and profile photo.</DialogDescription>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="flex flex-col items-center gap-2.5">
+              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-[#F0F2F5] dark:bg-white/10 ring-2 ring-[#1C2B33]/[0.08]">
                 <img src={adminProfile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
                 <label className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 hover:opacity-100 cursor-pointer transition-opacity">
-                  <FontAwesomeIcon icon={faEdit} />
+                  <Pencil className="h-4 w-4" />
                   <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} disabled={isUploading} />
                 </label>
               </div>
-              {isUploading && <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 animate-pulse">Uploading...</p>}
+              {isUploading && <p className="text-xs font-medium text-emerald-700 animate-pulse">Uploading photo…</p>}
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Display Name</label>
-              <Input className="h-12 rounded-xl" value={adminProfile.displayName} onChange={e => setAdminProfile({...adminProfile, displayName: e.target.value})} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Display name</label>
+              <Input value={adminProfile.displayName} onChange={e => setAdminProfile({...adminProfile, displayName: e.target.value})} />
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Phone</label>
-              <Input className="h-12 rounded-xl" value={adminProfile.phone} onChange={e => setAdminProfile({...adminProfile, phone: e.target.value})} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Phone</label>
+              <Input value={adminProfile.phone} onChange={e => setAdminProfile({...adminProfile, phone: e.target.value})} />
             </div>
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Address</label>
-              <Textarea className="rounded-xl" value={adminProfile.address} onChange={e => setAdminProfile({...adminProfile, address: e.target.value})} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Address</label>
+              <Textarea className="rounded-lg border-[#D0D5DD] dark:border-white/12 dark:bg-[#16191D]" value={adminProfile.address} onChange={e => setAdminProfile({...adminProfile, address: e.target.value})} />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProfile} disabled={busyAction !== null}>Save Changes</Button>
-          </DialogFooter>
+          <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsProfileOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleUpdateProfile} disabled={busyAction !== null}>Save changes</Button>
+          </div>
         </DialogContent>
       </Dialog>
+
       {/* Assign Landlord Dialog */}
       <Dialog open={isAssignLandlordOpen} onOpenChange={setIsAssignLandlordOpen}>
-        <DialogContent className="sm:max-w-[450px] p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black">Assign Landlord</DialogTitle>
-            <DialogDescription className="font-medium text-zinc-500">
-              Transfer ownership of this property to another landlord.
+        <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+            <DialogTitle className="text-base font-semibold">Assign landlord</DialogTitle>
+            <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">
+              Transfer management ownership of this unit to a landlord account.
             </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Select Landlord</label>
-              <select
-                className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none"
-                value={assignLandlordId}
-                onChange={e => setAssignLandlordId(e.target.value)}
-              >
-                <option value="">Choose Landlord...</option>
-                <option value={profile.uid}>Self ({profile.displayName})</option>
-                {users.filter(u => u.role === 'landlord').map(u => (
-                  <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
-                ))}
-              </select>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Landlord</label>
+              <Select value={assignLandlordId} onValueChange={setAssignLandlordId}>
+                <SelectTrigger className="h-9.5 rounded-lg">
+                  <SelectValue placeholder="Choose a landlord…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={profile.uid}>Self ({profile.displayName})</SelectItem>
+                  {users.filter(u => u.role === 'landlord').map(u => (
+                    <SelectItem key={u.uid} value={u.uid}>{u.displayName} ({u.email})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsAssignLandlordOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleAssignPropertyLandlord} disabled={busyAction !== null}>Save Assignment</Button>
-          </DialogFooter>
+          <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsAssignLandlordOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleAssignPropertyLandlord} disabled={busyAction !== null || !assignLandlordId}>Save assignment</Button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit Property Dialog */}
       <Dialog open={isEditPropertyOpen} onOpenChange={setIsEditPropertyOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[80vh] overflow-y-auto p-6 rounded-3xl border-none bg-white dark:bg-zinc-900 shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-black">Edit Property</DialogTitle>
-            <DialogDescription className="font-medium text-zinc-500">Change the details shown to tenants and house hunters.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="px-6 py-4 border-b border-[#1C2B33]/[0.08] dark:border-white/[0.08]">
+            <DialogTitle className="text-base font-semibold">Edit property</DialogTitle>
+            <DialogDescription className="text-xs text-[#5F6C7B] mt-0.5">Changes update live for tenants and house hunters.</DialogDescription>
+          </div>
           {editingProperty && (
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Title</label>
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Property title</label>
                 <Input
-                  className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800"
                   value={editingProperty.title}
                   onChange={e => setEditingProperty({ ...editingProperty, title: e.target.value })}
                 />
               </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Description</label>
-                <Input
-                  className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800"
-                  value={editingProperty.description}
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Property type</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PROPERTY_TYPE_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const selected = editingProperty.type === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setEditingProperty({ ...editingProperty, type: opt.id })}
+                        className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                          selected
+                            ? 'border-emerald-700 bg-emerald-700/[0.08] text-emerald-800 dark:border-emerald-500 dark:bg-emerald-500/15 dark:text-emerald-300'
+                            : 'border-[#D0D5DD] bg-white text-[#5F6C7B] hover:bg-[#F7F8FA] hover:text-[#1C2B33] dark:border-white/12 dark:bg-[#16191D] dark:text-slate-400'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Location</label>
+                  <div className="relative">
+                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8A94A6]" />
+                    <Input
+                      className="pl-8.5"
+                      value={editingProperty.location}
+                      onChange={e => setEditingProperty({ ...editingProperty, location: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">
+                    {editingProperty.type === 'bnb' ? 'Nightly rate' : 'Monthly rent'}
+                  </label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8A94A6]">KES</span>
+                    <Input
+                      type="number"
+                      className="pl-11 pr-14 tabular-nums"
+                      value={editingProperty.price}
+                      onChange={e => setEditingProperty({ ...editingProperty, price: parseFloat(e.target.value) || 0 })}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[#8A94A6]">
+                      {editingProperty.type === 'bnb' ? '/night' : '/mo'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Landlord</label>
+                <Select
+                  value={editingProperty.landlordId || ''}
+                  onValueChange={(val) => setEditingProperty({ ...editingProperty, landlordId: val })}
+                >
+                  <SelectTrigger className="h-9.5 rounded-lg">
+                    <SelectValue placeholder="Choose a landlord…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={profile.uid}>Self ({profile.displayName})</SelectItem>
+                    {users.filter(u => u.role === 'landlord').map(u => (
+                      <SelectItem key={u.uid} value={u.uid}>{u.displayName} ({u.email})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Description</label>
+                <Textarea
+                  className="min-h-[76px] rounded-lg border-[#D0D5DD] text-sm dark:border-white/12 dark:bg-[#16191D]"
+                  value={editingProperty.description || ''}
                   onChange={e => setEditingProperty({ ...editingProperty, description: e.target.value })}
                 />
               </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Location</label>
-                <Input
-                  className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800"
-                  value={editingProperty.location}
-                  onChange={e => setEditingProperty({ ...editingProperty, location: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Type</label>
-                  <select
-                    className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none"
-                    value={editingProperty.type}
-                    onChange={e => setEditingProperty({ ...editingProperty, type: e.target.value })}
-                  >
-                    <option value="residential">Residential</option>
-                    <option value="commercial">Commercial</option>
-                    <option value="bnb">Airbnb</option>
-                  </select>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Photos</label>
+                  {parseImageList(editingProperty.images).length > 0 && (
+                    <span className="text-[11px] font-medium text-[#5F6C7B]">
+                      {parseImageList(editingProperty.images).length} attached
+                    </span>
+                  )}
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Price (KES)</label>
-                  <Input
-                    type="number"
-                    className="h-12 rounded-xl border-zinc-200 dark:border-zinc-800"
-                    value={editingProperty.price}
-                    onChange={e => setEditingProperty({ ...editingProperty, price: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
-              </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Landlord</label>
-                <select
-                  className="h-12 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold focus:ring-2 focus:ring-zinc-400 outline-none"
-                  value={editingProperty.landlordId}
-                  onChange={e => setEditingProperty({ ...editingProperty, landlordId: e.target.value })}
-                >
-                  <option value="">Choose Landlord...</option>
-                  <option value={profile.uid}>Self ({profile.displayName})</option>
-                  {users.filter(u => u.role === 'landlord').map(u => (
-                    <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {parseImageList(editingProperty.images).map((url, idx) => (
+                    <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/10 dark:bg-white/5">
+                      <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      <button
+                        type="button"
+                        aria-label="Remove photo"
+                        onClick={() => {
+                          const next = parseImageList(editingProperty.images).filter((_, i) => i !== idx);
+                          setEditingProperty({ ...editingProperty, images: next });
+                        }}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                      {idx === 0 && (
+                        <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                          Cover
+                        </span>
+                      )}
+                    </div>
                   ))}
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <label className="text-xs font-black uppercase tracking-widest text-zinc-400">Images</label>
-                <Input
+                  <button
+                    type="button"
+                    onClick={() => editImageInputRef.current?.click()}
+                    disabled={isUploading}
+                    className={`flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#D0D5DD] bg-[#F7F8FA]/70 text-xs font-medium text-[#5F6C7B] transition hover:border-emerald-700 hover:bg-emerald-50/40 hover:text-emerald-800 disabled:opacity-60 dark:border-white/15 dark:bg-white/[0.03] dark:text-slate-400 dark:hover:border-emerald-500 ${
+                      parseImageList(editingProperty.images).length === 0 ? 'col-span-3 sm:col-span-4 py-6' : 'aspect-[4/3]'
+                    }`}
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    <span>{isUploading ? 'Uploading…' : parseImageList(editingProperty.images).length === 0 ? 'Click to upload property photos' : 'Add more'}</span>
+                  </button>
+                </div>
+                <input
+                  ref={editImageInputRef}
                   type="file"
                   multiple
                   accept="image/*"
+                  hidden
                   onChange={handleEditImageUpload}
                   disabled={isUploading}
-                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
-                {isUploading && <p className="text-xs text-blue-500 font-bold mt-1 animate-pulse">Uploading images...</p>}
-                {editingProperty?.images && (
-                  <p className="text-[10px] text-zinc-500 font-bold">
-                    {Array.isArray(editingProperty?.images)
-                      ? editingProperty.images.length
-                      : (editingProperty.images || '').split(',').filter((x: any) => x).length
-                    } images attached
-                  </p>
-                )}
               </div>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="ghost" className="rounded-xl font-bold" onClick={() => setIsEditPropertyOpen(false)}>Cancel</Button>
-            <Button className="h-10 px-8 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white font-black" onClick={handleUpdateProperty} disabled={busyAction !== null}>Save Changes</Button>
-          </DialogFooter>
+          <div className="px-6 py-3.5 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] dark:border-white/[0.08] dark:bg-[#16191D] flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setIsEditPropertyOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={handleUpdateProperty} disabled={busyAction !== null || isUploading}>Save changes</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

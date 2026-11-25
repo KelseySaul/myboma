@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,ital,wght@6..96,0,500;6..96,0,600;6..96,0,700;6..96,0,800;6..96,1,600;6..96,1,700&family=Montserrat:ital,wght@0,500;0,600;0,700;0,800;0,900;1,600;1,700&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,ital,wght@6..96,0,500;6..96,0,600;6..96,0,700;6..96,0,800;6..96,1,600;6..96,1,700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -6,8 +6,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-sans: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-heading: 'Geist Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'Geist Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -200,7 +200,8 @@ body {
     @apply font-sans;
     }
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: -0.02em;
   }
   button, input, select, textarea {
     font: inherit;
@@ -213,7 +214,7 @@ body {
   }
 
   [data-slot="card"] {
-    @apply rounded-2xl sm:rounded-3xl;
+    @apply rounded-xl;
   }
 }
 
@@ -280,12 +281,13 @@ body {
 
 /* ---------- Root / Dashboard Wrapper ---------- */
 .db {
-  font-family: 'Poppins', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f8fafc;
+  font-family: 'Geist Variable', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #F0F2F5;
   width: 100%;
   min-width: 0;
-  color: #0f172a;
+  color: #1C2B33;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ---------- Top Navigation Bar ---------- */
@@ -948,167 +950,130 @@ aside[class*="sticky"] {
     scroll-behavior: smooth;
   }
 }
-/* Signed-in workspace palette and glass surfaces. */
-.app-shell {
-  background: radial-gradient(ellipse at 90% 0%, rgba(169, 208, 205, .42), transparent 48%),
-    linear-gradient(145deg, #e7f0ef, #f0f4f2 60%, #e1ebe9);
-}
-.dark .app-shell {
-  background: radial-gradient(ellipse at 90% 0%, rgba(42, 105, 101, .26), transparent 48%),
-    linear-gradient(145deg, #122426, #152b2c 60%, #101e20);
-}
-.app-shell .db { background: transparent; }
-.app-shell aside {
-  background: rgba(238, 246, 244, .78);
-  border-color: rgba(66, 119, 113, .18);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
-}
-.dark .app-shell aside { background: rgba(18, 37, 39, .84); border-color: rgba(173, 216, 207, .12); }
-.app-shell [data-slot="card"], .app-shell .stat-card,
-.app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl {
-  background: rgba(255, 255, 255, .57);
-  border-color: rgba(255, 255, 255, .75);
-  box-shadow: 0 8px 24px rgba(37, 73, 70, .06), inset 0 1px rgba(255, 255, 255, .8);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
-  backdrop-filter: blur(18px) saturate(125%);
-  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
-}
-.dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
-.dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl {
-  background: rgba(35, 58, 59, .64);
-  border-color: rgba(190, 221, 215, .16);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .16), inset 0 1px rgba(255, 255, 255, .06);
-}
-.app-shell main button.group.rounded-2xl:hover, .app-shell .stat-card:hover {
-  border-color: rgba(65, 133, 125, .45);
-  box-shadow: 0 12px 28px rgba(37, 73, 70, .12);
-  transform: translateY(-2px);
-}
-@media (prefers-reduced-motion: reduce) {
-  .app-shell .stat-card, .app-shell main button.group.rounded-2xl { transition: none; }
-  .app-shell .stat-card:hover, .app-shell main button.group.rounded-2xl:hover { transform: none; }
-}
-@media (prefers-reduced-transparency: reduce) {
-  .app-shell [data-slot="card"], .app-shell .stat-card,
-  .app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl { background: #f8fbfa; }
-  .dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
-  .dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl { background: #223b3b; }
+/* ============================================
+   MYBOMA — Meta-Grade Layered Surface System
+   Clean #F0F2F5 canvas + crisp #FFFFFF surfaces + #1C2B33 ink + Deep Emerald accent.
+   ============================================ */
+.app-shell:not(.app-shell-public) {
+  --meta-canvas: #F0F2F5;
+  --meta-surface: #FFFFFF;
+  --meta-surface-subtle: #F7F8FA;
+  --meta-border: rgba(28, 43, 51, 0.09);
+  --meta-border-strong: rgba(28, 43, 51, 0.14);
+  --meta-ink: #1C2B33;
+  --meta-ink-secondary: #5F6C7B;
+  --meta-ink-muted: #8A94A6;
+  --meta-accent: #047857;
+  --meta-accent-hover: #065F46;
+  --meta-accent-soft: rgba(4, 120, 87, 0.10);
+  background: var(--meta-canvas);
+  color: var(--meta-ink);
 }
 
-/* Revenue surfaces use the slate-to-emerald finance palette. */
-.app-shell main .finance-highlight,
-.app-shell main button.group.finance-highlight,
-.dark .app-shell main button.group.finance-highlight {
-  background: linear-gradient(135deg, #0F172A 0%, #065F46 72%, #08795a 100%);
-  border-color: rgba(16, 185, 129, .35);
-  box-shadow: 0 12px 28px rgba(6, 95, 70, .18), inset 0 1px rgba(255, 255, 255, .16);
+.dark .app-shell:not(.app-shell-public) {
+  --meta-canvas: #111315;
+  --meta-surface: #1A1D21;
+  --meta-surface-subtle: #20242A;
+  --meta-border: rgba(255, 255, 255, 0.08);
+  --meta-border-strong: rgba(255, 255, 255, 0.14);
+  --meta-ink: #F1F5F9;
+  --meta-ink-secondary: #94A3B8;
+  --meta-ink-muted: #64748B;
+  --meta-accent: #10B981;
+  --meta-accent-hover: #059669;
+  --meta-accent-soft: rgba(16, 185, 129, 0.14);
+  background: var(--meta-canvas);
+  color: var(--meta-ink);
 }
-.app-shell main .finance-highlight :is(p, span, svg) { color: #f0fdf8; }
-.app-shell main .finance-highlight :is(p, span):first-child { color: #d1fae5; }
-.app-shell main .finance-highlight:hover { border-color: #6ee7b7; }
 
-/* Neutral work surfaces keep tables and lists clear and readable. */
-.app-shell [data-slot="card"], .app-shell main section.rounded-2xl {
-  background: #fff;
-  border-color: #e2e8f0;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+.app-shell:not(.app-shell-public) .db {
+  background: transparent;
+  color: var(--meta-ink);
 }
-.dark .app-shell [data-slot="card"], .dark .app-shell main section.rounded-2xl {
-  background: #182427;
-  border-color: #334155;
+
+/* Anchored crisp navigation rail */
+.app-shell:not(.app-shell-public) aside {
+  background: var(--meta-surface);
+  border-color: var(--meta-border);
 }
-.app-shell main .stat-tint, .app-shell main button.group.stat-tint {
-  background: linear-gradient(135deg, rgba(16,185,129,.08), rgba(37,99,235,.05)), #fff;
-  border-color: #e2e8f0;
+
+/* Opaque elevated work surfaces with hairline precision */
+.app-shell:not(.app-shell-public) [data-slot="card"],
+.app-shell:not(.app-shell-public) .stat-card,
+.app-shell:not(.app-shell-public) main section.rounded-2xl,
+.app-shell:not(.app-shell-public) main section.rounded-xl {
+  background: var(--meta-surface);
+  border-color: var(--meta-border);
+  box-shadow: 0 1px 2px rgba(28, 43, 51, 0.05), 0 0 0 1px rgba(28, 43, 51, 0.02);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
-.dark .app-shell main .stat-tint, .dark .app-shell main button.group.stat-tint {
-  background: linear-gradient(135deg, rgba(16,185,129,.12), rgba(37,99,235,.08)), #182427;
-  border-color: #334155;
+
+.dark .app-shell:not(.app-shell-public) [data-slot="card"],
+.dark .app-shell:not(.app-shell-public) .stat-card,
+.dark .app-shell:not(.app-shell-public) main section.rounded-2xl,
+.dark .app-shell:not(.app-shell-public) main section.rounded-xl {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
+
+.app-shell:not(.app-shell-public) main button.group.stat-tint,
+.app-shell:not(.app-shell-public) main .stat-tint,
+.app-shell:not(.app-shell-public) main button.group.finance-highlight,
+.app-shell:not(.app-shell-public) main .finance-highlight {
+  background: var(--meta-surface);
+  border-color: var(--meta-border);
+  box-shadow: 0 1px 2px rgba(28, 43, 51, 0.05);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.app-shell:not(.app-shell-public) main button.group.stat-tint:hover,
+.app-shell:not(.app-shell-public) main button.group.finance-highlight:hover,
+.app-shell:not(.app-shell-public) .stat-card:hover {
+  border-color: rgba(4, 120, 87, 0.35);
+  box-shadow: 0 4px 12px rgba(28, 43, 51, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Subtle executive top accent for revenue KPI card */
+.app-shell:not(.app-shell-public) main .finance-highlight,
+.app-shell:not(.app-shell-public) main button.group.finance-highlight {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(4, 120, 87, 0.22);
+  background: linear-gradient(180deg, rgba(4, 120, 87, 0.045) 0%, var(--meta-surface) 48%);
+}
+
+.dark .app-shell:not(.app-shell-public) main .finance-highlight,
+.dark .app-shell:not(.app-shell-public) main button.group.finance-highlight {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.09) 0%, var(--meta-surface) 52%);
+}
+
 .finance-cta {
-  background: linear-gradient(135deg, #0f172a 0%, #065f46 60%, #10b981 100%);
-  color: #fff;
+  background: #047857;
+  color: #ffffff;
 }
-.finance-cta:hover { filter: brightness(1.08); }
-
-/* House photography is softened so content retains contrast over the image. */
-.app-shell {
-  background: linear-gradient(135deg, rgba(241, 247, 245, .84), rgba(230, 240, 237, .78)),
-    url('/workspace-house.webp') center / cover no-repeat;
-}
-.dark .app-shell {
-  background: linear-gradient(135deg, rgba(12, 27, 29, .91), rgba(14, 38, 36, .86)),
-    url('/workspace-house.webp') center / cover no-repeat;
-}
-.app-shell main section.rounded-2xl {
-  background: rgba(255, 255, 255, .82);
-  -webkit-backdrop-filter: blur(18px);
-  backdrop-filter: blur(18px);
-}
-.dark .app-shell main section.rounded-2xl { background: rgba(24, 36, 39, .88); }
-
-/* A lightly blurred photograph sits behind translucent workspace surfaces. */
-.app-shell { position: relative; isolation: isolate; background: #dbe8e2; }
-.app-shell::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  z-index: -1;
-  background: url('/workspace-house.webp') center / cover no-repeat;
-  filter: blur(4px);
-  pointer-events: none;
-}
-.dark .app-shell { background: #142521; }
-.dark .app-shell::before { filter: blur(4px) brightness(.48); }
-.app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
-.app-shell main button.group.stat-tint, .app-shell main .stat-tint {
-  background: rgba(255, 255, 255, .48);
-  border-color: rgba(255, 255, 255, .6);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  backdrop-filter: blur(22px) saturate(150%);
-  box-shadow: inset 0 1px rgba(255,255,255,.65), 0 8px 24px rgba(15,23,42,.1);
-}
-.dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
-.dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint {
-  background: rgba(15, 30, 29, .65);
-  border-color: rgba(255,255,255,.17);
-}
-@media (prefers-reduced-transparency: reduce) {
-  .app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
-  .app-shell main button.group.stat-tint, .app-shell main .stat-tint { background: #f8fbfa; }
-  .dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
-  .dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint { background: #223b3b; }
+.finance-cta:hover {
+  background: #065F46;
 }
 
-/* A shared glass finish for navigation, summaries and tables. */
-.app-shell aside {
-  background: rgba(239, 246, 243, .82);
-  border-color: rgba(255,255,255,.55);
-  -webkit-backdrop-filter: blur(24px) saturate(125%);
-  backdrop-filter: blur(24px) saturate(125%);
-}
-.dark .app-shell aside { background: rgba(15, 33, 31, .88); }
-.app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
-.app-shell main button.group.stat-tint, .app-shell main .stat-tint {
-  background: rgba(250, 253, 251, .76);
-  border-color: rgba(255,255,255,.72);
-  -webkit-backdrop-filter: blur(24px) saturate(120%);
-  backdrop-filter: blur(24px) saturate(120%);
-}
-.dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
-.dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint { background: rgba(20, 37, 35, .82); }
-.app-shell main [data-slot="table-container"] {
-  background: rgba(255,255,255,.18);
-  border-color: rgba(255,255,255,.5);
+/* Crisp borderless tables inside cards */
+.app-shell:not(.app-shell-public) [data-slot="card"] [data-slot="table-container"] {
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
+  background: transparent;
 }
-.app-shell main [data-slot="table-header"] { background: rgba(235,244,240,.48); }
-.dark .app-shell main [data-slot="table-container"] { background: rgba(12,25,24,.2); border-color: rgba(255,255,255,.15); }
-.dark .app-shell main [data-slot="table-header"] { background: rgba(35,57,54,.5); }
-@media (prefers-reduced-transparency: reduce) {
-  .app-shell aside, .app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
-  .app-shell main button.group.stat-tint, .app-shell main .stat-tint, .app-shell main [data-slot="table-container"] { background: #f8fbfa; }
-  .dark .app-shell aside, .dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
-  .dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint, .dark .app-shell main [data-slot="table-container"] { background: #223b3b; }
+.app-shell:not(.app-shell-public) main [data-slot="table-header"] {
+  background: var(--meta-surface-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .stat-card,
+  .app-shell main button.group {
+    transition: none;
+  }
+  .app-shell .stat-card:hover,
+  .app-shell main button.group:hover {
+    transform: none;
+  }
 }

@@ -29,7 +29,7 @@ function DialogOverlay({
     <DialogPrimitive.Backdrop
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 z-50 bg-zinc-950/45 backdrop-blur-[3px] duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 z-50 bg-[#0F172A]/55 backdrop-blur-[2px] duration-200 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -69,12 +69,12 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          // Centred modal (sm and up)
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto overscroll-contain rounded-2xl border border-zinc-200 bg-white p-6 text-sm text-zinc-900 shadow-[0_24px_64px_-12px_rgba(9,9,11,0.25)] outline-none max-h-[88vh] dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100",
+          // Centred modal (sm and up) — Meta/Stripe architectural elevation
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto overscroll-contain rounded-xl border border-[#1C2B33]/[0.10] bg-white p-6 text-sm text-[#1C2B33] shadow-[0_20px_50px_rgba(15,23,42,0.22),0_0_0_1px_rgba(15,23,42,0.04)] outline-none max-h-[88vh] dark:border-white/[0.10] dark:bg-[#1A1D21] dark:text-slate-100",
           SIZES[size],
           "duration-200 ease-out data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 sm:data-open:zoom-in-95 sm:data-closed:zoom-out-95",
           // Bottom sheet (phones)
-          "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:max-h-[92dvh] max-sm:rounded-t-3xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-7 max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10",
+          "max-sm:inset-x-0 max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:w-full max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:max-h-[92dvh] max-sm:rounded-t-2xl max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:pt-7 max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:data-open:slide-in-from-bottom-10 max-sm:data-closed:slide-out-to-bottom-10",
           className
         )}
         {...props}
@@ -129,7 +129,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "sticky bottom-0 z-10 -mx-6 -mb-6 mt-2 flex flex-col-reverse gap-2 border-t border-zinc-200 bg-white/95 px-6 py-4 backdrop-blur sm:flex-row sm:justify-end sm:gap-2.5 sm:rounded-b-2xl max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-900/95",
+        "sticky bottom-0 z-10 -mx-6 -mb-6 mt-2 flex flex-col-reverse gap-2 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA] px-6 py-3.5 sm:flex-row sm:justify-end sm:gap-2.5 sm:rounded-b-xl max-sm:pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-white/[0.08] dark:bg-[#16191D]",
         className
       )}
       {...props}

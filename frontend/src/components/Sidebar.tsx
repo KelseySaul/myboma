@@ -1,24 +1,29 @@
 import { useState } from 'react';
+import {
+  BedDouble,
+  Bell,
+  Building2,
+  ChevronRight,
+  ClipboardList,
+  Globe,
+  Home,
+  LayoutGrid,
+  Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  UserCheck,
+  Users,
+  Wallet,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import type { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faBell,
-  faBuilding,
-  faChartPie,
-  faChevronRight,
-  faClipboardList,
-  faGlobe,
-  faHome,
-  faHotel,
-  faLink,
-  faTools,
-  faUsers,
-  faWallet,
-} from '@fortawesome/free-solid-svg-icons';
 import { tenantConfig } from '../config/tenant';
 import { useUnreadCount } from '../lib/queries';
 import AccountMenu, { roleLabel } from './AccountMenu';
+import { openCommandPalette } from './CommandPalette';
 
 interface SidebarProps {
   profile: UserProfile;
@@ -34,7 +39,7 @@ interface SidebarProps {
 interface NavItem {
   id: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
 }
 
 interface NavSection {
@@ -43,20 +48,20 @@ interface NavSection {
 }
 
 function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: UserProfile): NavSection[] {
-  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: faChartPie };
+  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: LayoutGrid };
 
   switch (role) {
     case 'landlord': {
       const features = profile ? getSubscriptionFeatures(profile) : { maintenanceHub: true };
       return [
-        { title: 'Manage', items: [dashboardItem, { id: 'properties', label: 'Properties', icon: faHome }] },
+        { title: 'Manage', items: [dashboardItem, { id: 'properties', label: 'Properties', icon: Home }] },
         {
           title: 'Day to day',
           items: [
-            { id: 'finances', label: 'Rent & payments', icon: faWallet },
-            ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: faTools }] : []),
-            { id: 'tenants', label: 'Tenants', icon: faUsers },
-            { id: 'automations', label: 'Notifications', icon: faBell },
+            { id: 'finances', label: 'Rent & payments', icon: Wallet },
+            ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: Wrench }] : []),
+            { id: 'tenants', label: 'Tenants', icon: Users },
+            { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
       ];
@@ -67,31 +72,31 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
           title: 'Browse',
           items: [
             dashboardItem,
-            { id: 'all', label: 'All homes', icon: faHome },
-            { id: 'residential', label: 'Homes', icon: faBuilding },
-            { id: 'commercial', label: 'Commercial', icon: faBuilding },
-            { id: 'bnb', label: 'Short stays', icon: faHotel },
+            { id: 'all', label: 'All homes', icon: Home },
+            { id: 'residential', label: 'Homes', icon: Building2 },
+            { id: 'commercial', label: 'Commercial', icon: Building2 },
+            { id: 'bnb', label: 'Short stays', icon: BedDouble },
           ],
         },
       ];
     case 'admin':
       return [
         {
-          title: 'People and properties',
+          title: 'People & properties',
           items: [
             dashboardItem,
-            { id: 'registered', label: 'Users', icon: faUsers },
-            { id: 'pending', label: 'Pending invites', icon: faLink },
-            { id: 'properties', label: 'Properties', icon: faBuilding },
+            { id: 'registered', label: 'Users', icon: Users },
+            { id: 'pending', label: 'Pending invites', icon: Mail },
+            { id: 'properties', label: 'Properties', icon: Building2 },
           ],
         },
         {
           title: 'Day to day',
           items: [
-            { id: 'maintenance', label: 'Maintenance', icon: faTools },
-            { id: 'finances', label: 'Rent & payments', icon: faWallet },
-            { id: 'tenants', label: 'Tenants', icon: faUsers },
-            { id: 'automations', label: 'Notifications', icon: faBell },
+            { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+            { id: 'finances', label: 'Rent & payments', icon: Wallet },
+            { id: 'tenants', label: 'Tenants', icon: UserCheck },
+            { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
         ...(isSuperAdmin
@@ -99,8 +104,8 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
               {
                 title: 'Administration',
                 items: [
-                  { id: 'platforms', label: 'Platforms', icon: faGlobe },
-                  { id: 'audit', label: 'Activity log', icon: faClipboardList },
+                  { id: 'platforms', label: 'Platforms', icon: Globe },
+                  { id: 'audit', label: 'Activity log', icon: ClipboardList },
                 ],
               },
             ]
@@ -112,9 +117,9 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
           title: 'My home',
           items: [
             dashboardItem,
-            { id: 'finances', label: 'Rent & payments', icon: faWallet },
-            { id: 'maintenance', label: 'Repairs', icon: faTools },
-            { id: 'notices', label: 'Notices', icon: faBell },
+            { id: 'finances', label: 'Rent & payments', icon: Wallet },
+            { id: 'maintenance', label: 'Repairs', icon: Wrench },
+            { id: 'notices', label: 'Notices', icon: Bell },
           ],
         },
       ];
@@ -123,7 +128,9 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
   }
 }
 
-/** Desktop navigation: collapse it to an icon rail without losing any routes or account actions. */
+const SIDEBAR_STORAGE_KEY = 'myboma_sidebar_collapsed';
+
+/** Desktop Meta-style workspace rail: expanded by default, smoothly collapsible without layout jank. */
 export default function Sidebar({
   profile,
   activeTab,
@@ -133,8 +140,26 @@ export default function Sidebar({
   setActiveView,
   onHelpClick,
 }: SidebarProps) {
-  const [expanded, setExpanded] = useState(false);
-  const collapsed = !expanded;
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   const navSections = getRoleNavSections(currentRole, profile.isSuperAdmin, profile);
   const { data: unreadCount = 0 } = useUnreadCount(profile.email);
 
@@ -143,7 +168,7 @@ export default function Sidebar({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const NavButton = ({ id, label, icon }: NavItem) => {
+  const NavButton = ({ id, label, icon: Icon }: NavItem) => {
     const isActive = (activeTab || 'dashboard') === id;
     const hasUnread = unreadCount > 0 && (id === 'automations' || id === 'notices');
 
@@ -152,57 +177,149 @@ export default function Sidebar({
         type="button"
         onClick={() => handleNavClick(id)}
         title={collapsed ? label : undefined}
-        className={`group flex w-full items-center rounded-xl py-2 text-left transition-all duration-200 ${
-          collapsed ? 'justify-center px-2' : 'gap-3 px-3'
+        className={`group relative flex w-full items-center rounded-lg py-2 text-left transition-colors duration-150 ${
+          collapsed ? 'justify-center px-2' : 'gap-2.5 px-2.5'
         } ${
           isActive
-            ? 'bg-gradient-to-r from-slate-900 to-emerald-700 font-semibold text-white shadow-sm'
-            : 'font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
+            ? 'bg-emerald-700/[0.09] font-semibold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300'
+            : 'font-medium text-[#5F6C7B] hover:bg-[#1C2B33]/[0.045] hover:text-[#1C2B33] dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100'
         }`}
       >
+        {isActive && !collapsed && (
+          <span
+            aria-hidden
+            className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-emerald-700 dark:bg-emerald-400"
+          />
+        )}
         <span
-          className={`relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
-            isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-800 dark:group-hover:text-zinc-200'
+          className={`relative flex h-6 w-6 shrink-0 items-center justify-center ${
+            isActive
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-[#6B7785] group-hover:text-[#1C2B33] dark:text-slate-400 dark:group-hover:text-slate-200'
           }`}
         >
-          <FontAwesomeIcon icon={icon} className="h-3.5 w-3.5" />
-          {hasUnread && collapsed && <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-current" />}
+          <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.2 : 1.75} />
+          {hasUnread && collapsed && (
+            <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-600 ring-2 ring-white dark:ring-[#1A1D21]" />
+          )}
         </span>
-        <span className={collapsed ? 'sr-only' : 'flex-1 truncate text-sm'}>{label}</span>
-        {hasUnread && !collapsed && <span className="h-2 w-2 shrink-0 rounded-full bg-current" aria-label="Unread" />}
+        <span className={collapsed ? 'sr-only' : 'flex-1 truncate text-[13.5px] leading-tight'}>{label}</span>
+        {hasUnread && !collapsed && (
+          <span
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-700 px-1.5 text-[10px] font-semibold tabular-nums text-white dark:bg-emerald-500 dark:text-slate-950"
+            aria-label={`${unreadCount} unread`}
+          >
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
       </button>
     );
   };
 
   return (
     <aside
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
-      onFocus={() => setExpanded(true)}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false); }}
-      className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950 sm:flex ${
-        collapsed ? 'w-[4.75rem]' : 'w-64'
+      className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-[#1C2B33]/[0.09] bg-white transition-[width] duration-200 ease-out dark:border-white/[0.08] dark:bg-[#1A1D21] sm:flex ${
+        collapsed ? 'w-[68px]' : 'w-60'
       }`}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'}`}>
-          <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
-          {!collapsed && <span className="font-brand min-w-0 flex-1 truncate text-xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>}
+        {/* Brand Header + Collapse Toggle */}
+        <div
+          className={`flex h-14 shrink-0 items-center border-b border-[#1C2B33]/[0.07] dark:border-white/[0.07] ${
+            collapsed ? 'justify-center px-2' : 'justify-between gap-2 px-3.5'
+          }`}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-contain" width="28" height="28" />
+            {!collapsed && (
+              <span className="font-brand min-w-0 truncate text-xl font-semibold leading-none tracking-tight text-[#1C2B33] dark:text-white">
+                {tenantConfig.appName}
+              </span>
+            )}
+          </div>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#8A94A6] transition-colors hover:bg-[#1C2B33]/[0.05] hover:text-[#1C2B33] dark:hover:bg-white/[0.06] dark:hover:text-white"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
-        <nav className={`min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">
+        {/* Quick Search Trigger (Cmd/Ctrl + K) */}
+        <div className={collapsed ? 'px-2 pt-3' : 'px-3 pt-3'}>
+          {collapsed ? (
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleCollapsed}
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#5F6C7B] transition-colors hover:bg-[#1C2B33]/[0.05] hover:text-[#1C2B33] dark:text-slate-400 dark:hover:bg-white/[0.06] dark:hover:text-white"
+              >
+                <PanelLeftOpen className="h-[18px] w-[18px]" strokeWidth={1.75} />
+              </button>
+              <button
+                type="button"
+                onClick={openCommandPalette}
+                title="Quick search (Ctrl+K)"
+                aria-label="Quick search"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#1C2B33]/[0.09] bg-[#F7F8FA] text-[#5F6C7B] transition-colors hover:border-[#1C2B33]/20 hover:text-[#1C2B33] dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:text-white"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              className="flex h-9 w-full items-center gap-2 rounded-lg border border-[#1C2B33]/[0.09] bg-[#F7F8FA] px-2.5 text-xs text-[#5F6C7B] transition-colors hover:border-[#1C2B33]/20 hover:bg-[#F0F2F5] hover:text-[#1C2B33] dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400 dark:hover:bg-white/[0.07] dark:hover:text-slate-200"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0 text-[#8A94A6]" />
+              <span className="flex-1 truncate text-left">Quick search…</span>
+              <kbd className="rounded border border-[#1C2B33]/10 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#8A94A6] dark:border-white/10 dark:bg-[#16191D]">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+        </div>
+
+        {/* Navigation Sections */}
+        <nav
+          className={`min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto ${collapsed ? 'p-2 pt-3' : 'px-3 py-4'}`}
+          aria-label="Main navigation"
+        >
           {navSections.map((section) => (
             <div key={section.title} className="space-y-1">
-              <p className={collapsed ? 'sr-only' : 'whitespace-nowrap px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500'}>
+              <p
+                className={
+                  collapsed
+                    ? 'sr-only'
+                    : 'whitespace-nowrap px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#8A94A6] dark:text-slate-500'
+                }
+              >
                 {section.title}
               </p>
-              <div className="space-y-0.5">{section.items.map((item) => <NavButton key={item.id} {...item} />)}</div>
+              <div className="space-y-0.5">
+                {section.items.map((item) => (
+                  <NavButton key={item.id} {...item} />
+                ))}
+              </div>
             </div>
           ))}
         </nav>
       </div>
 
-      <div className={`shrink-0 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50 ${collapsed ? 'p-2' : ''}`}>
+      {/* Account Footer */}
+      <div
+        className={`shrink-0 border-t border-[#1C2B33]/[0.08] bg-[#F7F8FA]/70 dark:border-white/[0.08] dark:bg-[#16191D]/80 ${
+          collapsed ? 'p-2' : 'p-2.5'
+        }`}
+      >
         <AccountMenu
           profile={profile}
           activeView={activeView}
@@ -216,18 +333,28 @@ export default function Sidebar({
             <button
               type="button"
               title={collapsed ? 'Open account menu' : undefined}
-              className={`flex w-full items-center rounded-xl text-left transition hover:bg-white dark:hover:bg-zinc-800 ${collapsed ? 'justify-center p-1' : 'gap-2.5 px-1 py-1.5'}`}
+              className={`flex w-full items-center rounded-lg text-left transition-colors hover:bg-[#1C2B33]/[0.05] dark:hover:bg-white/[0.06] ${
+                collapsed ? 'justify-center p-1' : 'gap-2.5 px-2 py-1.5'
+              }`}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-900 text-xs font-bold text-white shadow-xs">
-                {profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-700 text-xs font-semibold text-white shadow-2xs">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  profile.displayName?.charAt(0).toUpperCase() || 'U'
+                )}
               </span>
               {!collapsed && (
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold text-slate-900 dark:text-white">{profile.displayName || 'User'}</span>
-                  <span className="block truncate text-[10px] font-medium text-slate-500">{roleLabel(profile, activeView)}</span>
+                  <span className="block truncate text-[13px] font-semibold text-[#1C2B33] dark:text-white">
+                    {profile.displayName || 'User'}
+                  </span>
+                  <span className="block truncate text-[11px] font-medium text-[#5F6C7B] dark:text-slate-400">
+                    {roleLabel(profile, activeView)}
+                  </span>
                 </span>
               )}
-              {!collapsed && <FontAwesomeIcon icon={faChevronRight} className="mr-1 h-3 w-3 text-slate-400" />}
+              {!collapsed && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#8A94A6]" />}
             </button>
           }
         />
