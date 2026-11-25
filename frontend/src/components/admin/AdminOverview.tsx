@@ -369,10 +369,10 @@ function PropertyBreakdown({ properties, onNavigate }: { properties: Overview['p
         <p className="py-10 text-center text-sm text-zinc-500">No properties yet. Add one to see it here.</p>
       ) : (
         <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row">
-          <div className="relative flex h-36 w-36 shrink-0 items-center justify-center rounded-full" role="img"
+          <div className="relative flex h-40 w-40 shrink-0 items-center justify-center rounded-full shadow-sm" role="img"
             aria-label={`Property breakdown: ${byType.map(([type, t]) => `${TYPE_LABELS[type] ?? type}: ${t.total}`).join(', ')}`}
             style={{ background: `conic-gradient(${segments.join(', ')})` }}>
-            <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white/90 text-center dark:bg-slate-900/90">
+            <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white text-center dark:bg-slate-900">
               <span className="text-xl font-bold text-zinc-950 dark:text-white">{selectedEntry ? selectedEntry[1].total : grandTotal}</span>
               <span className="text-xs text-zinc-500">{selectedEntry ? (TYPE_LABELS[selectedEntry[0]] ?? selectedEntry[0]) : 'properties'}</span>
             </div>

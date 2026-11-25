@@ -1031,3 +1031,19 @@ aside[class*="sticky"] {
   color: #fff;
 }
 .finance-cta:hover { filter: brightness(1.08); }
+
+/* House photography is softened so content retains contrast over the image. */
+.app-shell {
+  background: linear-gradient(135deg, rgba(241, 247, 245, .84), rgba(230, 240, 237, .78)),
+    url('/workspace-house.webp') center / cover no-repeat;
+}
+.dark .app-shell {
+  background: linear-gradient(135deg, rgba(12, 27, 29, .91), rgba(14, 38, 36, .86)),
+    url('/workspace-house.webp') center / cover no-repeat;
+}
+.app-shell main section.rounded-2xl {
+  background: rgba(255, 255, 255, .82);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.dark .app-shell main section.rounded-2xl { background: rgba(24, 36, 39, .88); }
