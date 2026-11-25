@@ -115,8 +115,9 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
-    // Allow Firebase signInWithPopup (Google OAuth popup) to communicate back to the opener window.
-    crossOriginOpenerPolicy: {policy: 'same-origin-allow-popups'},
+    // Disable COOP so Firebase signInWithPopup (Google OAuth popup) can poll popup.closed
+    // without Chrome logging "Cross-Origin-Opener-Policy policy would block the window.closed call".
+    crossOriginOpenerPolicy: false,
   }),
 );
 

@@ -76,5 +76,7 @@ services:
         value: MyBoma
       - key: PESAPAL_AUTO_REGISTER_IPN
         value: "true"
+      - key: PESAPAL_NOTIFICATION_ID
+        value: 8f6ceffd-5b5d-45bb-8e20-d99f189a9cf8
       - key: PESAPAL_IPN_METHOD
         value: GET

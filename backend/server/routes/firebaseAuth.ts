@@ -28,7 +28,7 @@ const firebaseGoogleAuthSchema = z
   .object({
     idToken: z.string().min(20).max(8192),
     mode: z.enum(['signin', 'signup', 'auto']).optional().default('auto'),
-    intendedRole: z.enum(['hunter', 'landlord', 'tenant']).optional(),
+    intendedRole: z.enum(['hunter', 'landlord', 'tenant']).nullish().transform((v) => v ?? undefined),
     rememberMe: z.boolean().optional().default(true),
   })
   .strict();
@@ -37,9 +37,9 @@ const firebasePhoneAuthSchema = z
   .object({
     idToken: z.string().min(20).max(8192),
     mode: z.enum(['signin', 'signup', 'auto']).optional().default('auto'),
-    displayName: z.string().trim().min(1).max(120).optional(),
-    email: z.string().trim().email().max(320).optional(),
-    intendedRole: z.enum(['hunter', 'landlord', 'tenant']).optional(),
+    displayName: z.string().trim().min(1).max(120).nullish().transform((v) => v ?? undefined),
+    email: z.string().trim().email().max(320).nullish().transform((v) => v ?? undefined),
+    intendedRole: z.enum(['hunter', 'landlord', 'tenant']).nullish().transform((v) => v ?? undefined),
     rememberMe: z.boolean().optional().default(true),
   })
   .strict();
@@ -73,7 +73,8 @@ async function createBetterAuthSessionForUser(
   );
 
   // Clear any cached session-data cookie from an earlier account so cookieCache reloads cleanly.
-  const clearCacheCookie = `${ctx.authCookies.sessionData.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+  const secureFlag = sessionCookie.attributes?.secure ? '; Secure' : '';
+  const clearCacheCookie = `${ctx.authCookies.sessionData.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureFlag}`;
 
   return {
     token: createdSession.token,
