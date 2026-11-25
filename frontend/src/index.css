@@ -948,77 +948,50 @@ aside[class*="sticky"] {
     scroll-behavior: smooth;
   }
 }
-/* A soft, translucent workspace surface, scoped to signed-in screens. */
+/* Signed-in workspace palette and glass surfaces. */
 .app-shell {
-  background: radial-gradient(ellipse at 5% 0%, rgba(165, 180, 252, .32), transparent 40%),
-    radial-gradient(ellipse at 95% 15%, rgba(196, 181, 253, .3), transparent 38%),
-    linear-gradient(145deg, #f6f8ff, #f1f5ff 52%, #faf5ff);
+  background: radial-gradient(ellipse at 90% 0%, rgba(169, 208, 205, .42), transparent 48%),
+    linear-gradient(145deg, #e7f0ef, #f0f4f2 60%, #e1ebe9);
 }
 .dark .app-shell {
-  background: radial-gradient(ellipse at 10% 0%, rgba(79, 70, 229, .24), transparent 42%),
-    radial-gradient(ellipse at 100% 20%, rgba(126, 34, 206, .18), transparent 40%),
-    linear-gradient(145deg, #0b1022, #11152c 55%, #1b1028);
+  background: radial-gradient(ellipse at 90% 0%, rgba(42, 105, 101, .26), transparent 48%),
+    linear-gradient(145deg, #122426, #152b2c 60%, #101e20);
 }
+.app-shell .db { background: transparent; }
 .app-shell aside {
-  background: rgba(255, 255, 255, .72);
-  backdrop-filter: blur(22px);
-  border-color: rgba(165, 180, 252, .35);
+  background: rgba(238, 246, 244, .78);
+  border-color: rgba(66, 119, 113, .18);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
-.dark .app-shell aside { background: rgba(15, 20, 42, .8); border-color: rgba(165, 180, 252, .15); }
+.dark .app-shell aside { background: rgba(18, 37, 39, .84); border-color: rgba(173, 216, 207, .12); }
 .app-shell [data-slot="card"], .app-shell .stat-card,
 .app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl {
-  background: linear-gradient(145deg, rgba(255,255,255,.88), rgba(239,242,255,.65));
-  border-color: rgba(165,180,252,.38);
-  box-shadow: 0 8px 30px rgba(74, 74, 140, .07), inset 0 1px rgba(255,255,255,.85);
-  backdrop-filter: blur(16px);
-  transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
-}
-.app-shell main button.group.rounded-2xl:hover, .app-shell .stat-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(129,140,248,.7);
-  box-shadow: 0 14px 32px rgba(79,70,229,.15);
+  background: rgba(255, 255, 255, .57);
+  border-color: rgba(255, 255, 255, .75);
+  box-shadow: 0 8px 24px rgba(37, 73, 70, .06), inset 0 1px rgba(255, 255, 255, .8);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  backdrop-filter: blur(18px) saturate(125%);
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
 }
 .dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
 .dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl {
-  background: linear-gradient(145deg, rgba(35,40,70,.88), rgba(26,28,52,.75));
-  border-color: rgba(165,180,252,.16);
-  box-shadow: 0 8px 30px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.06);
+  background: rgba(35, 58, 59, .64);
+  border-color: rgba(190, 221, 215, .16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16), inset 0 1px rgba(255, 255, 255, .06);
+}
+.app-shell main button.group.rounded-2xl:hover, .app-shell .stat-card:hover {
+  border-color: rgba(65, 133, 125, .45);
+  box-shadow: 0 12px 28px rgba(37, 73, 70, .12);
+  transform: translateY(-2px);
 }
 @media (prefers-reduced-motion: reduce) {
   .app-shell .stat-card, .app-shell main button.group.rounded-2xl { transition: none; }
   .app-shell .stat-card:hover, .app-shell main button.group.rounded-2xl:hover { transform: none; }
 }
-/* Layered colour behind clear, frosted surfaces. */
-.app-shell {
-  background-color: #e8f1f5;
-  background-image: radial-gradient(ellipse at 12% 15%, rgba(62, 197, 191, .38), transparent 38%),
-    radial-gradient(ellipse at 85% 12%, rgba(127, 122, 229, .36), transparent 40%),
-    radial-gradient(ellipse at 76% 90%, rgba(255, 183, 140, .34), transparent 38%),
-    linear-gradient(135deg, #dceff1, #e6e9fb 60%, #f6e9e7);
-}
-.dark .app-shell {
-  background-image: radial-gradient(ellipse at 12% 15%, rgba(13, 148, 136, .30), transparent 38%),
-    radial-gradient(ellipse at 85% 12%, rgba(99, 102, 241, .32), transparent 40%),
-    radial-gradient(ellipse at 76% 90%, rgba(190, 85, 80, .18), transparent 38%),
-    linear-gradient(135deg, #071c28, #161b38 60%, #241827);
-}
-.app-shell [data-slot="card"], .app-shell .stat-card,
-.app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl {
-  background: linear-gradient(140deg, rgba(255,255,255,.57), rgba(255,255,255,.28));
-  border: 1px solid rgba(255,255,255,.72);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 12px 32px rgba(48,68,98,.1);
-  -webkit-backdrop-filter: blur(22px) saturate(150%);
-  backdrop-filter: blur(22px) saturate(150%);
-}
-.dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
-.dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl {
-  background: linear-gradient(140deg, rgba(32,42,66,.68), rgba(20,28,49,.48));
-  border-color: rgba(214,225,255,.18);
-  box-shadow: inset 0 1px rgba(255,255,255,.12), 0 12px 32px rgba(0,0,0,.2);
-}
 @media (prefers-reduced-transparency: reduce) {
   .app-shell [data-slot="card"], .app-shell .stat-card,
-  .app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl { background: #f7f9ff; }
+  .app-shell main section.rounded-2xl, .app-shell main button.group.rounded-2xl { background: #f8fbfa; }
   .dark .app-shell [data-slot="card"], .dark .app-shell .stat-card,
-  .dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl { background: #202943; }
+  .dark .app-shell main section.rounded-2xl, .dark .app-shell main button.group.rounded-2xl { background: #223b3b; }
 }

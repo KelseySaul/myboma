@@ -230,7 +230,7 @@ function QuickAction({ icon: Icon, label, onClick, primary = false }: { icon: ty
       onClick={onClick}
       className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition active:scale-[0.98] ${
         primary
-          ? 'bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200'
+          ? 'bg-teal-800 text-white hover:bg-teal-900 dark:bg-teal-700 dark:text-white dark:hover:bg-teal-600'
           : 'border border-zinc-200 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800'
       }`}
     >
@@ -321,7 +321,7 @@ function TrendChart({ trend }: { trend: Overview['trend'] }) {
                   {metric === 'collected' ? compactKes(value) : value}
                 </span>
                 <span
-                  className={`w-full max-w-12 rounded-t-lg transition-all duration-500 ${active ? 'bg-gradient-to-t from-indigo-600 to-violet-400' : 'bg-indigo-300/70 group-hover:bg-indigo-400 dark:bg-indigo-800'}`}
+                  className={`w-full max-w-12 rounded-t-lg transition-all duration-500 ${active ? 'bg-gradient-to-t from-teal-800 to-teal-500' : 'bg-teal-300/70 group-hover:bg-teal-400 dark:bg-teal-800'}`}
                   style={{ height: `${Math.max((value / max) * 100, value > 0 ? 6 : 2)}%` }}
                 />
                 <span className="text-xs text-zinc-500">{monthLabel(point.month)}</span>
@@ -348,7 +348,7 @@ function PropertyBreakdown({ properties, onNavigate }: { properties: Overview['p
   }, [properties]);
   const grandTotal = byType.reduce((sum, [, t]) => sum + t.total, 0);
   const [selected, setSelected] = useState<string | null>(null);
-  const colors = ['#6366f1', '#14b8a6', '#f59e0b', '#ec4899'];
+  const colors = ['#236b66', '#77aaa3', '#bdd5cf', '#95bdb2'];
   let offset = 0;
   const segments = byType.map(([type, value], index) => {
     const start = offset;
@@ -380,7 +380,7 @@ function PropertyBreakdown({ properties, onNavigate }: { properties: Overview['p
           <ul className="w-full space-y-2">
           {byType.map(([type, t], index) => (
             <li key={type}>
-              <button type="button" onClick={() => setSelected(selected === type ? null : type)} onMouseEnter={() => setSelected(type)} onMouseLeave={() => setSelected(null)} onFocus={() => setSelected(type)} onBlur={() => setSelected(null)} aria-pressed={selected === type} className="w-full rounded-lg p-2 text-left transition hover:bg-indigo-100/50 focus-visible:outline-2 focus-visible:outline-indigo-500 dark:hover:bg-indigo-900/30">
+              <button type="button" onClick={() => setSelected(selected === type ? null : type)} onMouseEnter={() => setSelected(type)} onMouseLeave={() => setSelected(null)} onFocus={() => setSelected(type)} onBlur={() => setSelected(null)} aria-pressed={selected === type} className="w-full rounded-lg p-2 text-left transition hover:bg-teal-100/50 focus-visible:outline-2 focus-visible:outline-teal-700 dark:hover:bg-teal-900/30">
               <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{backgroundColor: colors[index % colors.length]}} />
               <div className="flex items-baseline justify-between text-sm">
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">{TYPE_LABELS[type] ?? type}</span>

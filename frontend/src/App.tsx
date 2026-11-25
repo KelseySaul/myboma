@@ -465,7 +465,7 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />
@@ -519,7 +519,7 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />
@@ -1030,7 +1030,7 @@ export default function App() {
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-sm font-bold text-white shadow-lg shadow-indigo-500/30">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-teal-800 text-sm font-bold text-white shadow-lg shadow-teal-900/20">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />

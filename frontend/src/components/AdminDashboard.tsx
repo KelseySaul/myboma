@@ -888,7 +888,7 @@ export default function AdminDashboard({ profile, onImpersonate, activeTab, setA
   return (
     <div className="db w-full min-w-0 pb-12 animate-in fade-in duration-300">
       {/* ── Page header ─────────────────────────── */}
-      <div className="border-b border-zinc-200/80 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6 sm:py-5 md:px-8">
+      <div className="border-b border-teal-900/10 bg-white/35 px-4 py-4 backdrop-blur-md dark:border-white/10 dark:bg-teal-950/30 sm:px-6 sm:py-5 md:px-8">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center sm:gap-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">

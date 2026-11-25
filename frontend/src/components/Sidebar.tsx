@@ -156,7 +156,7 @@ export default function Sidebar({
           collapsed ? 'justify-center px-2' : 'gap-3 px-3'
         } ${
           isActive
-            ? 'bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold text-white shadow-lg shadow-indigo-500/20'
+            ? 'bg-teal-800 font-semibold text-white shadow-sm dark:bg-teal-700'
             : 'font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100'
         }`}
       >
