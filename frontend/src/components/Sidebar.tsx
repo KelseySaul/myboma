@@ -22,6 +22,7 @@ import type { UserProfile, UserRole } from '../App';
 import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
 import { tenantConfig } from '../config/tenant';
 import { useUnreadCount } from '../lib/queries';
+import { resolveMediaUrl } from '../lib/fileUrl';
 import AccountMenu, { roleLabel } from './AccountMenu';
 import { openCommandPalette } from './CommandPalette';
 
@@ -61,12 +62,25 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
             { id: 'finances', label: 'Rent & payments', icon: Wallet },
             ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: Wrench }] : []),
             { id: 'tenants', label: 'Tenants', icon: Users },
+            { id: 'caretakers', label: 'Caretakers & reports', icon: UserCheck },
             { id: 'pending', label: 'Pending invites', icon: Mail },
             { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
       ];
     }
+    case 'caretaker':
+      return [
+        {
+          title: 'Property operations',
+          items: [
+            dashboardItem,
+            { id: 'repairs', label: 'Repairs & issues', icon: Wrench },
+            { id: 'reports', label: 'Reports to landlord', icon: ClipboardList },
+            { id: 'automations', label: 'Notifications', icon: Bell },
+          ],
+        },
+      ];
     case 'hunter':
       return [
         {
@@ -340,7 +354,7 @@ export default function Sidebar({
             >
               <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-xs font-semibold text-white shadow-2xs">
                 {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   profile.displayName?.charAt(0).toUpperCase() || 'U'
                 )}

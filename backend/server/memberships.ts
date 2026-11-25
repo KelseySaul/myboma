@@ -17,6 +17,7 @@ export const addPlatformMembership = async (platformId: string | null | undefine
 /** Maps a profile's legacy role flags to a membership role. */
 export const membershipRoleFor = (profile: {role?: string | null; isAdmin?: boolean | null}): MembershipRole => {
   if (profile.isAdmin) return 'admin';
+  if (profile.role === 'caretaker') return 'manager';
   if (profile.role === 'landlord' || profile.role === 'tenant') return profile.role;
   return 'member';
 };

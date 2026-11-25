@@ -73,7 +73,7 @@ export const setAuthPersistence = (remember: boolean) => {
 
 export const getStoredToken = () => (IS_NATIVE ? cachedToken : null);
 
-const setStoredToken = (token: string) => {
+export const setStoredToken = (token: string) => {
   cachedToken = token;
   void persistToken(token).catch(() => undefined);
 };

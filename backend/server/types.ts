@@ -24,7 +24,9 @@ export interface UserProfileRecord {
   displayName?: string;
   role?: string;
   platformId?: string | null;
+  managedByAdminId?: string | null;
   phone?: string | null;
+  avatarUrl?: string | null;
   isAdmin?: boolean;
   isSuperAdmin?: boolean;
   stripeAccountId?: string | null;
@@ -43,6 +45,7 @@ export const toActor = (profile: UserProfileRecord): Actor => ({
   isAdmin: Boolean(profile.isAdmin),
   isSuperAdmin: Boolean(profile.isSuperAdmin),
   platformId: profile.platformId ?? null,
+  managedByAdminId: profile.managedByAdminId ?? null,
 });
 
 export interface RentPaymentRecord {

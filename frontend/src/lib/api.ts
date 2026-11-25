@@ -1,5 +1,6 @@
 import {Capacitor} from '@capacitor/core';
-import {getStoredToken} from '../lib/auth-client';
+import {getStoredToken, setStoredToken} from '../lib/auth-client';
+import {resolveMediaUrl} from './fileUrl';
 import {stripImageMetadata} from './imageSanitize';
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
@@ -97,7 +98,34 @@ export const uploadFile = async (file: File | Blob, fileName: string, subpath?: 
   if (!response.ok) {
     throw new Error(payload?.error || `Upload failed with status ${response.status}`);
   }
-  return payload as {url: string};
+  return {url: resolveMediaUrl(payload.url)};
+};
+
+/** Exchanges a verified Firebase Phone OTP ID token for a MyBoma Better-Auth session. */
+export const exchangeFirebasePhoneToken = async (body: {
+  idToken: string;
+  mode?: 'signin' | 'signup' | 'auto';
+  displayName?: string;
+  email?: string;
+  intendedRole?: 'hunter' | 'landlord' | 'tenant';
+  rememberMe?: boolean;
+}) => {
+  const isNative = Capacitor.isNativePlatform();
+  const response = await fetch(`${apiBaseUrl()}/api/auth/firebase-phone`, {
+    method: 'POST',
+    credentials: isNative ? undefined : 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Phone sign-in failed. Please try again.');
+  }
+  const token = response.headers.get('set-auth-token') || payload.token;
+  if (isNative && token) {
+    setStoredToken(String(token));
+  }
+  return payload as {ok: true; isNewUser: boolean; token?: string; user: {id: string; email: string; phone: string}};
 };
 
 export const getUnreadNotificationCount = () => bffRequest<{count: number}>('/notifications/unread-count');
@@ -154,6 +182,8 @@ export const getLandlordDashboard = (accountIds?: string[]) => {
     notifications: Record<string, any>[];
     leases?: Record<string, any>[];
     registeredEmails?: string[];
+    caretakers?: Record<string, any>[];
+    caretakerReports?: Record<string, any>[];
   }>(`/landlord/dashboard${qs}`);
 };
 
@@ -215,8 +245,48 @@ export const unassignTenant = (email: string) =>
 export const deleteTenant = (email: string) =>
   bffRequest<{deleted: boolean}>(`/landlord/tenants/${encodeURIComponent(email)}`, {method: 'DELETE'});
 
-export const updateMaintenanceRequestStatus = (id: string, status: 'pending' | 'in-progress' | 'resolved') =>
-  bffRequest<Record<string, any>>(`/landlord/maintenance-requests/${id}`, {method: 'PATCH', body: {status}});
+export const updateMaintenanceRequestStatus = (
+  id: string,
+  status: 'pending' | 'in-progress' | 'resolved',
+  resolutionNotes?: string | null,
+) =>
+  bffRequest<Record<string, any>>(`/landlord/maintenance-requests/${id}`, {
+    method: 'PATCH',
+    body: resolutionNotes !== undefined ? {status, resolutionNotes} : {status},
+  });
+
+export const updateCaretakerReport = (
+  id: string,
+  body: {status: 'open' | 'acknowledged' | 'resolved'; landlordNotes?: string | null},
+) => bffRequest<Record<string, any>>(`/landlord/caretaker-reports/${id}`, {method: 'PATCH', body});
+
+export const removeCaretaker = (uid: string) =>
+  bffRequest<{removed: boolean}>(`/landlord/caretakers/${uid}`, {method: 'DELETE'});
+
+export const getCaretakerDashboard = () =>
+  bffRequest<{
+    landlord: {uid: string; displayName: string; email: string; phone?: string | null; avatarUrl?: string | null} | null;
+    buildings: Record<string, any>[];
+    properties: Record<string, any>[];
+    requests: Record<string, any>[];
+    reports: Record<string, any>[];
+    notifications: Record<string, any>[];
+  }>('/caretaker/dashboard');
+
+export const respondCaretakerMaintenance = (
+  id: string,
+  body: {status: 'pending' | 'in-progress' | 'resolved'; resolutionNotes?: string | null},
+) => bffRequest<Record<string, any>>(`/caretaker/maintenance-requests/${id}`, {method: 'PATCH', body});
+
+export const createCaretakerReport = (body: {
+  propertyId?: string | null;
+  buildingId?: string | null;
+  category: 'maintenance' | 'security' | 'cleanliness' | 'utility' | 'tenant_issue' | 'inspection' | 'other';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  title: string;
+  description: string;
+  images?: string[];
+}) => bffRequest<Record<string, any>>('/caretaker/reports', {method: 'POST', body});
 
 export const getAvailableProperties = () => publicRequest<Record<string, any>[]>('/api/public/properties/available');
 
@@ -287,7 +357,7 @@ export const provisionUser = (body: {
   password?: string;
   displayName: string;
   phone?: string;
-  role: 'tenant' | 'landlord' | 'hunter' | 'admin';
+  role: 'tenant' | 'landlord' | 'hunter' | 'admin' | 'caretaker';
   platformId?: string | null;
   landlordId?: string;
   mustChangePassword?: boolean;
@@ -298,6 +368,9 @@ export const provisionUser = (body: {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
+  subscriptionTier?: 'free' | 'basic' | 'starter' | 'pro' | 'proplus';
+  subscriptionBilling?: 'monthly' | 'quarterly' | 'yearly';
+  propertyIds?: string[];
 }) =>
   bffRequest<{uid: string | null; email: string; invitation: any; existing?: boolean; invited?: boolean}>('/users/provision', {
     method: 'POST',
@@ -397,7 +470,7 @@ export type SuperAdminAccountOption = {
   uid: string;
   displayName: string;
   email: string;
-  role: 'landlord' | 'tenant' | 'hunter' | 'admin';
+  role: 'landlord' | 'tenant' | 'hunter' | 'admin' | 'caretaker';
   platformId: string | null;
   avatarUrl: string | null;
   isAdmin: boolean;
@@ -441,7 +514,7 @@ export const getAdminDashboard = (platformId?: string) =>
 export const getAuditLogs = (userId?: string) =>
   bffRequest<Record<string, any>[]>(`/admin/audit-logs${userId && userId !== 'all' ? `?userId=${encodeURIComponent(userId)}` : ''}`);
 
-export const updateUserRole = (uid: string, role: 'landlord' | 'tenant' | 'hunter' | 'admin' | 'superadmin') =>
+export const updateUserRole = (uid: string, role: 'landlord' | 'tenant' | 'hunter' | 'caretaker' | 'admin' | 'superadmin') =>
   bffRequest<Record<string, any>>(`/admin/users/${uid}/role`, {method: 'PATCH', body: {role}});
 
 export const createPlatform = (body: {name: string; slug: string; ownerEmail: string}) =>
@@ -471,7 +544,7 @@ export const getInvite = async (token: string) => {
     (error as Error & {status?: number}).status = response.status;
     throw error;
   }
-  return payload as {email: string; role: 'tenant' | 'landlord' | 'hunter' | 'admin'; invitedByName: string; displayName: string | null};
+  return payload as {email: string; role: 'tenant' | 'landlord' | 'hunter' | 'admin' | 'caretaker'; invitedByName: string; displayName: string | null};
 };
 
 /** Creates the invited account and signs it in (the server sets the session cookie). */

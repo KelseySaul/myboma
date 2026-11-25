@@ -35,6 +35,11 @@ const STEPS: Record<UserRole, Step[]> = {
     { title: 'Overview', description: 'Key numbers for the platform: users, properties, leases and rent collected.', spotlight: 'tab-analytics' },
     { title: 'Activity log', description: 'Every admin action is recorded. Use it to see who changed what and when.', spotlight: 'tab-activity' },
   ],
+  caretaker: [
+    { title: 'Welcome to MyBoma', description: 'Respond to tenant repair tickets and file field reports straight to your landlord.' },
+    { title: 'Repairs & issues', description: 'Review every repair request, add progress notes, and mark work fixed so tenants and your landlord stay updated.' },
+    { title: 'Reports to landlord', description: 'Snap photos on site and send security, utility, or inspection reports to your landlord anytime.' },
+  ],
 };
 
 const STORAGE_KEY = (role: UserRole) => `myboma_onboarding_done_v2_${role}`;

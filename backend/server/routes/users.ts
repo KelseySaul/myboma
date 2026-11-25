@@ -16,7 +16,7 @@ import {
 import {handleSendBulkRentReminders, handleSendRentReminder} from '../notificationHandlers.ts';
 import {buildObjectKey, uploadObject} from '../storage.ts';
 import {toActor} from '../types.ts';
-import {appBaseUrl} from '../http/config.ts';
+import {normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {
   asyncHandler,
   getValidatedBody,
@@ -28,7 +28,7 @@ import {
   uploadLimiter,
   validateBody,
 } from '../http/middleware.ts';
-import {uuidSchema} from '../http/schemas.ts';
+import {mediaUrlSchema, uuidSchema} from '../http/schemas.ts';
 import {streamStoredObject} from '../services/files.ts';
 import {ImageRejectedError, imageKindForSubpath, MAX_UPLOAD_BYTES, toWebp} from '../services/images.ts';
 import {insertNotification, sendEmail} from '../services/notify.ts';
@@ -74,7 +74,7 @@ const selfProfileUpdateSchema = z
     displayName: z.string().min(1).max(120).optional(),
     phone: z.string().max(20).nullable().optional(),
     address: z.string().max(280).nullable().optional(),
-    avatarUrl: z.string().url().nullable().optional(),
+    avatarUrl: mediaUrlSchema.nullable().optional(),
     bankName: z.string().max(120).nullable().optional(),
     bankAccountNumber: z.string().max(40).nullable().optional(),
     bankAccountName: z.string().max(120).nullable().optional(),
@@ -128,8 +128,11 @@ export function registerUserRoutes(bffRouter: Router) {
       await uploadObject(key, webp, 'image/webp');
       // `private/...` subpaths (receipts, IDs, expense evidence) are only reachable through
       // the authenticated route; everything else is a public marketing asset.
+      // Return a relative path for web so uploads never break across ports/domains, and a
+      // full origin URL for native Capacitor mobile clients.
       const isPrivate = subpath?.split('/')[0] === 'private';
-      const url = isPrivate ? `${appBaseUrl}${req.baseUrl}/files/${key}` : `${appBaseUrl}/api/files/${key}`;
+      const relativeUrl = isPrivate ? `${req.baseUrl}/files/${key}` : `/api/files/${key}`;
+      const url = normalizeStoredFileUrl(req, relativeUrl);
       res.status(201).json({url, private: isPrivate});
     }),
   );
@@ -161,13 +164,19 @@ export function registerUserRoutes(bffRouter: Router) {
   );
 
   bffRouter.get('/session', requireAuth, asyncHandler(async (req, res) => {
+    const profile = req.profile
+      ? {
+          ...req.profile,
+          avatarUrl: req.profile.avatarUrl ? normalizeStoredFileUrl(req, req.profile.avatarUrl) : req.profile.avatarUrl,
+        }
+      : req.profile;
     res.json({
       client: req.clientKind,
       user: {
         id: req.authUser?.id,
         email: req.authUser?.email,
       },
-      profile: req.profile,
+      profile,
     });
   }));
 
@@ -285,7 +294,10 @@ export function registerUserRoutes(bffRouter: Router) {
         res.status(404).json({error: 'Not found'});
         return;
       }
-      res.json(platform);
+      res.json({
+        ...platform,
+        brandLogoUrl: platform.brandLogoUrl ? normalizeStoredFileUrl(req, platform.brandLogoUrl) : platform.brandLogoUrl,
+      });
     }),
   );
 

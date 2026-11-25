@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Bell, Camera, Check, Eye, EyeOff, Loader2, LogOut } from 'lucide-react';
 import { authClient } from '../lib/auth-client';
 import { getPlatformBranding, initPlatform, updateMyProfile, updatePlatformBranding, uploadFile } from '../lib/api';
+import { resolveMediaUrl } from '../lib/fileUrl';
 import { clearQueryCache } from '../lib/queryClient';
 import { promptForPush, type UserProfile } from '../App';
 import {
@@ -203,7 +204,7 @@ function ProfileSection({ profile }: { profile: SettingsProfile }) {
       <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:gap-4">
         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-violet-50 ring-1 ring-violet-200/70 dark:bg-violet-500/15 dark:ring-violet-500/20">
           {form.avatarUrl ? (
-            <img src={form.avatarUrl} alt="" className="h-full w-full object-cover" />
+            <img src={resolveMediaUrl(form.avatarUrl)} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-xl font-bold text-violet-700 dark:text-violet-300">{initials}</span>
           )}
@@ -523,6 +524,8 @@ function startPageOptions(profile: SettingsProfile) {
     options.push({ id: 'properties', label: 'Properties' }, { id: 'tenants', label: 'Tenants' }, { id: 'finances', label: 'Finances' });
   } else if (profile.role === 'tenant') {
     options.push({ id: 'finances', label: 'Payments' }, { id: 'maintenance', label: 'Repairs' }, { id: 'notices', label: 'Notices' });
+  } else if (profile.role === 'caretaker') {
+    options.push({ id: 'repairs', label: 'Repairs & issues' }, { id: 'reports', label: 'Reports to landlord' }, { id: 'automations', label: 'Notifications' });
   }
   return options;
 }
@@ -682,7 +685,7 @@ function BrandingSection({ profile }: { profile: SettingsProfile }) {
             <Field label="Logo" htmlFor="brand-logo">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800">
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin text-violet-600" /> : form.brandLogoUrl ? <img src={form.brandLogoUrl} alt="" className="h-full w-full object-contain p-1" /> : <Camera className="h-4 w-4 text-zinc-400" />}
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin text-violet-600" /> : form.brandLogoUrl ? <img src={resolveMediaUrl(form.brandLogoUrl)} alt="" className="h-full w-full object-contain p-1" /> : <Camera className="h-4 w-4 text-zinc-400" />}
                 </span>
                 <PhotoCaptureControl
                   defaultFacingMode="environment"

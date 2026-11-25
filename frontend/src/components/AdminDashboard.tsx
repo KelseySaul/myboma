@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { getSubscriptionFeatures } from '../../../shared/landlordSubscription';
+import { formatPlanPrice, getSubscriptionFeatures, SUBSCRIPTION_TIERS, type SubscriptionTier } from '../../../shared/landlordSubscription';
+import { resolveMediaUrl } from '../lib/fileUrl';
 import {
   provisionUser,
   resendInvitation,
@@ -88,6 +89,7 @@ import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSuperAdminA
 import AdminOverview from './admin/AdminOverview';
 import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
 import PhotoCaptureControl from './PhotoCaptureControl';
+import PropertyDescriptionPresets from './PropertyDescriptionPresets';
 
 const formatKes = (amount: number | string | null | undefined) =>
   `KES ${Math.round(Number(amount) || 0).toLocaleString('en-KE')}`;
@@ -235,6 +237,8 @@ export default function AdminDashboard({
     rentRouting?: 'admin' | 'direct';
     rentPayoutMethod?: 'cash' | 'mpesa' | 'bank';
     mpesaSettlementPhone?: string;
+    subscriptionTier?: SubscriptionTier;
+    subscriptionBilling?: 'monthly' | 'quarterly' | 'yearly';
   }>({ 
     email: '', 
     displayName: '', 
@@ -242,7 +246,9 @@ export default function AdminDashboard({
     role: profile.role === 'landlord' ? 'tenant' : 'landlord',
     rentRouting: 'admin',
     rentPayoutMethod: 'mpesa',
-    mpesaSettlementPhone: ''
+    mpesaSettlementPhone: '',
+    subscriptionTier: 'pro',
+    subscriptionBilling: 'monthly',
   });
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [propertyForm, setPropertyForm] = useState({ title: '', description: '', type: 'residential', price: '', location: '', landlordId: '', images: '' });
@@ -470,6 +476,11 @@ export default function AdminDashboard({
         rentRouting: inviteForm.role === 'landlord' ? inviteForm.rentRouting : undefined,
         rentPayoutMethod: inviteForm.role === 'landlord' && inviteForm.rentRouting === 'direct' ? inviteForm.rentPayoutMethod : undefined,
         mpesaSettlementPhone: inviteForm.role === 'landlord' && inviteForm.rentRouting === 'direct' ? inviteForm.mpesaSettlementPhone : undefined,
+        subscriptionTier: profile.isSuperAdmin && inviteForm.role === 'landlord' ? inviteForm.subscriptionTier : undefined,
+        subscriptionBilling:
+          profile.isSuperAdmin && inviteForm.role === 'landlord' && inviteForm.subscriptionTier && inviteForm.subscriptionTier !== 'free'
+            ? inviteForm.subscriptionBilling
+            : undefined,
       });
 
       if (result.invitation) {
@@ -487,7 +498,17 @@ export default function AdminDashboard({
 
       toast.success(`Invitation sent to ${result.email}`);
       setIsInviteUserOpen(false);
-      setInviteForm({ email: '', displayName: '', password: '', role: 'landlord', rentRouting: 'admin', rentPayoutMethod: 'mpesa', mpesaSettlementPhone: '' });
+      setInviteForm({
+        email: '',
+        displayName: '',
+        password: '',
+        role: 'landlord',
+        rentRouting: 'admin',
+        rentPayoutMethod: 'mpesa',
+        mpesaSettlementPhone: '',
+        subscriptionTier: 'pro',
+        subscriptionBilling: 'monthly',
+      });
     } catch (err: any) {
       toast.error(err.message || "Failed to create user");
     }
@@ -1291,6 +1312,7 @@ export default function AdminDashboard({
                       <option value="all">All Roles</option>
                       <option value="admin">Platform Admins</option>
                       <option value="landlord">Landlords</option>
+                      <option value="caretaker">Caretakers</option>
                       <option value="tenant">Tenants</option>
                       <option value="hunter">Hunters</option>
                     </select>
@@ -1339,11 +1361,55 @@ export default function AdminDashboard({
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Role</label>
                             <select className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-slate-900/10" value={inviteForm.role} onChange={e => setInviteForm({...inviteForm, role: e.target.value as UserRole})}>
                               <option value="landlord">Landlord</option>
+                              <option value="caretaker">Caretaker</option>
                               <option value="tenant">Tenant</option>
                               <option value="hunter">Hunter</option>
                               {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
                             </select>
                           </div>
+
+                          {inviteForm.role === 'landlord' && profile.isSuperAdmin && (
+                            <div className="rounded-xl border border-violet-200/80 dark:border-violet-500/25 p-3.5 space-y-3 bg-violet-50/40 dark:bg-violet-950/20">
+                              <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Landlord Subscription Plan</h4>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Plan Tier</label>
+                                  <select
+                                    className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none"
+                                    value={inviteForm.subscriptionTier || 'pro'}
+                                    onChange={(e) => setInviteForm({ ...inviteForm, subscriptionTier: e.target.value as SubscriptionTier })}
+                                  >
+                                    {(['free', 'basic', 'starter', 'pro', 'proplus'] as SubscriptionTier[]).map((tierId) => {
+                                      const info = SUBSCRIPTION_TIERS[tierId];
+                                      const priceLabel = info.monthlyBaseKes === 0 ? 'Free (1 unit)' : `${formatPlanPrice(info.monthlyBaseKes)}/mo`;
+                                      return (
+                                        <option key={tierId} value={tierId}>
+                                          {info.label} — {priceLabel}
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                                {inviteForm.subscriptionTier !== 'free' && (
+                                  <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Duration</label>
+                                    <select
+                                      className="h-9 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none"
+                                      value={inviteForm.subscriptionBilling || 'monthly'}
+                                      onChange={(e) => setInviteForm({ ...inviteForm, subscriptionBilling: e.target.value as 'monthly' | 'quarterly' | 'yearly' })}
+                                    >
+                                      <option value="monthly">Monthly (30 days)</option>
+                                      <option value="quarterly">Quarterly (90 days)</option>
+                                      <option value="yearly">Yearly (365 days)</option>
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {SUBSCRIPTION_TIERS[inviteForm.subscriptionTier || 'pro'].tagline}
+                              </p>
+                            </div>
+                          )}
 
                           {inviteForm.role === 'landlord' && profile.isAdmin && (
                             <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 space-y-3 bg-slate-50 dark:bg-slate-800/40">
@@ -1405,6 +1471,7 @@ export default function AdminDashboard({
                             <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Assigned Role Tier</label>
                             <select className="h-10 w-full rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold outline-none" value={updateRoleForm.role} onChange={e => setUpdateRoleForm({ role: e.target.value })}>
                               <option value="landlord">Landlord</option>
+                              <option value="caretaker">Caretaker</option>
                               <option value="tenant">Tenant</option>
                               <option value="hunter">Hunter</option>
                               {(profile.isSuperAdmin || profile.isAdmin) && <option value="admin">Platform Admin</option>}
@@ -1512,34 +1579,16 @@ export default function AdminDashboard({
                 </Table>
               
               {/* Pagination Controls */}
-              {totalUserPages > 1 && (
-                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
-                  <span className="text-xs text-slate-500 font-medium pl-2">
-                    Showing {indexOfFirstUser + 1} to {Math.min(indexOfLastUser, users.length)} of {users.length} users
-                  </span>
-                  <div className="flex items-center gap-1.5 pr-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={userPage === 1}
-                      onClick={() => setUserPage(p => Math.max(1, p - 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                    </Button>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{userPage}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={userPage === totalUserPages}
-                      onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-4 pb-4 sm:px-5">
+                <Pagination
+                  page={userPage}
+                  pageCount={Math.max(1, totalUserPages)}
+                  total={filteredUsers.length}
+                  pageSize={usersPerPage}
+                  onPageChange={setUserPage}
+                  label="users"
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1647,34 +1696,16 @@ export default function AdminDashboard({
                     </TableBody>
                   </Table>
 
-                  {totalInvitePages > 1 && (
-                    <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
-                      <span className="text-xs text-slate-500 font-medium pl-2">
-                        Page {invitePage} of {totalInvitePages}
-                      </span>
-                      <div className="flex items-center gap-1.5 pr-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="rounded-lg h-7 w-7 p-0"
-                          disabled={invitePage === 1}
-                          onClick={() => setInvitePage(p => Math.max(1, p - 1))}
-                        >
-                          <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                        </Button>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{invitePage}</span>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="rounded-lg h-7 w-7 p-0"
-                          disabled={invitePage === totalInvitePages}
-                          onClick={() => setInvitePage(p => Math.min(totalInvitePages, p + 1))}
-                        >
-                          <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="px-4 pb-4 sm:px-5">
+                    <Pagination
+                      page={invitePage}
+                      pageCount={Math.max(1, totalInvitePages)}
+                      total={filteredInvs.length}
+                      pageSize={10}
+                      onPageChange={setInvitePage}
+                      label="pending invites"
+                    />
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -2001,8 +2032,14 @@ export default function AdminDashboard({
                             </Select>
                           </div>
 
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Description</label>
+                            <PropertyDescriptionPresets
+                              type={propertyForm.type as 'residential' | 'commercial' | 'bnb'}
+                              location={propertyForm.location}
+                              description={propertyForm.description}
+                              onChangeDescription={(next) => setPropertyForm((prev) => ({ ...prev, description: next }))}
+                            />
                             <Textarea
                               className="min-h-[76px] rounded-lg border-[#D0D5DD] text-sm dark:border-white/12 dark:bg-[#16191D]"
                               value={propertyForm.description}
@@ -2025,7 +2062,7 @@ export default function AdminDashboard({
                               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                                 {parseImageList(propertyForm.images).map((url, idx) => (
                                   <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#221844]/[0.08] bg-[#F8F7FC] dark:border-white/10 dark:bg-white/5">
-                                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                                    <img src={resolveMediaUrl(url)} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                     <button
                                       type="button"
                                       aria-label="Remove photo"
@@ -2101,7 +2138,7 @@ export default function AdminDashboard({
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F0F2F5] text-[#5F6C7B] dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-slate-300">
                               {coverUrl ? (
-                                <img src={coverUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                                <img src={resolveMediaUrl(coverUrl)} alt="" className="h-full w-full object-cover" loading="lazy" />
                               ) : (
                                 <TypeIcon className="h-4 w-4" strokeWidth={1.75} />
                               )}
@@ -2239,32 +2276,16 @@ export default function AdminDashboard({
                 </TableBody>
               </Table>
 
-              {totalAdminPropertyPages > 1 && (
-                <div className="flex items-center justify-between border-t border-[#1C2B33]/[0.07] bg-[#F7F8FA]/70 px-4 py-3 dark:border-white/[0.07] dark:bg-[#16191D]/60 sm:px-5">
-                  <span className="text-xs font-medium text-[#5F6C7B] tabular-nums">
-                    Page {adminPropertyPage} of {totalAdminPropertyPages} · {filteredProps.length} total
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      disabled={adminPropertyPage === 1}
-                      onClick={() => setAdminPropertyPage(p => Math.max(1, p - 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                    </Button>
-                    <span className="min-w-[24px] text-center text-xs font-semibold tabular-nums text-[#1C2B33] dark:text-slate-200">{adminPropertyPage}</span>
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      disabled={adminPropertyPage === totalAdminPropertyPages}
-                      onClick={() => setAdminPropertyPage(p => Math.min(totalAdminPropertyPages, p + 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-4 pb-4 sm:px-5">
+                <Pagination
+                  page={adminPropertyPage}
+                  pageCount={Math.max(1, totalAdminPropertyPages)}
+                  total={filteredProps.length}
+                  pageSize={10}
+                  onPageChange={setAdminPropertyPage}
+                  label="properties"
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -2414,34 +2435,16 @@ export default function AdminDashboard({
                 </TableBody>
               </Table>
 
-              {totalPlatformPages > 1 && (
-                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
-                  <span className="text-xs text-slate-500 font-medium pl-2">
-                    Page {platformPage} of {totalPlatformPages}
-                  </span>
-                  <div className="flex items-center gap-1.5 pr-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={platformPage === 1}
-                      onClick={() => setPlatformPage(p => Math.max(1, p - 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                    </Button>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{platformPage}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={platformPage === totalPlatformPages}
-                      onClick={() => setPlatformPage(p => Math.min(totalPlatformPages, p + 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-4 pb-4 sm:px-5">
+                <Pagination
+                  page={platformPage}
+                  pageCount={Math.max(1, totalPlatformPages)}
+                  total={filteredPlats.length}
+                  pageSize={10}
+                  onPageChange={setPlatformPage}
+                  label="platforms"
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -2568,34 +2571,16 @@ export default function AdminDashboard({
                   </Table>
               )}
 
-              {totalAuditLogPages > 1 && (
-                <div className="flex items-center justify-between p-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/20">
-                  <span className="text-xs text-slate-500 font-medium pl-2">
-                    Page {auditLogPage} of {totalAuditLogPages}
-                  </span>
-                  <div className="flex items-center gap-1.5 pr-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={auditLogPage === 1}
-                      onClick={() => setAuditLogPage(p => Math.max(1, p - 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="h-2.5 w-2.5" />
-                    </Button>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 min-w-[20px] text-center">{auditLogPage}</span>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="rounded-lg h-7 w-7 p-0"
-                      disabled={auditLogPage === totalAuditLogPages}
-                      onClick={() => setAuditLogPage(p => Math.min(totalAuditLogPages, p + 1))}
-                    >
-                      <FontAwesomeIcon icon={faChevronRight} className="h-2.5 w-2.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <div className="px-4 pb-4 sm:px-5">
+                <Pagination
+                  page={auditLogPage}
+                  pageCount={Math.max(1, totalAuditLogPages)}
+                  total={filteredAudits.length}
+                  pageSize={15}
+                  onPageChange={setAuditLogPage}
+                  label="events"
+                />
+              </div>
             </CardContent>
           </Card>
         )}
@@ -2636,7 +2621,7 @@ export default function AdminDashboard({
                 {/* Cover Preview */}
                 <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-[#1C2B33]/[0.08] bg-[#F0F2F5] dark:border-white/[0.08] dark:bg-white/[0.04]">
                   {photos[0] ? (
-                    <img src={photos[0]} alt="" className="h-full w-full object-cover" />
+                    <img src={resolveMediaUrl(photos[0])} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-1.5 text-[#8A94A6]">
                       <TypeIcon className="h-7 w-7" strokeWidth={1.5} />
@@ -2661,7 +2646,7 @@ export default function AdminDashboard({
                   <div className="grid grid-cols-4 gap-2">
                     {photos.slice(1, 5).map((url, idx) => (
                       <div key={idx} className="aspect-square overflow-hidden rounded-lg border border-[#1C2B33]/[0.08] bg-[#F7F8FA]">
-                        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        <img src={resolveMediaUrl(url)} alt="" className="h-full w-full object-cover" loading="lazy" />
                       </div>
                     ))}
                   </div>
@@ -2765,7 +2750,7 @@ export default function AdminDashboard({
           <div className="p-6 space-y-4">
             <div className="flex flex-col items-center gap-3">
               <div className="relative h-20 w-20 rounded-full overflow-hidden bg-violet-50 dark:bg-white/10 ring-2 ring-violet-500/20">
-                <img src={adminProfile.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
+                <img src={resolveMediaUrl(adminProfile.avatarUrl) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} alt="Profile" className="h-full w-full object-cover" />
               </div>
               <PhotoCaptureControl
                 defaultFacingMode="user"
@@ -2919,8 +2904,14 @@ export default function AdminDashboard({
                 </Select>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-xs font-medium text-[#1C2B33] dark:text-slate-200">Description</label>
+                <PropertyDescriptionPresets
+                  type={(editingProperty.type || 'residential') as 'residential' | 'commercial' | 'bnb'}
+                  location={editingProperty.location}
+                  description={editingProperty.description || ''}
+                  onChangeDescription={(next) => setEditingProperty({ ...editingProperty, description: next })}
+                />
                 <Textarea
                   className="min-h-[76px] rounded-lg border-[#D0D5DD] text-sm dark:border-white/12 dark:bg-[#16191D]"
                   value={editingProperty.description || ''}
@@ -2941,7 +2932,7 @@ export default function AdminDashboard({
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                     {parseImageList(editingProperty.images).map((url, idx) => (
                       <div key={`${url}-${idx}`} className="group relative aspect-[4/3] overflow-hidden rounded-lg border border-[#221844]/[0.08] bg-[#F8F7FC] dark:border-white/10 dark:bg-white/5">
-                        <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                        <img src={resolveMediaUrl(url)} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                         <button
                           type="button"
                           aria-label="Remove photo"

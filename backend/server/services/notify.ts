@@ -1,33 +1,77 @@
 import {sql} from 'drizzle-orm';
 import {db, schema} from '../../db/client.ts';
 import type {RentPaymentRecord, UserProfileRecord} from '../types.ts';
+import {appBaseUrl} from '../http/config.ts';
 import {sendEmail} from './email.ts';
 
 export {sendEmail};
 
-export const sendPushNotification = async (targetUserId: string, title: string, message: string) => {
-  const ONE_SIGNAL_APP_ID = "16fe44a9-e285-4d7d-85f0-8b82014b9a71";
-  const ONE_SIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY; 
-  if (!ONE_SIGNAL_REST_API_KEY) return null;
+const DEFAULT_ONESIGNAL_APP_ID = '16fe44a9-e285-4d7d-85f0-8b82014b9a71';
 
-  const response = await fetch("https://onesignal.com/api/v1/notifications", {
-    method: "POST",
+export type PushNotificationOptions = {
+  url?: string;
+  data?: Record<string, unknown>;
+};
+
+export const sendPushNotification = async (
+  targetUserId: string,
+  title: string,
+  message: string,
+  options: PushNotificationOptions = {},
+) => {
+  const appId = process.env.ONESIGNAL_APP_ID || DEFAULT_ONESIGNAL_APP_ID;
+  const apiKey = process.env.ONESIGNAL_REST_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn('[OneSignal] ONESIGNAL_REST_API_KEY is not configured; push delivery skipped (in-app alert still saved).');
+    return null;
+  }
+
+  // OneSignal v2 REST API keys (os_v2_app_...) require "Key <token>"; legacy REST keys use "Basic <token>".
+  const authHeader = apiKey.startsWith('os_v2_') ? `Key ${apiKey}` : `Basic ${apiKey}`;
+  const targetUrl = options.url || appBaseUrl;
+
+  const response = await fetch('https://api.onesignal.com/notifications', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Authorization": `Basic ${ONE_SIGNAL_REST_API_KEY}`
+      'Content-Type': 'application/json; charset=utf-8',
+      Authorization: authHeader,
     },
     body: JSON.stringify({
-      app_id: ONE_SIGNAL_APP_ID,
-      target_channel: "push",
+      app_id: appId,
+      target_channel: 'push',
       include_aliases: {
-        external_id: [targetUserId]
+        external_id: [targetUserId],
       },
-      headings: { en: title },
-      contents: { en: message }
-    })
+      headings: {en: title},
+      contents: {en: message},
+      url: targetUrl,
+      web_url: targetUrl,
+      priority: 10,
+      ...(options.data ? {data: options.data} : {}),
+    }),
   });
 
-  return response.json();
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    console.error('[OneSignal] Push failed:', response.status, errorText);
+    return null;
+  }
+
+  return response.json().catch(() => null);
+};
+
+export const sendPushToEmail = async (
+  email: string,
+  title: string,
+  message: string,
+  options: PushNotificationOptions = {},
+) => {
+  const user = await db.query.users.findFirst({
+    where: sql`lower(${schema.users.email}) = ${email.trim().toLowerCase()}`,
+    columns: {uid: true},
+  });
+  if (!user?.uid) return null;
+  return sendPushNotification(user.uid, title, message, options);
 };
 
 export const insertNotification = async (payload: {
@@ -38,22 +82,23 @@ export const insertNotification = async (payload: {
   message?: string | null;
   propertyId?: string | null;
   read?: boolean;
+  url?: string;
 }) => {
+  const {url, ...dbPayload} = payload;
   // Savepoint: callers often swallow notification failures; that must not abort their transaction.
-  await db.transaction((tx) => tx.insert(schema.notifications).values(payload));
+  await db.transaction((tx) => tx.insert(schema.notifications).values(dbPayload));
 
-  const user = await db.query.users.findFirst({
-    where: sql`lower(${schema.users.email}) = ${payload.recipientEmail.toLowerCase()}`,
-    columns: {uid: true},
+  const title = String(payload.title || 'New Notification');
+  const message = String(payload.message || 'You have a new update.');
+  await sendPushToEmail(payload.recipientEmail, title, message, {
+    url: url || appBaseUrl,
+    data: {
+      type: payload.type ?? 'notification',
+      ...(payload.propertyId ? {propertyId: payload.propertyId} : {}),
+    },
+  }).catch((err) => {
+    console.error('[OneSignal] Failed to send push:', err);
   });
-
-  if (user?.uid) {
-    const title = String(payload.title || 'New Notification');
-    const message = String(payload.message || 'You have a new update.');
-    await sendPushNotification(user.uid, title, message).catch(err => {
-      console.error('[OneSignal] Failed to send push:', err);
-    });
-  }
 };
 
 export const notifyRentPaymentSuccess = async ({

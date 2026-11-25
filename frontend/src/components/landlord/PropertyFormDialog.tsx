@@ -3,7 +3,9 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { uploadFile } from '../../lib/api';
+import { resolveMediaUrl } from '../../lib/fileUrl';
 import PhotoCaptureControl from '../PhotoCaptureControl';
+import PropertyDescriptionPresets from '../PropertyDescriptionPresets';
 import type { Building, Property, PropertyStatus, PropertyType } from './types';
 import { ActionButton, Field, inputClass } from './ui';
 
@@ -167,13 +169,23 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
           )}
 
           <Field label="Description">
-            <textarea
-              className={`${inputClass} h-24 py-2.5`}
-              value={values.description}
-              onChange={(e) => set('description', e.target.value)}
-              placeholder="Bedrooms, parking, water, security, nearby roads or schools…"
-              maxLength={2000}
-            />
+            <div className="space-y-2.5">
+              <PropertyDescriptionPresets
+                type={values.type}
+                location={values.location}
+                description={values.description}
+                onChangeDescription={(next) => set('description', next)}
+                amenities={values.amenities}
+                onChangeAmenities={(next) => set('amenities', next)}
+              />
+              <textarea
+                className={`${inputClass} h-24 py-2.5`}
+                value={values.description}
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="Bedrooms, parking, water, security, nearby roads or schools…"
+                maxLength={2000}
+              />
+            </div>
           </Field>
 
           <Field label="Amenities" hint="Separate with commas.">
@@ -191,7 +203,7 @@ export default function PropertyFormDialog({ open, property, buildings, allowBui
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {values.images.map((url, index) => (
                   <div key={url + index} className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                    <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                    <img src={resolveMediaUrl(url)} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                     <button
                       type="button"
                       aria-label="Remove photo"

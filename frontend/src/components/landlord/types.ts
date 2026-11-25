@@ -39,7 +39,39 @@ export interface MaintenanceRequest {
   description: string;
   status: RequestStatus;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+  resolutionNotes?: string | null;
+  updatedAt?: string | null;
   createdAt: string;
+}
+
+export interface CaretakerMember {
+  uid: string;
+  email: string;
+  displayName: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  status: 'active' | 'suspended';
+  createdAt: string;
+}
+
+export interface CaretakerReport {
+  id: string;
+  landlordId: string;
+  caretakerId: string;
+  propertyId?: string | null;
+  buildingId?: string | null;
+  category: 'maintenance' | 'security' | 'cleanliness' | 'utility' | 'tenant_issue' | 'inspection' | 'other';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  title: string;
+  description: string;
+  images: string[];
+  status: 'open' | 'acknowledged' | 'resolved';
+  landlordNotes?: string | null;
+  caretakerName?: string | null;
+  caretakerEmail?: string | null;
+  caretakerPhone?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RentPayment {
@@ -116,4 +148,4 @@ export interface Tenant {
   invitedAt: string;
 }
 
-export type LandlordTab = 'dashboard' | 'properties' | 'tenants' | 'pending' | 'finances' | 'maintenance' | 'automations';
+export type LandlordTab = 'dashboard' | 'properties' | 'tenants' | 'caretakers' | 'pending' | 'finances' | 'maintenance' | 'automations';

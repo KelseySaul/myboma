@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { UserProfile } from '../App';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Pagination, usePagination } from '@/components/ui/pagination';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faHome, faBuilding, faHotel } from '@fortawesome/free-solid-svg-icons';
 import { Loader2 } from 'lucide-react';
@@ -75,6 +76,7 @@ export default function HunterDashboard({
   const filteredProperties = searchTerm.trim()
     ? searchListings(ofType, searchTerm).map((result) => result.listing)
     : [...ofType].sort((a, b) => Number(likedPropertyIds.has(b.id)) - Number(likedPropertyIds.has(a.id)));
+  const listingsPager = usePagination(filteredProperties, 12);
 
   const searchInput = (
     <div className="relative group w-full">
@@ -147,17 +149,29 @@ export default function HunterDashboard({
             <p className="text-xs font-medium text-zinc-400">Loading homes…</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredProperties.map((property) => (
-              <ListingCard
-                key={property.id}
-                listing={property}
-                liked={likedPropertyIds.has(property.id)}
-                onToggleLike={toggleLike}
-                onOpen={setSelected}
+          <>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-5 sm:gap-y-8 lg:grid-cols-3 xl:grid-cols-4">
+              {listingsPager.pageItems.map((property) => (
+                <ListingCard
+                  key={property.id}
+                  listing={property}
+                  liked={likedPropertyIds.has(property.id)}
+                  onToggleLike={toggleLike}
+                  onOpen={setSelected}
+                />
+              ))}
+            </div>
+            <div className="mt-6">
+              <Pagination
+                page={listingsPager.page}
+                pageCount={listingsPager.pageCount}
+                total={listingsPager.total}
+                pageSize={listingsPager.pageSize}
+                onPageChange={listingsPager.setPage}
+                label="listings"
               />
-            ))}
-          </div>
+            </div>
+          </>
         )}
 
         {filteredProperties.length === 0 && !loading && (

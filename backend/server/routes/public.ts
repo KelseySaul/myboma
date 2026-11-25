@@ -18,6 +18,7 @@ import {
 } from '../http/middleware.ts';
 import {uuidSchema} from '../http/schemas.ts';
 import {publicListingsCache, weakEtag} from '../http/cache.ts';
+import {normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {runDailyJobs} from '../services/dailyJobs.ts';
 import {streamStoredObject} from '../services/files.ts';
 import {sendEmail} from '../services/notify.ts';
@@ -61,16 +62,8 @@ const healthHandler = (_req: Request, res: Response) => {
   });
 };
 
-/** Routes stored legacy Render file URLs through the current public API origin. */
-const publicImageUrl = (request: Request, value: string) => {
-  try {
-    const parsed = new URL(value);
-    if (!parsed.pathname.startsWith('/api/files/')) return value;
-    return `${request.protocol}://${request.get('host')}${parsed.pathname}${parsed.search}`;
-  } catch {
-    return value;
-  }
-};
+/** Routes stored legacy Render / localhost file URLs cleanly for the current origin. */
+const publicImageUrl = (request: Request, value: string) => normalizeStoredFileUrl(request, value);
 
 /** Public (unauthenticated) routes and provider webhooks, registered after express.json(). */
 /** Public feed: never expose tenant references or internal fields. */

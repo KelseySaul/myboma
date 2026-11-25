@@ -4,7 +4,9 @@ import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
 import {canCreateMaintenanceRequest} from '../../db/authz.ts';
 import {toActor, type UserProfileRecord} from '../types.ts';
+import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {asyncHandler, getValidatedBody, hasActiveSubscription, requireAuth, validateBody} from '../http/middleware.ts';
+import {insertNotification} from '../services/notify.ts';
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
 
 const createMaintenanceRequestSchema = z
@@ -93,7 +95,27 @@ export function registerTenantRoutes(bffRouter: Router) {
             Boolean(tier && SUBSCRIPTION_TIERS[tier].features.maintenanceHub));
       }
 
-      res.json({property, properties: tenantProperties, leases, landlord, requests, payments, notifications, repairsEnabled});
+      const normalizedProperties = tenantProperties.map((p) => ({
+        ...p,
+        price: Number(p.price),
+        images: normalizeMediaArray(req, p.images),
+      }));
+      const normalizedPayments = payments.map((p) => ({
+        ...p,
+        amount: Number(p.amount),
+        receiptUrl: p.receiptUrl ? normalizeStoredFileUrl(req, p.receiptUrl) : p.receiptUrl,
+      }));
+
+      res.json({
+        property: normalizedProperties[0] ?? null,
+        properties: normalizedProperties,
+        leases,
+        landlord,
+        requests,
+        payments: normalizedPayments,
+        notifications,
+        repairsEnabled,
+      });
     }),
   );
 
@@ -135,6 +157,35 @@ export function registerTenantRoutes(bffRouter: Router) {
           status: 'pending',
         })
         .returning();
+
+      // Alert landlord and any caretakers assigned to this landlord via push + in-app notification.
+      const [landlordUser, caretakers] = await Promise.all([
+        db.query.users.findFirst({where: eq(schema.users.uid, property.landlordId), columns: {email: true}}),
+        db.query.users.findMany({
+          where: eq(schema.users.managedByAdminId, property.landlordId),
+          columns: {email: true, role: true, status: true},
+        }),
+      ]);
+      const recipientEmails = new Set<string>();
+      if (landlordUser?.email) recipientEmails.add(landlordUser.email.toLowerCase());
+      for (const ct of caretakers) {
+        if (ct.role === 'caretaker' && ct.status === 'active') {
+          recipientEmails.add(ct.email.toLowerCase());
+        }
+      }
+      await Promise.allSettled(
+        [...recipientEmails].map((recipientEmail) =>
+          insertNotification({
+            recipientEmail,
+            platformId: property.platformId,
+            type: 'maintenance',
+            title: `New ${body.priority} repair request: ${body.title}`,
+            message: `${req.profile!.displayName || req.profile!.email} reported: ${body.description.slice(0, 180)}`,
+            propertyId: property.id,
+            read: false,
+          }),
+        ),
+      );
 
       res.status(201).json(request);
     }),

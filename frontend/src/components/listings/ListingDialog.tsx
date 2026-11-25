@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Home, Loader2, MapPin, X } fro
 import { toast } from 'sonner';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { submitEnquiry } from '../../lib/api';
+import { resolveMediaUrl } from '../../lib/fileUrl';
 import { TYPE_LABELS, formatKes, priceUnit, type Listing } from './types';
 
 interface Prefill {
@@ -61,7 +62,7 @@ function Gallery({ images, title }: { images: string[]; title: string }) {
       {images.map((src, i) => (
         <img
           key={src}
-          src={src}
+          src={resolveMediaUrl(src)}
           alt={i === index ? `${title}, photo ${i + 1} of ${count}` : ''}
           loading={i === 0 ? 'eager' : 'lazy'}
           decoding="async"

@@ -28,3 +28,6 @@ r2keys.docx
 *.apk
 *.ipa
 *.aab
+
+# Local development upload fallback storage
+backend/.uploads/

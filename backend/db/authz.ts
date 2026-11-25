@@ -15,11 +15,15 @@ import { db, schema } from './client.js';
 export type Actor = {
   id: string; // users.uid (== Better-Auth user.id)
   email: string;
-  role: 'landlord' | 'tenant' | 'hunter' | 'admin';
+  role: 'landlord' | 'tenant' | 'hunter' | 'admin' | 'caretaker';
   isAdmin: boolean;
   isSuperAdmin: boolean;
   platformId: string | null;
+  managedByAdminId?: string | null;
 };
+
+export const isCaretakerOfLandlord = (actor: Actor, landlordId: string) =>
+  actor.role === 'caretaker' && Boolean(actor.managedByAdminId) && actor.managedByAdminId === landlordId;
 
 const email = (value: string) => value.trim().toLowerCase();
 
@@ -111,7 +115,7 @@ export function canWriteUser(
     row.uid === actor.id &&
     row.isSuperAdmin === false &&
     row.isAdmin === false &&
-    (['landlord', 'tenant', 'hunter'] as string[]).includes(row.role)
+    (['landlord', 'tenant', 'hunter', 'caretaker'] as string[]).includes(row.role)
   );
 }
 
@@ -136,6 +140,7 @@ type PropertyRow = typeof schema.properties.$inferSelect;
 export async function canViewProperty(actor: Actor, property: PropertyRow): Promise<boolean> {
   if (property.status === 'available') return true;
   if (property.landlordId === actor.id) return true;
+  if (isCaretakerOfLandlord(actor, property.landlordId)) return true;
   if (email(property.tenantId ?? '') === email(actor.email)) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, property.platformId)) return true;
@@ -195,6 +200,7 @@ type MaintenanceRow = typeof schema.maintenanceRequests.$inferSelect;
 
 export async function canViewMaintenanceRequest(actor: Actor, row: MaintenanceRow): Promise<boolean> {
   if (row.tenantId === actor.id || row.landlordId === actor.id) return true;
+  if (isCaretakerOfLandlord(actor, row.landlordId)) return true;
   if (isSuperAdmin(actor)) return true;
   return isPropertyManager(actor, row.propertyId);
 }
@@ -208,10 +214,32 @@ export async function canUpdateMaintenanceRequest(
   row: { landlordId: string; propertyId: string; platformId: string | null },
 ): Promise<boolean> {
   if (row.landlordId === actor.id) return true;
+  if (isCaretakerOfLandlord(actor, row.landlordId)) return true;
   if (isSuperAdmin(actor)) return true;
   if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
   return isPropertyManager(actor, row.propertyId);
 }
+
+// ---------------------------------------------------------------------------
+// caretaker_reports — caretakers file reports to their landlord; landlords and
+// platform/super admins review, acknowledge, and resolve them.
+// ---------------------------------------------------------------------------
+export const canViewCaretakerReport = (
+  actor: Actor,
+  row: { landlordId: string; caretakerId: string; platformId: string | null },
+) =>
+  row.landlordId === actor.id ||
+  row.caretakerId === actor.id ||
+  isSuperAdmin(actor) ||
+  (isAdmin(actor) && platformMatches(actor.platformId, row.platformId));
+
+export const canUpdateCaretakerReport = (
+  actor: Actor,
+  row: { landlordId: string; platformId: string | null },
+) =>
+  row.landlordId === actor.id ||
+  isSuperAdmin(actor) ||
+  (isAdmin(actor) && platformMatches(actor.platformId, row.platformId));
 
 // ---------------------------------------------------------------------------
 // rentPayments — tenants have NO write access at all (mutations are landlord/

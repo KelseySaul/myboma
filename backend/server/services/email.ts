@@ -208,6 +208,7 @@ export const sendEmail = async ({to, subject, text, html, template, replyTo}: Se
 const ROLE_LABELS: Record<string, string> = {
   tenant: 'Tenant',
   landlord: 'Landlord',
+  caretaker: 'Caretaker',
   admin: 'Administrator',
   hunter: 'House hunter',
 };

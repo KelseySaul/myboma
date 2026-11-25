@@ -14,7 +14,7 @@ import {resolveSignupProfile} from './invitePolicy.ts';
 // admin rights are only ever granted by a super admin (provisioning / role endpoint)
 // or by an admin invitation once the invitee has proven ownership of the mailbox.
 const SELF_SIGNUP_ROLES = ['landlord', 'tenant', 'hunter'] as const;
-type Role = (typeof SELF_SIGNUP_ROLES)[number] | 'admin';
+type Role = (typeof SELF_SIGNUP_ROLES)[number] | 'admin' | 'caretaker';
 
 /**
  * Ports supabase-setup.sql's handle_new_user() trigger: on every new auth user
@@ -75,6 +75,7 @@ async function seedProfileForNewAuthUser(
   await db.insert(schema.users).values({
     uid: authUser.id,
     platformId: invitedPlatformId,
+    managedByAdminId: resolved.applyInvitation && invited?.role === 'caretaker' ? (invited.landlordId ?? null) : null,
     email: normalizedEmail,
     displayName,
     role: resolvedRole,
@@ -114,12 +115,16 @@ async function applyInvitationAfterVerification(authUser: { id: string; email?: 
         .update(schema.users)
         .set({ role: 'admin', isAdmin: true, platformId: invited.platformId ?? null })
         .where(eq(schema.users.uid, authUser.id));
-    } else if (profile.role === 'hunter' && (invited.role === 'tenant' || invited.role === 'landlord')) {
+    } else if (profile.role === 'hunter' && (invited.role === 'tenant' || invited.role === 'landlord' || invited.role === 'caretaker')) {
       // Only a plain account is upgraded; a role the person already earned (e.g. a paid
       // landlord) is never replaced by an invitation.
       await db
         .update(schema.users)
-        .set({ role: invited.role, platformId: profile.platformId ?? invited.platformId ?? null })
+        .set({
+          role: invited.role,
+          platformId: profile.platformId ?? invited.platformId ?? null,
+          ...(invited.role === 'caretaker' && invited.landlordId ? { managedByAdminId: invited.landlordId } : {}),
+        })
         .where(eq(schema.users.uid, authUser.id));
     }
   }

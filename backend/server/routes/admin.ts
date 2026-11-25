@@ -6,6 +6,7 @@ import {db, schema} from '../../db/client.ts';
 import {invalidatePublicListings} from '../http/cache.ts';
 import {canAdministerBuilding, canWriteUser, isSuperAdmin} from '../../db/authz.ts';
 import {updatePlatformBrandingSchema} from '../adminHandlers.ts';
+import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {toActor} from '../types.ts';
 import {
   asyncHandler,
@@ -24,7 +25,7 @@ import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload, type InvitePayload} from '
 
 const resendInviteSchema = z.object({email: emailSchema}).strict();
 
-const updateRoleSchema = z.object({role: z.enum(['landlord', 'tenant', 'hunter', 'admin', 'superadmin'])}).strict();
+const updateRoleSchema = z.object({role: z.enum(['landlord', 'tenant', 'hunter', 'caretaker', 'admin', 'superadmin'])}).strict();
 
 const createPlatformSchema = z
   .object({name: z.string().min(1).max(160), slug: z.string().min(1).max(80), ownerEmail: emailSchema})
@@ -100,7 +101,30 @@ export function registerAdminRoutes(bffRouter: Router) {
 
       const platforms = isSuperAdmin(actor) ? await db.query.platforms.findMany() : [];
 
-      res.json({users, properties, invitations, payments, buildings, platforms});
+      res.json({
+        users: users.map((u) => ({
+          ...u,
+          avatarUrl: u.avatarUrl ? normalizeStoredFileUrl(req, u.avatarUrl) : u.avatarUrl,
+        })),
+        properties: properties.map((p) => ({
+          ...p,
+          price: Number(p.price),
+          images: normalizeMediaArray(req, p.images),
+        })),
+        invitations,
+        payments: payments.map((p) => ({
+          ...p,
+          receiptUrl: p.receiptUrl ? normalizeStoredFileUrl(req, p.receiptUrl) : p.receiptUrl,
+        })),
+        buildings,
+        platforms: platforms.map((pl) => ({
+          ...pl,
+          brandLogoUrl:
+            typeof pl.brandLogoUrl === 'string' && pl.brandLogoUrl
+              ? normalizeStoredFileUrl(req, pl.brandLogoUrl)
+              : pl.brandLogoUrl,
+        })),
+      });
     }),
   );
 
@@ -170,7 +194,7 @@ export function registerAdminRoutes(bffRouter: Router) {
     '/admin/accounts',
     requireAuth,
     requireSuperAdmin,
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const accounts = await db.query.users.findMany({
         orderBy: desc(schema.users.createdAt),
         limit: 500,
@@ -186,7 +210,12 @@ export function registerAdminRoutes(bffRouter: Router) {
           status: true,
         },
       });
-      res.json(accounts);
+      res.json(
+        accounts.map((a) => ({
+          ...a,
+          avatarUrl: a.avatarUrl ? normalizeStoredFileUrl(req, a.avatarUrl) : a.avatarUrl,
+        })),
+      );
     }),
   );
 

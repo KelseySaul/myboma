@@ -107,8 +107,15 @@ export default function CommandPalette({ profile, currentRole, onNavigate, onHel
         { id: 'finances', label: 'Rent & payments', section: 'Navigation', keywords: 'invoices mpesa money billing', icon: Wallet, action: go('finances') },
         { id: 'maintenance', label: 'Maintenance', section: 'Navigation', keywords: 'repairs issues', icon: Wrench, action: go('maintenance') },
         { id: 'tenants', label: 'Tenants', section: 'Navigation', keywords: 'renters leases', icon: Users, action: go('tenants') },
+        { id: 'caretakers', label: 'Caretakers & reports', section: 'Navigation', keywords: 'team staff caretakers reports issues', icon: UserCheck, action: go('caretakers') },
         { id: 'pending', label: 'Pending invites', section: 'Navigation', keywords: 'invitations email onboarding resend', icon: Mail, action: go('pending') },
         { id: 'automations', label: 'Notifications', section: 'Navigation', keywords: 'alerts reminders', icon: Bell, action: go('automations') },
+      );
+    } else if (currentRole === 'caretaker') {
+      nav.push(
+        { id: 'repairs', label: 'Repairs & issues', section: 'Navigation', keywords: 'maintenance tickets respond fix', icon: Wrench, action: go('repairs') },
+        { id: 'reports', label: 'Reports to landlord', section: 'Navigation', keywords: 'file report inspection incident photos', icon: ClipboardList, action: go('reports') },
+        { id: 'automations', label: 'Notifications', section: 'Navigation', keywords: 'alerts messages', icon: Bell, action: go('automations') },
       );
     } else if (currentRole === 'tenant') {
       nav.push(

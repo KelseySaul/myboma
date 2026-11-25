@@ -15,6 +15,7 @@ import { tenantConfig } from './config/tenant';
 // Role dashboards and secondary routes are code-split so initial load stays fast and lean.
 const LandlordDashboard = lazy(() => import('./components/LandlordDashboard'));
 const TenantDashboard = lazy(() => import('./components/TenantDashboard'));
+const CaretakerDashboard = lazy(() => import('./components/CaretakerDashboard'));
 const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
@@ -64,7 +65,8 @@ import {
 import { Toaster, toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { initializeOneSignal, promptForPush, syncOneSignalIdentity } from './lib/oneSignal';
+import { initializeOneSignal, promptForPush, showBrowserPushNotification, syncOneSignalIdentity } from './lib/oneSignal';
+import { resolveMediaUrl } from './lib/fileUrl';
 
 const shouldShowOnboarding = (role: UserRole): boolean => {
   try {
@@ -79,8 +81,8 @@ import {
   type PendingLandlordSubscription,
 } from '../../shared/landlordSubscription';
 import { queryClient, clearQueryCache } from './lib/queryClient';
-import { queryKeys, useSessionProfile } from './lib/queries';
-export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin';
+import { queryKeys, useSessionProfile, useUnreadCount } from './lib/queries';
+export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin' | 'caretaker';
 
 export { promptForPush } from './lib/oneSignal';
 
@@ -111,7 +113,7 @@ export interface UserProfile {
   privacyVersion?: string;
 }
 
-const VALID_ROLES: UserRole[] = ['landlord', 'tenant', 'hunter', 'admin'];
+const VALID_ROLES: UserRole[] = ['landlord', 'tenant', 'hunter', 'admin', 'caretaker'];
 
 const normalizeRole = (role?: string | null): UserRole => (
   VALID_ROLES.includes(role as UserRole) ? role as UserRole : 'hunter'
@@ -335,6 +337,25 @@ export default function App() {
     setProfile(p);
     setActiveView(prev => (!p.isAdmin ? p.role : prev || p.role));
   }, [sessionData]);
+
+  // Live push bridge: whenever unread notifications increase while signed in, fire a
+  // native browser push notification (when permitted) and an in-app toast alert.
+  const { data: liveUnreadCount } = useUnreadCount(profile?.email);
+  const prevUnreadRef = useRef<number | null>(null);
+  useEffect(() => {
+    prevUnreadRef.current = null;
+  }, [profile?.email]);
+  useEffect(() => {
+    if (typeof liveUnreadCount !== 'number') return;
+    if (prevUnreadRef.current !== null && liveUnreadCount > prevUnreadRef.current) {
+      const diff = liveUnreadCount - prevUnreadRef.current;
+      const title = diff === 1 ? 'New MyBoma notification' : `${diff} new MyBoma notifications`;
+      const body = 'Open Notifications to read your rent reminder or update.';
+      showBrowserPushNotification(title, body);
+      toast.info(title, { description: body });
+    }
+    prevUnreadRef.current = liveUnreadCount;
+  }, [liveUnreadCount]);
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
@@ -754,6 +775,13 @@ export default function App() {
                         setActiveTab={setActiveTab}
                       />
                     )}
+                    {currentRole === 'caretaker' && (
+                      <CaretakerDashboard
+                        profile={activeProfile!}
+                        activeTab={activeTab || 'dashboard'}
+                        setActiveTab={setActiveTab}
+                      />
+                    )}
                     {currentRole === 'hunter' && (
                       <HunterDashboard
                         profile={activeProfile!}
@@ -950,7 +978,7 @@ export default function App() {
                 </button>
               );})}
               {(() => {
-                const isMenuTabActive = ['pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
+                const isMenuTabActive = ['caretakers', 'pending', 'maintenance', 'automations', 'settings'].includes(activeTab);
                 return (
                   <button
                     onClick={() => setIsMobileMenuOpen(true)}
@@ -999,6 +1027,7 @@ export default function App() {
             
             <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
               {[
+                { id: 'caretakers',  label: 'Caretakers & reports', icon: faUsers },
                 { id: 'pending',     label: 'Pending invites', icon: faLink },
                 { id: 'maintenance', label: 'Repairs', icon: faTools },
                 { id: 'automations', label: 'Notifications', icon: faBell },
@@ -1091,12 +1120,51 @@ export default function App() {
         </nav>
       )}
 
+      {currentRole === 'caretaker' && (
+        <nav className="sm:hidden mobile-bottom-nav fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181922]/95 border-t border-[#221844]/[0.08] dark:border-white/[0.08] shadow-lg">
+          <div className="flex items-center justify-around h-15 px-1">
+            {[
+              { id: 'dashboard',   label: 'Home',     icon: faChartPie },
+              { id: 'repairs',     label: 'Repairs',  icon: faTools },
+              { id: 'reports',     label: 'Reports',  icon: faClipboardList },
+              { id: 'automations', label: 'Alerts',   icon: faBell },
+              { id: 'settings',    label: 'Settings', icon: faCog },
+            ].map(t => {
+              const isActive = (activeTab || 'dashboard') === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all cursor-pointer ${
+                    isActive
+                      ? 'text-violet-700 dark:text-violet-300 font-bold'
+                      : 'text-[#8A86A1] hover:text-[#161426]'
+                  }`}
+                >
+                  <div className={`flex items-center justify-center h-7 w-9 rounded-xl transition-all ${
+                    isActive ? 'bg-violet-600/12 dark:bg-violet-500/20' : ''
+                  }`}>
+                    <FontAwesomeIcon icon={t.icon} className={`text-xs ${isActive ? 'text-violet-700 dark:text-violet-300' : 'text-[#8A86A1]'}`} />
+                  </div>
+                  <span className={`text-[9px] uppercase tracking-wide leading-none ${
+                    isActive ? 'font-bold text-violet-700 dark:text-violet-300' : 'font-medium text-[#8A86A1]'
+                  }`}>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
       {profile && (
         <div className="fixed bottom-20 right-4 z-40 sm:hidden">
           <AccountMenu profile={profile} activeView={activeView}
             setActiveView={(role) => { setActiveView(role); setActiveTab(''); }}
             setActiveTab={setActiveTab} onHelpClick={() => setShowOnboarding(true)} side="top"
-            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30 ring-2 ring-white dark:ring-[#181922]">{profile.avatarUrl ? <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
+            trigger={<button type="button" aria-label="Open account menu" className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700 via-purple-600 to-fuchsia-600 text-sm font-bold text-white shadow-lg shadow-violet-700/30 ring-2 ring-white dark:ring-[#181922]">{profile.avatarUrl ? <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" /> : profile.displayName?.charAt(0).toUpperCase() || 'U'}</button>} />
         </div>
       )}
       <Toaster />

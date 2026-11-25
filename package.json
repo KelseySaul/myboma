@@ -57,6 +57,7 @@
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
     "express-rate-limit": "^8.4.1",
+    "firebase": "^13.4.0",
     "helmet": "^8.2.0",
     "http-proxy-middleware": "^3.0.5",
     "leaflet": "^1.9.4",

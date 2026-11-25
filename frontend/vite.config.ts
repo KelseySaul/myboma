@@ -44,6 +44,9 @@ export default defineConfig({
           if (normalized.includes('/node_modules/@fortawesome/')) return 'icons-fa';
           if (normalized.includes('/node_modules/leaflet/')) return 'maps-leaflet';
           if (normalized.includes('/node_modules/better-auth/')) return 'auth-vendor';
+          if (normalized.includes('/node_modules/firebase/') || normalized.includes('/node_modules/@firebase/')) {
+            return 'firebase-vendor';
+          }
         },
       },
     },

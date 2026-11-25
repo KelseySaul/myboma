@@ -23,6 +23,8 @@ import {registerHunterRoutes} from './server/routes/hunter.ts';
 import {registerLandlordRoutes} from './server/routes/landlord.ts';
 import {registerAdminRoutes} from './server/routes/admin.ts';
 import {registerPaymentRoutes} from './server/routes/payments.ts';
+import {registerCaretakerRoutes} from './server/routes/caretaker.ts';
+import {registerFirebaseAuthRoutes} from './server/routes/firebaseAuth.ts';
 
 const app = express();
 // gzip/brotli for text responses (HTML, JS, CSS, JSON); images are skipped by its filter.
@@ -63,10 +65,23 @@ app.use(
         baseUri: ["'self'"],
         objectSrc: ["'none'"],
         frameAncestors: ["'none'"],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        // cdn.onesignal.com: the web push SDK, also importScripts()-ed by /OneSignalSDKWorker.js,
-        // which is served with this same policy.
-        scriptSrc: ["'self'", 'https://cdn.onesignal.com', 'https://api.onesignal.com'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        // cdn.onesignal.com: web push SDK; google.com / gstatic.com: Firebase Phone Auth reCAPTCHA.
+        scriptSrc: [
+          "'self'",
+          'https://cdn.onesignal.com',
+          'https://api.onesignal.com',
+          'https://www.google.com',
+          'https://www.gstatic.com',
+          'https://www.recaptcha.net',
+          'https://apis.google.com',
+        ],
+        frameSrc: [
+          "'self'",
+          'https://www.google.com',
+          'https://www.recaptcha.net',
+          'https://*.firebaseapp.com',
+        ],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://onesignal.com'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
         connectSrc: [
@@ -81,6 +96,10 @@ app.use(
           'https://onesignal.com',
           'https://cdn.onesignal.com',
           'https://api.onesignal.com',
+          'https://identitytoolkit.googleapis.com',
+          'https://securetoken.googleapis.com',
+          'https://www.googleapis.com',
+          'https://*.firebaseapp.com',
         ].filter(Boolean),
       },
     },
@@ -105,6 +124,10 @@ app.use(
 // Baseline for every /api request (per session, or per IP when signed out). Provider
 // webhooks are exempt here and keep their own webhookLimiter.
 app.use('/api', apiLimiter);
+
+// Firebase Phone OTP token exchange (parses JSON before Better-Auth's wildcard handler).
+app.post('/api/auth/firebase-phone', express.json({limit: '32kb'}));
+registerFirebaseAuthRoutes(app);
 
 // Better-Auth parses its own request body, so it's mounted before express.json() too.
 // Credential endpoints get a tight brute-force budget before anything else runs.
@@ -134,6 +157,7 @@ registerHunterRoutes(bffRouter);
 registerLandlordRoutes(bffRouter);
 registerAdminRoutes(bffRouter);
 registerPaymentRoutes(bffRouter);
+registerCaretakerRoutes(bffRouter);
 
 app.use('/api/web', bffRouter);
 app.use('/api/mobile', bffRouter);

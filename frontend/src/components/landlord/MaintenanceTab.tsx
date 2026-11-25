@@ -82,6 +82,11 @@ export default function MaintenanceTab({ enabled, requests, propertyName, tenant
                       {(request.priority === 'urgent' || request.priority === 'high') && <StatusPill status={request.priority} />}
                     </div>
                     <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">{request.description}</p>
+                    {request.resolutionNotes && (
+                      <p className="mt-1.5 rounded-lg bg-violet-50/80 px-2.5 py-1.5 text-xs text-violet-900 dark:bg-violet-500/15 dark:text-violet-200">
+                        <span className="font-semibold">Update note:</span> {request.resolutionNotes}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-zinc-500">
                       {propertyName(request.propertyId)} · {tenantName(request.tenantId)} · {shortDate(request.createdAt)}
                     </p>

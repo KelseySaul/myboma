@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Building2, Home, MoreVertical, Pencil, Plus, Trash2, UserPlus, Users } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Pagination, usePagination } from '@/components/ui/pagination';
+import { resolveMediaUrl } from '../../lib/fileUrl';
 import type { Building, Property } from './types';
 import { ActionButton, EmptyBlock, FilterChips, Panel, SearchInput, StatusPill, kes } from './ui';
 
@@ -131,7 +132,7 @@ export default function PropertiesTab(props: PropertiesTabProps) {
               <article key={property.id} className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white transition hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
                 <button type="button" onClick={() => props.onEdit(property)} className="relative block aspect-[16/10] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800" aria-label={`Edit ${property.title}`}>
                   {property.images?.[0] ? (
-                    <img src={property.images[0]} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    <img src={resolveMediaUrl(property.images[0])} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
                   ) : (
                     <span className="flex h-full items-center justify-center text-sm text-zinc-400">No photo yet</span>
                   )}

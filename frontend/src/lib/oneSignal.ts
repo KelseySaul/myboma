@@ -84,9 +84,28 @@ export async function promptForPush() {
     if (!nativeInitialized) return false;
     return OneSignalNative.Notifications.requestPermission(true);
   }
+  if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission().catch(() => undefined);
+  }
   if (!webInitialized) return false;
-  await OneSignalWeb.Slidedown.promptPush();
+  await OneSignalWeb.Slidedown.promptPush().catch(() => undefined);
   return true;
+}
+
+/** Shows a real OS browser push banner when the user has granted browser notification permission. */
+export function showBrowserPushNotification(title: string, body?: string | null) {
+  if (Capacitor.isNativePlatform()) return;
+  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, {
+      body: body || undefined,
+      icon: '/bomalog.webp',
+      badge: '/bomalog.webp',
+    });
+  } catch {
+    /* ignore browsers that require a ServiceWorker registration for new Notification() */
+  }
 }
 
 /** Keep OneSignal's external ID aligned with the backend notification target (users.uid). */

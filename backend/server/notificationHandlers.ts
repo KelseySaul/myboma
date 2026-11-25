@@ -1,6 +1,7 @@
 import {and, eq, gte, inArray, lte, sql} from 'drizzle-orm';
 import {db, schema} from '../db/client.ts';
-import {canViewRentPayment, isAdmin} from '../db/authz.ts';
+import {canViewRentPayment} from '../db/authz.ts';
+import {sendPushToEmail} from './services/notify.ts';
 import {toActor} from './types.ts';
 import type {AuthenticatedRequest} from './types.ts';
 
@@ -14,6 +15,7 @@ export type NotificationDependencies = {
     message?: string | null;
     propertyId?: string | null;
     read?: boolean;
+    url?: string;
   }) => Promise<void>;
 };
 
@@ -21,52 +23,8 @@ export const sendOneSignalPushNotification = async (
   email: string,
   title: string,
   message: string,
-  url?: string
-) => {
-  const appId = process.env.ONESIGNAL_APP_ID;
-  const apiKey = process.env.ONESIGNAL_REST_API_KEY;
-
-  if (!appId || !apiKey) {
-    console.warn('[OneSignal] Missing App ID or API Key. Push notification skipped.');
-    return;
-  }
-
-  const recipient = await db.query.users.findFirst({
-    where: sql`lower(${schema.users.email}) = ${email.trim().toLowerCase()}`,
-    columns: {uid: true},
-  });
-  if (!recipient) {
-    console.warn('[OneSignal] No user account found for push recipient. Push notification skipped.');
-    return;
-  }
-
-  try {
-    const response = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${apiKey}`,
-      },
-      body: JSON.stringify({
-        app_id: appId,
-        target_channel: 'push',
-        include_aliases: {
-          external_id: [recipient.uid],
-        },
-        headings: {en: title},
-        contents: {en: message},
-        url,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('[OneSignal Error]', response.status, errorData);
-    }
-  } catch (err) {
-    console.error('[OneSignal Request Failed]', err);
-  }
-};
+  url?: string,
+) => sendPushToEmail(email, title, message, {url, data: {type: 'reminder'}});
 
 /** Looks up a rent payment plus its property's display fields in one query. */
 async function findRentPaymentWithProperty(rentPaymentId: string) {
@@ -125,6 +83,8 @@ async function dispatchRentReminderForPayment(
     ? `Reminder: Your rent payment of KES ${amount} for ${propertyLabel} was due on ${dueDateStr} and is now overdue. Please pay promptly via MyBoma.`
     : `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
 
+  // insertNotification persists the in-app alert and triggers the OneSignal push once,
+  // avoiding duplicate push notifications on the tenant's device.
   await Promise.allSettled([
     insertNotification({
       recipientEmail: tenantEmail.toLowerCase(),
@@ -140,7 +100,6 @@ async function dispatchRentReminderForPayment(
       subject: title,
       text: message,
     }),
-    sendOneSignalPushNotification(tenantEmail, title, message),
   ]);
 
   return {ok: true, tenantEmail: tenantEmail.toLowerCase()};
@@ -307,7 +266,6 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
         subject: title,
         text: message,
       }),
-      sendOneSignalPushNotification(tenantEmail, title, message),
     ]);
     for (const result of results) {
       if (result.status === 'rejected') console.error(`[Reminders] Delivery failed for payment ${payment.id}:`, result.reason);

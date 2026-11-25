@@ -7,6 +7,7 @@ import {
   canAdministerBuilding,
   canAdministerProperty,
   canManageProperty,
+  canUpdateCaretakerReport,
   canUpdateMaintenanceRequest,
   isAdminInPlatform,
   isSuperAdmin,
@@ -14,6 +15,8 @@ import {
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
 import {ensureRentInvoiceForProperty, syncAutomaticRentInvoices} from '../rentInvoiceSync.ts';
 import {endLeaseForProperty, endLeasesForTenant, startLease} from '../leases.ts';
+import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
+import {insertNotification} from '../services/notify.ts';
 import type {UserProfileRecord} from '../types.ts';
 import {toActor} from '../types.ts';
 import {
@@ -29,7 +32,7 @@ import {
   FREE_PLAN_BUILDING_ERROR,
   validateBody,
 } from '../http/middleware.ts';
-import {emailSchema, parseAccountIdsParam} from '../http/schemas.ts';
+import {emailSchema, mediaUrlSchema, parseAccountIdsParam} from '../http/schemas.ts';
 import {invalidatePublicListings} from '../http/cache.ts';
 import {createAndSendInvite} from '../inviteService.ts';
 import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload, type InvitePayload} from '../invitePolicy.ts';
@@ -163,7 +166,14 @@ const expenseInputSchema = z
     description: z.string().min(1).max(500),
     amount: z.number().min(0),
     expenseDate: z.string(),
-    receiptUrl: z.string().url().nullable().optional(),
+    receiptUrl: mediaUrlSchema.nullable().optional(),
+  })
+  .strict();
+
+const updateCaretakerReportSchema = z
+  .object({
+    status: z.enum(['open', 'acknowledged', 'resolved']),
+    landlordNotes: z.string().trim().max(2000).nullable().optional(),
   })
   .strict();
 
@@ -204,6 +214,8 @@ export function registerLandlordRoutes(bffRouter: Router) {
             notifications: [],
             leases: [],
             registeredEmails: [],
+            caretakers: [],
+            caretakerReports: [],
           });
           return;
         }
@@ -225,6 +237,8 @@ export function registerLandlordRoutes(bffRouter: Router) {
             notifications: [],
             leases: [],
             registeredEmails: [],
+            caretakers: [],
+            caretakerReports: [],
           });
           return;
         }
@@ -302,10 +316,9 @@ export function registerLandlordRoutes(bffRouter: Router) {
           : Promise.resolve([]),
       ]);
 
-      // Lease terms for the tenant list, and which invitees have already created an account
-      // (an invitation without an account is still "waiting for the tenant to accept").
+      // Lease terms for the tenant list, registered accounts, caretakers, and caretaker reports.
       const invitedEmails = invitations.map((i) => i.email.toLowerCase());
-      const [leases, invitedAccounts] = await Promise.all([
+      const [leases, invitedAccounts, caretakers, caretakerReportRows] = await Promise.all([
         propertyIds.length
           ? db.query.leases.findMany({
               where: and(inArray(schema.leases.propertyId, propertyIds), eq(schema.leases.status, 'active')),
@@ -318,20 +331,62 @@ export function registerLandlordRoutes(bffRouter: Router) {
               .from(schema.users)
               .where(inArray(sql`lower(${schema.users.email})`, invitedEmails))
           : Promise.resolve([] as {email: string}[]),
+        db.query.users.findMany({
+          where: and(inArray(schema.users.managedByAdminId, targetIds), eq(schema.users.role, 'caretaker')),
+          columns: {
+            uid: true,
+            email: true,
+            displayName: true,
+            phone: true,
+            avatarUrl: true,
+            status: true,
+            createdAt: true,
+            managedByAdminId: true,
+          },
+          orderBy: desc(schema.users.createdAt),
+        }),
+        db.query.caretakerReports.findMany({
+          where: inArray(schema.caretakerReports.landlordId, targetIds),
+          orderBy: desc(schema.caretakerReports.createdAt),
+          limit: 300,
+        }),
       ]);
       const registeredEmails = invitedAccounts.map((u) => u.email.toLowerCase());
+      const caretakerByUid = new Map(caretakers.map((c) => [c.uid, c]));
 
       res.json({
         buildings,
-        properties,
+        properties: properties.map((p) => ({
+          ...p,
+          price: Number(p.price),
+          images: normalizeMediaArray(req, p.images),
+        })),
         requests,
-        payments,
+        payments: payments.map((p) => ({
+          ...p,
+          receiptUrl: p.receiptUrl ? normalizeStoredFileUrl(req, p.receiptUrl) : p.receiptUrl,
+        })),
         bookings,
-        expenses,
+        expenses: expenses.map((e) => ({
+          ...e,
+          amount: Number(e.amount),
+          receiptUrl: e.receiptUrl ? normalizeStoredFileUrl(req, e.receiptUrl) : e.receiptUrl,
+        })),
         invitations,
         notifications,
         leases: leases.map((l) => ({...l, rentAmount: Number(l.rentAmount), depositAmount: Number(l.depositAmount)})),
         registeredEmails,
+        caretakers: caretakers.map((c) => ({
+          ...c,
+          avatarUrl: c.avatarUrl ? normalizeStoredFileUrl(req, c.avatarUrl) : null,
+        })),
+        caretakerReports: caretakerReportRows.map((rep) => ({
+          ...rep,
+          images: normalizeMediaArray(req, rep.images),
+          caretakerName: caretakerByUid.get(rep.caretakerId)?.displayName ?? null,
+          caretakerEmail: caretakerByUid.get(rep.caretakerId)?.email ?? null,
+          caretakerPhone: caretakerByUid.get(rep.caretakerId)?.phone ?? null,
+        })),
       });
     }),
   );
@@ -800,7 +855,14 @@ export function registerLandlordRoutes(bffRouter: Router) {
   bffRouter.patch(
     '/landlord/maintenance-requests/:id',
     requireAuth,
-    validateBody(z.object({status: z.enum(['pending', 'in-progress', 'resolved'])}).strict()),
+    validateBody(
+      z
+        .object({
+          status: z.enum(['pending', 'in-progress', 'resolved']),
+          resolutionNotes: z.string().trim().max(2000).nullable().optional(),
+        })
+        .strict(),
+    ),
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
       const request = await db.query.maintenanceRequests.findFirst({where: eq(schema.maintenanceRequests.id, req.params.id)});
@@ -813,7 +875,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         return;
       }
       // The maintenance hub is a Pro/Pro Plus feature of the unit owner's plan.
-      if (!actor.isAdmin && !actor.isSuperAdmin) {
+      if (!actor.isAdmin && !actor.isSuperAdmin && actor.role !== 'caretaker') {
         const owner = await db.query.users.findFirst({where: eq(schema.users.uid, request.landlordId)});
         const tier = parseSubscriptionPlan(owner?.subscriptionPlan)?.tier;
         const entitled =
@@ -825,13 +887,112 @@ export function registerLandlordRoutes(bffRouter: Router) {
           return;
         }
       }
-      const {status} = getValidatedBody<{status: 'pending' | 'in-progress' | 'resolved'}>(req);
+      const {status, resolutionNotes} = getValidatedBody<{
+        status: 'pending' | 'in-progress' | 'resolved';
+        resolutionNotes?: string | null;
+      }>(req);
       const [updated] = await db
         .update(schema.maintenanceRequests)
-        .set({status})
+        .set({
+          status,
+          ...(resolutionNotes !== undefined ? {resolutionNotes} : {}),
+          updatedById: actor.id,
+          updatedAt: new Date(),
+        })
         .where(eq(schema.maintenanceRequests.id, req.params.id))
         .returning();
       res.json(updated);
+    }),
+  );
+
+  /** Landlord reviews, acknowledges, or resolves a report filed by one of their caretakers. */
+  bffRouter.patch(
+    '/landlord/caretaker-reports/:id',
+    requireAuth,
+    validateBody(updateCaretakerReportSchema),
+    asyncHandler(async (req, res) => {
+      const actor = toActor(req.profile!);
+      const report = await db.query.caretakerReports.findFirst({
+        where: eq(schema.caretakerReports.id, req.params.id),
+      });
+      if (!report) {
+        res.status(404).json({error: 'Caretaker report not found'});
+        return;
+      }
+      if (!canUpdateCaretakerReport(actor, report)) {
+        res.status(403).json({error: 'Forbidden'});
+        return;
+      }
+
+      const body = getValidatedBody<z.infer<typeof updateCaretakerReportSchema>>(req);
+      const [updated] = await db
+        .update(schema.caretakerReports)
+        .set({
+          status: body.status,
+          ...(body.landlordNotes !== undefined ? {landlordNotes: body.landlordNotes} : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.caretakerReports.id, req.params.id))
+        .returning();
+
+      const caretaker = await db.query.users.findFirst({
+        where: eq(schema.users.uid, report.caretakerId),
+        columns: {email: true},
+      });
+      if (caretaker?.email) {
+        const noteText = body.landlordNotes ? ` Note: "${body.landlordNotes}"` : '';
+        await insertNotification({
+          recipientEmail: caretaker.email.toLowerCase(),
+          platformId: report.platformId,
+          type: 'caretaker_report',
+          title: `Report ${body.status}: ${report.title}`,
+          message: `${req.profile!.displayName || 'Your landlord'} marked your report "${report.title}" as ${body.status}.${noteText}`,
+          propertyId: report.propertyId,
+          read: false,
+        }).catch(() => undefined);
+      }
+
+      await recordAudit(req.profile!, 'CARETAKER_REPORT_UPDATE', 'caretaker_report', updated.id, {status: body.status});
+      res.json({...updated, images: normalizeMediaArray(req, updated.images)});
+    }),
+  );
+
+  /** Landlord removes a caretaker account from their team (revokes caretaker link + manager assignments). */
+  bffRouter.delete(
+    '/landlord/caretakers/:uid',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const actor = toActor(req.profile!);
+      const targetUid = req.params.uid;
+      const caretaker = await db.query.users.findFirst({
+        where: eq(schema.users.uid, targetUid),
+        columns: {uid: true, email: true, role: true, managedByAdminId: true},
+      });
+      if (!caretaker || caretaker.role !== 'caretaker') {
+        res.status(404).json({error: 'Caretaker not found'});
+        return;
+      }
+      if (!isSuperAdmin(actor) && caretaker.managedByAdminId !== actor.id) {
+        res.status(403).json({error: 'You can only remove caretakers on your own team.'});
+        return;
+      }
+
+      await withSystemAccess(() =>
+        db.transaction(async (tx) => {
+          await tx
+            .delete(schema.propertyManagers)
+            .where(and(eq(schema.propertyManagers.userId, targetUid), eq(schema.propertyManagers.landlordId, caretaker.managedByAdminId ?? actor.id)));
+          await tx
+            .update(schema.users)
+            .set({managedByAdminId: null, status: 'suspended'})
+            .where(eq(schema.users.uid, targetUid));
+          await tx
+            .delete(schema.invitations)
+            .where(and(sql`lower(${schema.invitations.email}) = ${caretaker.email.toLowerCase()}`, eq(schema.invitations.role, 'caretaker')));
+        }),
+      );
+      await recordAudit(req.profile!, 'CARETAKER_REMOVED', 'user', targetUid, {email: caretaker.email});
+      res.json({removed: true});
     }),
   );
 

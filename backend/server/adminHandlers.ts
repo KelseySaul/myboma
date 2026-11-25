@@ -5,39 +5,15 @@ import {z} from 'zod';
 import {createAndSendInvite} from './inviteService.ts';
 import {db, schema} from '../db/client.ts';
 import {invalidatePublicListings} from './http/cache.ts';
+import {mediaUrlSchema} from './http/schemas.ts';
 import type {AuthenticatedRequest, UserProfileRecord} from './types.ts';
+import {
+  assertCanProvision,
+  provisionUserSchema,
+  resolveProvisionedLandlordSubscription,
+} from './provisionPolicy.ts';
 
-const emailSchema = z.string().email().max(320);
-const passwordSchema = z.string().min(8).max(128);
-const phoneSchema = z
-  .string()
-  .max(20)
-  .regex(/^\+?\d+$/)
-  .or(z.literal(''))
-  .nullable()
-  .optional();
-
-export const provisionUserSchema = z
-  .object({
-    email: emailSchema,
-    // Ignored: invitees choose their own password from the emailed link. Still accepted so
-    // older app versions that send one keep working.
-    password: passwordSchema.optional(),
-    displayName: z.string().min(1).max(120),
-    phone: phoneSchema,
-    role: z.enum(['tenant', 'landlord', 'hunter', 'admin']),
-    platformId: z.string().uuid().nullable().optional(),
-    landlordId: z.string().uuid().optional(),
-    mustChangePassword: z.boolean().optional(),
-    rentRouting: z.enum(['direct', 'admin']).optional(),
-    rentPayoutMethod: z.enum(['cash', 'mpesa', 'bank']).optional(),
-    mpesaSettlementPhone: phoneSchema,
-    mpesaSettlementShortCode: z.string().optional(),
-    bankName: z.string().optional(),
-    bankAccountNumber: z.string().optional(),
-    bankAccountName: z.string().optional(),
-  })
-  .strict();
+export {assertCanProvision, provisionUserSchema, resolveProvisionedLandlordSubscription};
 
 export const suspendUserSchema = z
   .object({
@@ -53,7 +29,7 @@ export const manualRentPaidSchema = z
 
 export const updatePlatformBrandingSchema = z
   .object({
-    brandLogoUrl: z.string().url().or(z.literal('')).nullable().optional(),
+    brandLogoUrl: mediaUrlSchema.or(z.literal('')).nullable().optional(),
     brandPrimaryColor: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).or(z.literal('')).nullable().optional(),
     brandSecondaryColor: z.string().regex(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/).or(z.literal('')).nullable().optional(),
   })
@@ -74,51 +50,6 @@ export const syncSuperAdminFromEnv = async (
   return updated as unknown as UserProfileRecord;
 };
 
-const forbidden = (message: string) => {
-  const error = new Error(message);
-  (error as any).statusCode = 403;
-  return error;
-};
-
-/**
- * Who may create which accounts:
- * - super admin: anything, including other admins.
- * - platform admin (isAdmin): tenants/landlords/hunters inside their own platform only.
- * - Pro Plus agency admin / landlord: tenants for themselves; agencies may also add
- *   managed landlords. Nobody but a super admin can mint an admin.
- */
-export const assertCanProvision = (
-  actor: UserProfileRecord,
-  body: z.infer<typeof provisionUserSchema>,
-  isAgencyAdmin = false,
-) => {
-  if (actor.isSuperAdmin) return;
-  if (body.role === 'admin') throw forbidden('Only a super admin can create admin accounts.');
-
-  if (actor.isAdmin) {
-    if (!actor.platformId) throw forbidden('Your admin account is not attached to a platform.');
-    if (body.platformId && body.platformId !== actor.platformId) {
-      throw forbidden('Cannot provision users outside your platform.');
-    }
-    return;
-  }
-
-  if (body.platformId && body.platformId !== (actor.platformId ?? null)) {
-    throw forbidden('Cannot provision users outside your platform.');
-  }
-
-  if (body.role === 'tenant') {
-    if (body.landlordId && body.landlordId !== actor.uid) {
-      throw forbidden('You can only provision tenants for your own account.');
-    }
-    if (actor.role === 'landlord' || isAgencyAdmin) return;
-  }
-
-  if (body.role === 'landlord' && isAgencyAdmin) return;
-
-  throw forbidden('You are not allowed to provision this user type.');
-};
-
 export const handleProvisionUser = async (req: AuthenticatedRequest, res: Response, isAgencyAdmin = false) => {
   const body = req.validatedBody as z.infer<typeof provisionUserSchema>;
   const actor = req.profile!;
@@ -127,7 +58,10 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
   const email = body.email.toLowerCase();
   const platformId = actor.isSuperAdmin ? (body.platformId ?? actor.platformId ?? null) : (actor.platformId ?? null);
   // Every invitation records who created it, so the creator (and RLS) can see it later.
-  const landlordId = body.role === 'tenant' ? body.landlordId || actor.uid : (body.landlordId ?? actor.uid);
+  const landlordId =
+    body.role === 'tenant' || body.role === 'caretaker'
+      ? body.landlordId || actor.uid
+      : (body.landlordId ?? actor.uid);
 
   // Provisioning invites NEW people only. Updating an existing user from here let any
   // landlord rewrite someone else's role, admin flags and rent routing.
@@ -164,27 +98,30 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
   // account themselves (choosing their own password) — see server/inviteService.ts. The
   // provisioning-specific profile fields travel with the invite and are applied on accept.
   const isManagedLandlord = body.role === 'landlord';
+  const isCaretaker = body.role === 'caretaker';
   const direct = body.rentRouting === 'direct';
   const profile = {
     rentRecipientId: isManagedLandlord && body.rentRouting === 'admin' ? actor.uid : null,
-    managedByAdminId: isManagedLandlord ? actor.uid : null,
+    managedByAdminId: isManagedLandlord ? actor.uid : isCaretaker ? (landlordId ?? actor.uid) : null,
     rentPayoutMethod: direct ? (body.rentPayoutMethod ?? null) : null,
     mpesaSettlementPhone: direct ? (body.mpesaSettlementPhone || null) : null,
     mpesaSettlementShortCode: direct ? (body.mpesaSettlementShortCode ?? null) : null,
     bankName: direct ? (body.bankName ?? null) : null,
     bankAccountNumber: direct ? (body.bankAccountNumber ?? null) : null,
     bankAccountName: direct ? (body.bankAccountName ?? null) : null,
+    ...(isCaretaker && body.propertyIds?.length ? {propertyIds: body.propertyIds} : {}),
     ...(isManagedLandlord
-      ? // Landlords managed by a platform admin are covered by the platform; landlords
-        // managed by a Pro Plus agency inherit the agency's plan (and are extended when
-        // the agency renews — see activateLandlordSubscription).
-        actor.isAdmin || actor.isSuperAdmin
-        ? {subscriptionPlan: 'proplus:yearly', subscriptionStatus: 'active' as const, subscriptionExpiresAt: '2099-12-31T23:59:59Z'}
-        : {
-            subscriptionPlan: actor.subscriptionPlan ?? null,
-            subscriptionStatus: (actor.subscriptionStatus ?? 'none') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
-            subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt).toISOString() : null,
-          }
+      ? // Super admins can assign any explicit subscription tier; platform admins cover their
+        // landlords; Pro Plus agencies pass their own subscription to managed landlords.
+        actor.isSuperAdmin
+        ? resolveProvisionedLandlordSubscription(body.subscriptionTier, body.subscriptionBilling ?? 'monthly')
+        : actor.isAdmin
+          ? {subscriptionPlan: 'proplus:yearly', subscriptionStatus: 'active' as const, subscriptionExpiresAt: '2099-12-31T23:59:59Z'}
+          : {
+              subscriptionPlan: actor.subscriptionPlan ?? null,
+              subscriptionStatus: (actor.subscriptionStatus ?? 'none') as 'none' | 'pending' | 'active' | 'expired' | 'suspended',
+              subscriptionExpiresAt: actor.subscriptionExpiresAt ? new Date(actor.subscriptionExpiresAt).toISOString() : null,
+            }
       : {}),
   };
 
@@ -297,7 +234,7 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
 
     if (!actor.isSuperAdmin) {
       let isCreator = false;
-      if (!actor.isAdmin && !targetUser.isAdmin && ['tenant', 'landlord'].includes(targetUser.role)) {
+      if (!actor.isAdmin && !targetUser.isAdmin && ['tenant', 'landlord', 'caretaker'].includes(targetUser.role)) {
         // "Creator" means the account was created from this actor's invitation (the
         // invitation predates the account) or is a landlord they manage — merely
         // linking an existing user later must not grant the power to delete them.

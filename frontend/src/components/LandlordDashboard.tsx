@@ -21,12 +21,14 @@ import {
   markNotificationRead,
   markRentPaymentManual,
   provisionUser,
+  removeCaretaker,
   resendLandlordInvitation,
   sendBulkRentReminders,
   sendRentReminder,
   syncRentInvoices,
   unassignTenant,
   updateBuilding,
+  updateCaretakerReport,
   updateMaintenanceRequestStatus,
   updateProperty,
 } from '../lib/api';
@@ -36,6 +38,7 @@ import type { UserProfile } from '../App';
 import OverviewTab from './landlord/OverviewTab';
 import PropertiesTab from './landlord/PropertiesTab';
 import TenantsTab from './landlord/TenantsTab';
+import TeamTab from './landlord/TeamTab';
 import PendingInvitesTab from './landlord/PendingInvitesTab';
 import PaymentsTab from './landlord/PaymentsTab';
 import MaintenanceTab from './landlord/MaintenanceTab';
@@ -56,6 +59,8 @@ import { useBusy } from './landlord/ui';
 import type {
   Booking,
   Building,
+  CaretakerMember,
+  CaretakerReport,
   Expense,
   Invitation,
   LandlordTab,
@@ -79,6 +84,7 @@ const SUPER_ADMIN_TAB_CONTEXT: Record<LandlordTab, string> = {
   dashboard: 'Overview',
   properties: 'Properties',
   tenants: 'Tenants',
+  caretakers: 'Caretakers & reports',
   pending: 'Pending invites',
   finances: 'Rent & payments',
   maintenance: 'Maintenance',
@@ -89,6 +95,7 @@ const SUPER_ADMIN_TAB_GATE_LABEL: Record<LandlordTab, string> = {
   dashboard: 'the dashboard overview',
   properties: 'properties',
   tenants: 'tenants',
+  caretakers: 'caretakers & reports',
   pending: 'pending invites',
   finances: 'rent & payments',
   maintenance: 'maintenance requests',
@@ -139,7 +146,7 @@ export default function LandlordDashboard({
     if (error) toast.error('Could not load your dashboard. Check your connection and try again.');
   }, [error]);
 
-  const raw = data as (typeof data & { leases?: Lease[]; registeredEmails?: string[] }) | undefined;
+  const raw = data as (typeof data & { leases?: Lease[]; registeredEmails?: string[]; caretakers?: CaretakerMember[]; caretakerReports?: CaretakerReport[] }) | undefined;
   const properties = (raw?.properties ?? []) as Property[];
   const buildings = (raw?.buildings ?? []) as Building[];
   const requests = (raw?.requests ?? []) as MaintenanceRequest[];
@@ -149,10 +156,16 @@ export default function LandlordDashboard({
   const invitations = (raw?.invitations ?? []) as Invitation[];
   const notifications = (raw?.notifications ?? []) as Notification[];
   const leases = (raw?.leases ?? []) as Lease[];
+  const caretakers = (raw?.caretakers ?? []) as CaretakerMember[];
+  const caretakerReports = (raw?.caretakerReports ?? []) as CaretakerReport[];
   const registered = useMemo(() => new Set((raw?.registeredEmails ?? []).map((e) => e.toLowerCase())), [raw?.registeredEmails]);
   const pendingInvitations = useMemo(
     () => invitations.filter((inv) => !registered.has(inv.email.toLowerCase())),
     [invitations, registered],
+  );
+  const pendingCaretakerInvites = useMemo(
+    () => pendingInvitations.filter((inv) => inv.role === 'caretaker'),
+    [pendingInvitations],
   );
   const loading = !needsAccountSelection && (isPending || (shouldSyncOwnInvoices && syncedUid !== profile.uid));
 
@@ -177,7 +190,10 @@ export default function LandlordDashboard({
 
   const tenants = useMemo<Tenant[]>(() => {
     const emails = new Map<string, Invitation | null>();
-    for (const inv of invitations) emails.set(inv.email.toLowerCase(), inv);
+    for (const inv of invitations) {
+      if (inv.role === 'caretaker') continue;
+      emails.set(inv.email.toLowerCase(), inv);
+    }
     for (const p of properties) if (p.tenantId?.includes('@') && !emails.has(p.tenantId.toLowerCase())) emails.set(p.tenantId.toLowerCase(), null);
 
     return [...emails.entries()].map(([email, inv]) => {
@@ -223,7 +239,7 @@ export default function LandlordDashboard({
     bankAccountName: profile.bankAccountName ?? '',
   }));
 
-  const tab: LandlordTab = (['properties', 'tenants', 'pending', 'finances', 'maintenance', 'automations'] as const).includes(activeTab as any)
+  const tab: LandlordTab = (['properties', 'tenants', 'caretakers', 'pending', 'finances', 'maintenance', 'automations'] as const).includes(activeTab as any)
     ? (activeTab as LandlordTab)
     : 'dashboard';
 
@@ -339,6 +355,56 @@ export default function LandlordDashboard({
     await refresh();
     toast.success(result.existing ? `${values.email} already has an account and was added to your tenants` : `Invite sent to ${values.email}`);
   };
+
+  const inviteCaretaker = async (values: { displayName: string; email: string; phone: string; propertyIds: string[] }) => {
+    const targetLandlordId = isSuperAdminScoped && selectedAccountIds.length === 1 ? selectedAccountIds[0] : profile.uid;
+    await provisionUser({
+      email: values.email,
+      displayName: values.displayName,
+      phone: values.phone || undefined,
+      role: 'caretaker',
+      platformId: profile.platformId,
+      landlordId: targetLandlordId,
+      propertyIds: values.propertyIds.length ? values.propertyIds : undefined,
+    });
+    logAudit('CARETAKER_INVITE', 'user', values.email);
+    await refresh();
+    toast.success(`Caretaker invite sent to ${values.email}`);
+  };
+
+  const handleRemoveCaretaker = (caretaker: CaretakerMember) => {
+    setConfirm({
+      title: 'Remove caretaker',
+      body: `Remove ${caretaker.displayName} (${caretaker.email}) from your team? They will lose access to your units and repair queue.`,
+      confirmLabel: 'Remove caretaker',
+      danger: true,
+      action: async () => {
+        await run(`remove-ct-${caretaker.uid}`, async () => {
+          await removeCaretaker(caretaker.uid);
+          await refresh();
+          toast.success(`${caretaker.displayName} removed from your team`);
+        });
+      },
+    });
+  };
+
+  const handleUpdateCaretakerReport = (
+    report: CaretakerReport,
+    status: 'open' | 'acknowledged' | 'resolved',
+    landlordNotes?: string,
+  ) =>
+    run(`report-${report.id}`, async () => {
+      try {
+        await updateCaretakerReport(report.id, {
+          status,
+          landlordNotes: landlordNotes?.trim() || null,
+        });
+        await refresh();
+        toast.success(`Report marked ${status}. Your caretaker has been notified.`);
+      } catch (err: any) {
+        toast.error(err.message || 'Could not update report');
+      }
+    });
 
   const resendInvite = (target: { email: string }) => {
     const emailLower = target.email.toLowerCase();
@@ -599,6 +665,22 @@ export default function LandlordDashboard({
               onAssign={openAssignForTenant}
               onUnassign={tenantMoveOut}
               onRemove={removeTenant}
+            />
+          )}
+
+          {tab === 'caretakers' && (
+            <TeamTab
+              caretakers={caretakers}
+              pendingCaretakerInvites={pendingCaretakerInvites}
+              reports={caretakerReports}
+              properties={properties}
+              buildings={buildings}
+              isBusy={isBusy}
+              onInviteCaretaker={inviteCaretaker}
+              onResendInvite={resendInvite}
+              onCancelInvite={cancelInvite}
+              onRemoveCaretaker={handleRemoveCaretaker}
+              onUpdateReport={handleUpdateCaretakerReport}
             />
           )}
 

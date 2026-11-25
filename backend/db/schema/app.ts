@@ -23,12 +23,22 @@ import { authUser } from './auth';
 // rentPayments.tenantId, which historically hold either a uid or an email)
 // keeps its original type.
 
-export const userRoleEnum = pgEnum('user_role', ['landlord', 'tenant', 'hunter', 'admin']);
+export const userRoleEnum = pgEnum('user_role', ['landlord', 'tenant', 'hunter', 'admin', 'caretaker']);
 export const activeSuspendedEnum = pgEnum('active_suspended_status', ['active', 'suspended']);
 export const propertyTypeEnum = pgEnum('property_type', ['residential', 'commercial', 'bnb']);
 export const propertyStatusEnum = pgEnum('property_status', ['available', 'rented', 'booked']);
 export const maintenanceStatusEnum = pgEnum('maintenance_status', ['pending', 'in-progress', 'resolved']);
 export const maintenancePriorityEnum = pgEnum('maintenance_priority', ['low', 'medium', 'high', 'urgent']);
+export const caretakerReportStatusEnum = pgEnum('caretaker_report_status', ['open', 'acknowledged', 'resolved']);
+export const caretakerReportCategoryEnum = pgEnum('caretaker_report_category', [
+  'maintenance',
+  'security',
+  'cleanliness',
+  'utility',
+  'tenant_issue',
+  'inspection',
+  'other',
+]);
 // 'verifying' isn't in supabase-setup.sql's CHECK constraint but is genuinely used by
 // the app (tenant-submitted manual receipts awaiting landlord confirmation) — see
 // app.ts's /rent-payments/:paymentId/mark-manual and TenantDashboard.tsx. The checked-in
@@ -91,6 +101,10 @@ export const users = pgTable('users', {
   index('users_platform_idx').on(t.platformId),
   index('users_managed_by_idx').on(t.managedByAdminId),
   index('users_email_lower_idx').on(sql`lower(${t.email})`),
+  index('users_role_status_idx').on(t.role, t.status),
+  index('users_platform_created_idx').on(t.platformId, t.createdAt),
+  index('users_phone_idx').on(t.phone),
+  index('users_sub_status_expires_idx').on(t.subscriptionStatus, t.subscriptionExpiresAt),
 ]);
 
 export const buildings = pgTable('buildings', {
@@ -105,6 +119,7 @@ export const buildings = pgTable('buildings', {
 }, (t) => [
   index('buildings_landlord_idx').on(t.landlordId),
   index('buildings_platform_idx').on(t.platformId),
+  index('buildings_landlord_created_idx').on(t.landlordId, t.createdAt),
 ]);
 
 export const properties = pgTable('properties', {
@@ -130,6 +145,9 @@ export const properties = pgTable('properties', {
   index('properties_building_idx').on(t.buildingId),
   index('properties_status_created_idx').on(t.status, t.createdAt),
   index('properties_tenant_lower_idx').on(sql`lower(${t.tenantId})`),
+  index('properties_landlord_status_idx').on(t.landlordId, t.status),
+  index('properties_platform_status_created_idx').on(t.platformId, t.status, t.createdAt),
+  index('properties_type_status_idx').on(t.type, t.status),
 ]);
 
 export const maintenanceRequests = pgTable('maintenanceRequests', {
@@ -142,11 +160,40 @@ export const maintenanceRequests = pgTable('maintenanceRequests', {
   description: text('description').notNull(),
   status: maintenanceStatusEnum('status').notNull().default('pending'),
   priority: maintenancePriorityEnum('priority').notNull().default('medium'),
+  resolutionNotes: text('resolutionNotes'),
+  updatedById: uuid('updatedById').references(() => users.uid, { onDelete: 'set null' }),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }),
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('maintenance_landlord_idx').on(t.landlordId),
   index('maintenance_property_idx').on(t.propertyId),
   index('maintenance_tenant_idx').on(t.tenantId),
+  index('maintenance_landlord_status_created_idx').on(t.landlordId, t.status, t.createdAt),
+  index('maintenance_platform_status_idx').on(t.platformId, t.status),
+  index('maintenance_property_status_idx').on(t.propertyId, t.status),
+]);
+
+export const caretakerReports = pgTable('caretaker_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platformId: uuid('platformId').references(() => platforms.id, { onDelete: 'cascade' }),
+  landlordId: uuid('landlordId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  caretakerId: uuid('caretakerId').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  propertyId: uuid('propertyId').references(() => properties.id, { onDelete: 'set null' }),
+  buildingId: uuid('buildingId').references(() => buildings.id, { onDelete: 'set null' }),
+  category: caretakerReportCategoryEnum('category').notNull().default('maintenance'),
+  priority: maintenancePriorityEnum('priority').notNull().default('medium'),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  images: text('images').array().notNull().default([]),
+  status: caretakerReportStatusEnum('status').notNull().default('open'),
+  landlordNotes: text('landlordNotes'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('caretaker_reports_landlord_status_created_idx').on(t.landlordId, t.status, t.createdAt),
+  index('caretaker_reports_caretaker_created_idx').on(t.caretakerId, t.createdAt),
+  index('caretaker_reports_property_idx').on(t.propertyId),
+  index('caretaker_reports_building_idx').on(t.buildingId),
 ]);
 
 export const rentPayments = pgTable('rentPayments', {
@@ -174,6 +221,9 @@ export const rentPayments = pgTable('rentPayments', {
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('rent_payments_landlord_due_idx').on(t.landlordId, t.dueDate),
+  index('rent_payments_landlord_status_due_idx').on(t.landlordId, t.status, t.dueDate),
+  index('rent_payments_platform_status_paid_idx').on(t.platformId, t.status, t.paidAt),
+  index('rent_payments_lease_idx').on(t.leaseId),
   index('rent_payments_property_idx').on(t.propertyId),
   index('rent_payments_tenant_lower_idx').on(sql`lower(${t.tenantId})`),
   index('rent_payments_status_due_idx').on(t.status, t.dueDate),
@@ -234,6 +284,8 @@ export const notifications = pgTable('notifications', {
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('notifications_recipient_read_idx').on(sql`lower(${t.recipientEmail})`, t.read),
+  index('notifications_recipient_created_idx').on(sql`lower(${t.recipientEmail})`, t.createdAt),
+  index('notifications_property_idx').on(t.propertyId),
 ]);
 
 export const invitations = pgTable('invitations', {
@@ -246,6 +298,7 @@ export const invitations = pgTable('invitations', {
   createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index('invitations_landlord_idx').on(t.landlordId),
+  index('invitations_landlord_created_idx').on(t.landlordId, t.createdAt),
   index('invitations_platform_idx').on(t.platformId),
 ]);
 
@@ -259,6 +312,8 @@ export const propertyManagers = pgTable('property_managers', {
 }, (table) => [
   unique().on(table.propertyId, table.userId),
   index('property_managers_user_idx').on(table.userId),
+  index('property_managers_landlord_idx').on(table.landlordId),
+  index('property_managers_property_idx').on(table.propertyId),
 ]);
 
 export const auditLogs = pgTable('audit_logs', {
@@ -274,6 +329,8 @@ export const auditLogs = pgTable('audit_logs', {
 }, (t) => [
   index('audit_logs_created_idx').on(t.createdAt),
   index('audit_logs_user_idx').on(t.userId),
+  index('audit_logs_platform_created_idx').on(t.platformId, t.createdAt),
+  index('audit_logs_email_created_idx').on(sql`lower(${t.userEmail})`, t.createdAt),
 ]);
 
 export const waitlistSignups = pgTable('waitlistSignups', {
@@ -358,6 +415,8 @@ export const leases = pgTable('leases', {
   index('leases_tenant_user_idx').on(t.tenantUserId),
   index('leases_tenant_email_idx').on(sql`lower(${t.tenantEmail})`),
   index('leases_landlord_idx').on(t.landlordId),
+  index('leases_landlord_status_idx').on(t.landlordId, t.status),
+  index('leases_property_status_idx').on(t.propertyId, t.status),
 ]);
 
 export const membershipRoleEnum = pgEnum('membership_role', ['owner', 'admin', 'manager', 'landlord', 'tenant', 'member']);

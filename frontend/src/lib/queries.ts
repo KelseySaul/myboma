@@ -4,6 +4,7 @@ import {
   getAdminPendingInvites,
   getAuditLogs,
   getAvailableProperties,
+  getCaretakerDashboard,
   getImpersonatedUser,
   getLandlordDashboard,
   getSession,
@@ -25,6 +26,7 @@ export const queryKeys = {
   session: (userId: string | null | undefined) => ['session', userId ?? null] as const,
   landlordDashboard: (uid: string, accountIds?: string[]) => ['landlord', 'dashboard', uid, accountKey(accountIds)] as const,
   tenantDashboard: (uid: string) => ['tenant', 'dashboard', uid] as const,
+  caretakerDashboard: (uid: string) => ['caretaker', 'dashboard', uid] as const,
   adminDashboard: (params: AdminDashboardParams) =>
     ['admin', 'dashboard', params.uid, params.viewerPlatformId ?? null, params.platformId ?? 'all'] as const,
   adminPendingInvites: (params: { uid: string; platformId?: string; accountIds?: string[] }) =>
@@ -88,6 +90,15 @@ export const useTenantDashboard = (uid: string) =>
   useQuery({
     queryKey: queryKeys.tenantDashboard(uid),
     queryFn: getTenantDashboard,
+    enabled: Boolean(uid),
+    refetchInterval: DASHBOARD_POLL_MS,
+    refetchOnWindowFocus: true,
+  });
+
+export const useCaretakerDashboard = (uid: string) =>
+  useQuery({
+    queryKey: queryKeys.caretakerDashboard(uid),
+    queryFn: getCaretakerDashboard,
     enabled: Boolean(uid),
     refetchInterval: DASHBOARD_POLL_MS,
     refetchOnWindowFocus: true,

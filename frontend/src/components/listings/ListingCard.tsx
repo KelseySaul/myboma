@@ -1,5 +1,6 @@
 import {useState, type KeyboardEvent, type MouseEvent} from 'react';
 import { Heart, Home, MapPin } from 'lucide-react';
+import { resolveMediaUrl } from '../../lib/fileUrl';
 import { TYPE_LABELS, formatKes, type Listing } from './types';
 
 interface ListingCardProps {
@@ -32,7 +33,7 @@ export default function ListingCard({ listing, liked, onToggleLike, onOpen }: Li
       <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800 sm:aspect-[4/3]">
         {listing.images?.[0] && !imageFailed ? (
           <img
-            src={listing.images[0]}
+            src={resolveMediaUrl(listing.images[0])}
             alt=""
             loading="lazy"
             decoding="async"

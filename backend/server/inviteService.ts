@@ -82,7 +82,13 @@ export const lookupInvite = async (token: unknown): Promise<LookupResult> => {
 /** Gives an account everything its invitation promised: role, platform, profile fields, leases. */
 export const applyInvitationToAccount = async (uid: string, payload: InvitePayload, details: {name: string; phone?: string | null}) => {
   const isAdmin = payload.role === 'admin';
-  const {subscriptionExpiresAt, ...profile} = payload.profile ?? {};
+  const {subscriptionExpiresAt, propertyIds, ...profile} = payload.profile ?? {};
+  const managedByAdminId =
+    profile.managedByAdminId !== undefined
+      ? profile.managedByAdminId
+      : payload.role === 'caretaker'
+        ? payload.landlordId
+        : undefined;
   await db
     .update(schema.users)
     .set({
@@ -93,6 +99,7 @@ export const applyInvitationToAccount = async (uid: string, payload: InvitePaylo
       phone: details.phone?.trim() || payload.phone || null,
       mustChangePassword: false,
       ...profile,
+      ...(managedByAdminId !== undefined ? {managedByAdminId} : {}),
       ...(subscriptionExpiresAt !== undefined
         ? {subscriptionExpiresAt: subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null}
         : {}),
@@ -100,6 +107,22 @@ export const applyInvitationToAccount = async (uid: string, payload: InvitePaylo
     .where(eq(schema.users.uid, uid));
 
   await addPlatformMembership(payload.platformId, uid, isAdmin ? 'admin' : membershipRoleFor({role: payload.role}));
+
+  // If a landlord invited a caretaker with specific properties assigned, link them in property_managers.
+  if (payload.role === 'caretaker' && payload.landlordId && Array.isArray(propertyIds) && propertyIds.length > 0) {
+    const ownedProperties = await db
+      .select({id: schema.properties.id})
+      .from(schema.properties)
+      .where(eq(schema.properties.landlordId, payload.landlordId));
+    const ownedSet = new Set(ownedProperties.map((p) => p.id));
+    const validIds = propertyIds.filter((id) => ownedSet.has(id));
+    for (const propertyId of validIds) {
+      await db
+        .insert(schema.propertyManagers)
+        .values({propertyId, userId: uid, landlordId: payload.landlordId, role: 'manager'})
+        .onConflictDoNothing();
+    }
+  }
 
   await db
     .update(schema.leases)

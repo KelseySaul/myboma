@@ -13,9 +13,9 @@ const ListingsSkeleton = () => (
   <div className="grid grid-cols-2 gap-4 px-2 py-8 sm:grid-cols-3 lg:grid-cols-4">
     {[0, 1, 2, 3].map((i) => (
       <div key={i} className="space-y-2.5">
-        <div className="aspect-[4/3] animate-pulse rounded-2xl bg-violet-100/60" />
-        <div className="h-4 w-3/4 animate-pulse rounded bg-violet-100/60" />
-        <div className="h-3 w-1/2 animate-pulse rounded bg-violet-100/40" />
+        <div className="aspect-[4/3] animate-pulse rounded-2xl bg-zinc-100" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-100" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-zinc-100/70" />
       </div>
     ))}
   </div>

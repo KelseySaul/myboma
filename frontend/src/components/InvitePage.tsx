@@ -7,6 +7,7 @@ type Invite = Awaited<ReturnType<typeof getInvite>>;
 const ROLE_LABELS: Record<string, string> = {
   tenant: 'a tenant',
   landlord: 'a landlord',
+  caretaker: 'a caretaker',
   admin: 'an administrator',
   hunter: 'a member',
 };

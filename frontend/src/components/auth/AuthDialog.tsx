@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, Home, KeyRound, MailCheck } from 'lucide-react';
+import type { ConfirmationResult } from 'firebase/auth';
+import { ArrowLeft, Home, KeyRound, Mail, MailCheck, Phone, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { authClient, getAuthPersistence, setAuthPersistence } from '../../lib/auth-client';
+import { exchangeFirebasePhoneToken } from '../../lib/api';
+import {
+  clearPhoneRecaptcha,
+  FIREBASE_PROJECT_ID,
+  isFirebasePhoneConfigured,
+  sendFirebasePhoneOtp,
+  verifyFirebasePhoneOtp,
+} from '../../lib/firebase';
 import { LEGAL_DOCUMENTS, PRIVACY_VERSION, TERMS_VERSION } from '../../../../shared/legalDocuments';
 import { PENDING_LANDLORD_SUBSCRIPTION_KEY, type PendingLandlordSubscription } from '../../../../shared/landlordSubscription';
 import LandlordSignupFields, { defaultLandlordSignupState } from '../LandlordSignupFields';
@@ -24,7 +33,8 @@ interface AuthDialogProps {
 }
 
 type View = AuthMode | 'forgot' | 'forgot-sent' | 'terms' | 'privacy';
-type Errors = Partial<Record<'name' | 'phone' | 'email' | 'password' | 'confirm' | 'terms' | 'payout' | 'form', string>>;
+type AuthMethod = 'email' | 'phone';
+type Errors = Partial<Record<'name' | 'phone' | 'email' | 'password' | 'confirm' | 'otp' | 'terms' | 'payout' | 'form', string>>;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clean = (value: string) => value.normalize('NFKC').replace(/<[^>]*>/g, '').trim();
@@ -43,6 +53,7 @@ const recordTermsAcceptance = () => {
 
 export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogProps) {
   const [view, setView] = useState<View>(intent.mode);
+  const [method, setMethod] = useState<AuthMethod>('email');
   const [role, setRole] = useState<SignupRole>(intent.role ?? 'hunter');
   const [landlord, setLandlord] = useState<PendingLandlordSubscription>(defaultLandlordSignupState);
   const [name, setName] = useState('');
@@ -50,17 +61,24 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpTargetPhone, setOtpTargetPhone] = useState<string | null>(null);
+  const [otpConfirmation, setOtpConfirmation] = useState<ConfirmationResult | null>(null);
   const [rememberMe, setRememberMe] = useState(() => getAuthPersistence());
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
-  const [busy, setBusy] = useState<'email' | 'google' | 'reset' | null>(null);
-  // Guards against double submits between the click and React re-rendering the disabled button.
+  const [busy, setBusy] = useState<'email' | 'google' | 'reset' | 'otp-send' | 'otp-verify' | null>(null);
   const inFlight = useRef(false);
-  // Start focus on the panel, not the first tab, so the dialog doesn't open with a focus ring.
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      clearPhoneRecaptcha();
+      setOtpConfirmation(null);
+      setOtpTargetPhone(null);
+      setOtpCode('');
+      return;
+    }
     setView(intent.mode);
     if (intent.role) setRole(intent.role);
     setErrors({});
@@ -71,10 +89,21 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
 
   const switchMode = (mode: AuthMode) => {
     setView(mode);
+    setOtpConfirmation(null);
+    setOtpTargetPhone(null);
+    setOtpCode('');
     setErrors({});
   };
 
-  const validate = (): Errors => {
+  const switchMethod = (nextMethod: AuthMethod) => {
+    setMethod(nextMethod);
+    setOtpConfirmation(null);
+    setOtpTargetPhone(null);
+    setOtpCode('');
+    setErrors({});
+  };
+
+  const validateEmailForm = (): Errors => {
     const next: Errors = {};
     if (!EMAIL_RE.test(clean(email))) next.email = 'Enter a valid email address.';
     if (!password) next.password = 'Enter your password.';
@@ -96,10 +125,10 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     return next;
   };
 
-  const submit = async (event: FormEvent) => {
+  const submitEmail = async (event: FormEvent) => {
     event.preventDefault();
     if (inFlight.current) return;
-    const found = validate();
+    const found = validateEmailForm();
     setErrors(found);
     if (Object.keys(found).length) return;
 
@@ -119,7 +148,6 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
 
       if (role === 'landlord') localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlord));
       const terms = recordTermsAcceptance();
-      // Extra fields ride along in the body and are read by the server's user.create hook.
       const { error } = await authClient.signUp.email({
         email: clean(email).toLowerCase(),
         password,
@@ -151,6 +179,85 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     }
   };
 
+  const handleSendOtp = async (event: FormEvent) => {
+    event.preventDefault();
+    if (inFlight.current) return;
+    const next: Errors = {};
+    if (cleanPhone(phone).replace('+', '').length < 9) {
+      next.phone = 'Enter a valid phone number, e.g. 0712 345 678.';
+    }
+    if (isSignup) {
+      if (clean(name).length < 2) next.name = 'Enter your full name.';
+      if (clean(email) && !EMAIL_RE.test(clean(email))) next.email = 'Enter a valid email address or leave blank.';
+      if (!agreed) next.terms = 'Accept the terms to create an account.';
+      if (role === 'landlord') {
+        if (landlord.rentPayoutMethod === 'mpesa' && !landlord.mpesaSettlementPhone?.trim()) {
+          next.payout = 'Enter the M-Pesa number where you receive rent.';
+        }
+        if (landlord.rentPayoutMethod === 'bank' && (!landlord.bankName?.trim() || !landlord.bankAccountNumber?.trim() || !landlord.bankAccountName?.trim())) {
+          next.payout = 'Complete your bank details.';
+        }
+      }
+    }
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    inFlight.current = true;
+    setBusy('otp-send');
+    try {
+      const { e164Phone, confirmation } = await sendFirebasePhoneOtp(phone, 'firebase-recaptcha-container');
+      setOtpConfirmation(confirmation);
+      setOtpTargetPhone(e164Phone);
+      setOtpCode('');
+      setErrors({});
+      toast.success(`Verification code sent to ${e164Phone}`);
+    } catch (err: any) {
+      setErrors({ form: err?.message || 'Could not send SMS code.' });
+    } finally {
+      inFlight.current = false;
+      setBusy(null);
+    }
+  };
+
+  const handleVerifyOtp = async (event: FormEvent) => {
+    event.preventDefault();
+    if (inFlight.current || !otpConfirmation) return;
+    if (otpCode.replace(/\D/g, '').length !== 6) {
+      setErrors({ otp: 'Enter the 6-digit SMS code.' });
+      return;
+    }
+
+    inFlight.current = true;
+    setBusy('otp-verify');
+    setAuthPersistence(isSignup ? true : rememberMe);
+    try {
+      const idToken = await verifyFirebasePhoneOtp(otpConfirmation, otpCode);
+      if (isSignup && role === 'landlord') {
+        localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlord));
+      }
+      if (isSignup) recordTermsAcceptance();
+
+      const result = await exchangeFirebasePhoneToken({
+        idToken,
+        mode: isSignup ? 'signup' : 'signin',
+        displayName: isSignup ? clean(name) : undefined,
+        email: isSignup && clean(email) ? clean(email).toLowerCase() : undefined,
+        intendedRole: isSignup ? role : undefined,
+        rememberMe: isSignup ? true : rememberMe,
+      });
+
+      toast.success(result.isNewUser ? 'Phone verified! Account created.' : 'Phone verified! Welcome back.');
+      onOpenChange(false);
+      // Reload cleanly so Better-Auth's useSession picks up the fresh session cookie immediately.
+      window.location.reload();
+    } catch (err: any) {
+      setErrors({ form: err?.message || 'Could not verify the code. Try again.' });
+    } finally {
+      inFlight.current = false;
+      setBusy(null);
+    }
+  };
+
   const continueWithGoogle = async () => {
     if (inFlight.current) return;
     if (isSignup && !agreed) {
@@ -159,7 +266,6 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     }
     inFlight.current = true;
     setBusy('google');
-    // The chosen role can't travel through the OAuth redirect; the landlord plan is picked up after return.
     if (isSignup && role === 'landlord') localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlord));
     if (isSignup) recordTermsAcceptance();
     setAuthPersistence(isSignup ? true : rememberMe);
@@ -192,7 +298,6 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
         setErrors({ form: friendlyAuthError(error, '') });
         return;
       }
-      // Same message whether or not the account exists, so emails can't be probed.
       setView('forgot-sent');
     } catch {
       setErrors({ form: 'Something went wrong. Check your connection and try again.' });
@@ -204,247 +309,429 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
 
   const legal = view === 'terms' || view === 'privacy' ? LEGAL_DOCUMENTS[view] : null;
   const wide = isSignup && role === 'landlord';
+  const firebaseReady = isFirebasePhoneConfigured();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent initialFocus={panelRef} className={`gap-0 p-0 ${wide || legal ? 'sm:max-w-[560px]' : 'sm:max-w-[440px]'}`}>
         <div ref={panelRef} tabIndex={-1} className="outline-none">
-        {legal ? (
-          <div className="px-6 pb-6 pt-7 sm:px-8 sm:pt-8">
-            <button type="button" onClick={() => setView('signup')} className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-950">
-              <ArrowLeft className="h-4 w-4" /> Back
-            </button>
-            <DialogTitle className="text-xl">{legal.title}</DialogTitle>
-            <DialogDescription className="mt-1">
-              Effective {legal.effectiveDate} · Version {legal.version}
-            </DialogDescription>
-            <div className="mt-6 space-y-5">
-              {legal.sections.map((section) => (
-                <section key={section.title}>
-                  <h3 className="text-sm font-semibold text-zinc-950">{section.title}</h3>
-                  <p className="mt-1 whitespace-pre-line text-sm leading-6 text-zinc-600">{section.body}</p>
-                </section>
-              ))}
-            </div>
-          </div>
-        ) : view === 'forgot' || view === 'forgot-sent' ? (
-          <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-950">
-              {view === 'forgot' ? <KeyRound className="h-5 w-5" /> : <MailCheck className="h-5 w-5" />}
-            </span>
-            {view === 'forgot' ? (
-              <>
-                <DialogTitle className="mt-5 text-2xl">Reset your password</DialogTitle>
-                <DialogDescription className="mt-1.5">Enter your account email and we'll send you a link to choose a new password.</DialogDescription>
-                <form onSubmit={requestReset} noValidate className="mt-6 space-y-4">
-                  <Field id="reset-email" label="Email" error={errors.email}>
-                    <input
-                      id="reset-email"
-                      type="email"
-                      autoComplete="email"
-                      inputMode="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      aria-invalid={Boolean(errors.email) || undefined}
-                      className={inputClass(Boolean(errors.email))}
-                    />
-                  </Field>
-                  {errors.form && <FormError message={errors.form} />}
-                  <SubmitButton loading={busy === 'reset'}>Send reset link</SubmitButton>
-                </form>
-              </>
-            ) : (
-              <>
-                <DialogTitle className="mt-5 text-2xl">Check your email</DialogTitle>
-                <DialogDescription className="mt-1.5">
-                  If an account exists for <span className="font-medium text-zinc-950">{clean(email)}</span>, we've sent a link to reset the password. It expires in one hour.
-                </DialogDescription>
-              </>
-            )}
-            <button type="button" onClick={() => switchMode('signin')} className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-950">
-              <ArrowLeft className="h-4 w-4" /> Back to sign in
-            </button>
-          </div>
-        ) : (
-          <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-8">
-            <div className="flex items-center gap-2.5">
-              <img src={tenantConfig.logoUrl} alt="" width="32" height="32" className="h-8 w-8 object-contain" />
-              <span className="font-brand text-2xl font-semibold leading-none tracking-tight text-zinc-950">{tenantConfig.appName}</span>
-            </div>
-            <DialogTitle className="mt-6 text-2xl">{isSignup ? 'Create your account' : 'Sign in to your account'}</DialogTitle>
-            <DialogDescription className="mt-1">
-              {isSignup ? 'It takes a minute. Tenants are invited by their landlord.' : 'Welcome back. Enter your details to continue.'}
-            </DialogDescription>
+          {/* Invisible reCAPTCHA mount point for Firebase Phone Auth */}
+          <div id="firebase-recaptcha-container" />
 
-            <div role="tablist" aria-label="Sign in or create account" className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
-              {(['signin', 'signup'] as AuthMode[]).map((mode) => (
+          {legal ? (
+            <div className="px-6 pb-6 pt-7 sm:px-8 sm:pt-8">
+              <button type="button" onClick={() => setView('signup')} className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 hover:text-zinc-950">
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
+              <DialogTitle className="text-xl">{legal.title}</DialogTitle>
+              <DialogDescription className="mt-1">
+                Effective {legal.effectiveDate} · Version {legal.version}
+              </DialogDescription>
+              <div className="mt-6 space-y-5">
+                {legal.sections.map((section) => (
+                  <section key={section.title}>
+                    <h3 className="text-sm font-semibold text-zinc-950">{section.title}</h3>
+                    <p className="mt-1 whitespace-pre-line text-sm leading-6 text-zinc-600">{section.body}</p>
+                  </section>
+                ))}
+              </div>
+            </div>
+          ) : view === 'forgot' || view === 'forgot-sent' ? (
+            <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-9">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-100 text-zinc-950">
+                {view === 'forgot' ? <KeyRound className="h-5 w-5" /> : <MailCheck className="h-5 w-5" />}
+              </span>
+              {view === 'forgot' ? (
+                <>
+                  <DialogTitle className="mt-5 text-2xl">Reset your password</DialogTitle>
+                  <DialogDescription className="mt-1.5">Enter your account email and we'll send you a link to choose a new password.</DialogDescription>
+                  <form onSubmit={requestReset} noValidate className="mt-6 space-y-4">
+                    <Field id="reset-email" label="Email" error={errors.email}>
+                      <input
+                        id="reset-email"
+                        type="email"
+                        autoComplete="email"
+                        inputMode="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        aria-invalid={Boolean(errors.email) || undefined}
+                        className={inputClass(Boolean(errors.email))}
+                      />
+                    </Field>
+                    {errors.form && <FormError message={errors.form} />}
+                    <SubmitButton loading={busy === 'reset'}>Send reset link</SubmitButton>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <DialogTitle className="mt-5 text-2xl">Check your email</DialogTitle>
+                  <DialogDescription className="mt-1.5">
+                    If an account exists for <span className="font-medium text-zinc-950">{clean(email)}</span>, we've sent a link to reset the password. It expires in one hour.
+                  </DialogDescription>
+                </>
+              )}
+              <button type="button" onClick={() => switchMode('signin')} className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-950">
+                <ArrowLeft className="h-4 w-4" /> Back to sign in
+              </button>
+            </div>
+          ) : (
+            <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8 sm:pt-8">
+              <div className="flex items-center gap-2.5">
+                <img src={tenantConfig.logoUrl} alt="" width="32" height="32" className="h-8 w-8 object-contain" />
+                <span className="font-brand text-2xl font-semibold leading-none tracking-tight text-zinc-950">{tenantConfig.appName}</span>
+              </div>
+              <DialogTitle className="mt-5 text-2xl">{isSignup ? 'Create your account' : 'Sign in to your account'}</DialogTitle>
+              <DialogDescription className="mt-1">
+                {isSignup ? 'Sign up with email, Google, or a free SMS OTP code.' : 'Welcome back. Sign in with email, Google, or Phone OTP.'}
+              </DialogDescription>
+
+              <div role="tablist" aria-label="Sign in or create account" className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
+                {(['signin', 'signup'] as AuthMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={formView === mode}
+                    onClick={() => switchMode(mode)}
+                    className={`h-10 rounded-lg text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/25 ${
+                      formView === mode ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 hover:text-zinc-950'
+                    }`}
+                  >
+                    {mode === 'signin' ? 'Sign in' : 'Create account'}
+                  </button>
+                ))}
+              </div>
+
+              {isSignup && (
+                <div className="mt-5">
+                  <p className="text-sm font-medium text-zinc-800">I am</p>
+                  <div role="radiogroup" aria-label="Account type" className="mt-2 grid grid-cols-2 gap-2">
+                    {([
+                      { id: 'landlord', title: 'A landlord or agent', body: 'List and manage property', icon: KeyRound },
+                      { id: 'hunter', title: 'Looking for a home', body: 'Browse and enquire', icon: Home },
+                    ] as const).map(({ id, title, body, icon: Icon }) => {
+                      const selected = role === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setRole(id)}
+                          className={`rounded-xl border p-3 text-left transition ${
+                            selected ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950' : 'border-zinc-200 hover:border-zinc-400'
+                          }`}
+                        >
+                          <Icon className="h-4 w-4" />
+                          <span className="mt-2 block text-sm font-semibold leading-snug">{title}</span>
+                          <span className={`block text-xs ${selected ? 'text-white/70 dark:text-zinc-600' : 'text-zinc-500'}`}>{body}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Method Switcher: Email vs Phone OTP */}
+              <div className="mt-5 grid grid-cols-2 gap-2">
                 <button
-                  key={mode}
                   type="button"
-                  role="tab"
-                  aria-selected={formView === mode}
-                  onClick={() => switchMode(mode)}
-                  className={`h-10 rounded-lg text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950/25 ${
-                    formView === mode ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-950 dark:text-white' : 'text-zinc-500 hover:text-zinc-950'
+                  onClick={() => switchMethod('email')}
+                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
+                    method === 'email'
+                      ? 'border-violet-600 bg-violet-50 text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-200'
+                      : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
                   }`}
                 >
-                  {mode === 'signin' ? 'Sign in' : 'Create account'}
+                  <Mail className="h-3.5 w-3.5" />
+                  Email &amp; password
                 </button>
-              ))}
-            </div>
-
-            {isSignup && (
-              <div className="mt-6">
-                <p className="text-sm font-medium text-zinc-800">I am</p>
-                <div role="radiogroup" aria-label="Account type" className="mt-2 grid grid-cols-2 gap-2">
-                  {([
-                    { id: 'landlord', title: 'A landlord or agent', body: 'List and manage property', icon: KeyRound },
-                    { id: 'hunter', title: 'Looking for a home', body: 'Browse and enquire', icon: Home },
-                  ] as const).map(({ id, title, body, icon: Icon }) => {
-                    const selected = role === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() => setRole(id)}
-                        className={`rounded-xl border p-3 text-left transition ${
-                          selected ? 'border-zinc-950 bg-zinc-950 text-white dark:border-white dark:bg-white dark:text-zinc-950' : 'border-zinc-200 hover:border-zinc-400'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span className="mt-2 block text-sm font-semibold leading-snug">{title}</span>
-                        <span className={`block text-xs ${selected ? 'text-white/70 dark:text-zinc-600' : 'text-zinc-500'}`}>{body}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => switchMethod('phone')}
+                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
+                    method === 'phone'
+                      ? 'border-violet-600 bg-violet-50 text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-200'
+                      : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+                  }`}
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  Phone SMS OTP
+                </button>
               </div>
-            )}
 
-            <button
-              type="button"
-              onClick={continueWithGoogle}
-              disabled={busy !== null}
-              className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white text-[15px] font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-            >
-              <GoogleLogo />
-              Continue with Google
-            </button>
+              {method === 'phone' ? (
+                <div className="mt-5 space-y-4">
+                  {!firebaseReady && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">
+                      <p className="font-semibold">Firebase SMS OTP almost ready ({FIREBASE_PROJECT_ID})</p>
+                      <p className="mt-0.5 text-amber-800">
+                        Add <code className="rounded bg-amber-100 px-1 font-mono">VITE_FIREBASE_API_KEY</code> and{' '}
+                        <code className="rounded bg-amber-100 px-1 font-mono">VITE_FIREBASE_APP_ID</code> from Firebase Console → Project Settings to activate live SMS codes.
+                      </p>
+                    </div>
+                  )}
 
-            <div className="my-6 flex items-center gap-3 text-xs text-zinc-400">
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-              or with email
-              <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                  {!otpConfirmation ? (
+                    <form onSubmit={handleSendOtp} noValidate className="space-y-4">
+                      {isSignup && (
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <Field id="otp-name" label="Full name" error={errors.name}>
+                            <input
+                              id="otp-name"
+                              autoComplete="name"
+                              value={name}
+                              onChange={(e) => setName(e.target.value)}
+                              aria-invalid={Boolean(errors.name) || undefined}
+                              className={inputClass(Boolean(errors.name))}
+                            />
+                          </Field>
+                          <Field id="otp-email" label="Email (optional)" error={errors.email}>
+                            <input
+                              id="otp-email"
+                              type="email"
+                              inputMode="email"
+                              autoComplete="email"
+                              placeholder="you@example.com"
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
+                              aria-invalid={Boolean(errors.email) || undefined}
+                              className={inputClass(Boolean(errors.email))}
+                            />
+                          </Field>
+                        </div>
+                      )}
+
+                      <Field id="otp-phone" label="Phone number" error={errors.phone}>
+                        <input
+                          id="otp-phone"
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          placeholder="0712 345 678 or +254712345678"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          aria-invalid={Boolean(errors.phone) || undefined}
+                          className={inputClass(Boolean(errors.phone))}
+                        />
+                      </Field>
+
+                      {isSignup && role === 'landlord' && (
+                        <div className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
+                          <LandlordSignupFields value={landlord} onChange={setLandlord} />
+                          {errors.payout && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{errors.payout}</p>}
+                        </div>
+                      )}
+
+                      {!isSignup && (
+                        <label className="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700">
+                          <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 accent-zinc-950" />
+                          Keep me signed in
+                        </label>
+                      )}
+
+                      {isSignup && (
+                        <div>
+                          <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-6 text-zinc-600">
+                            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 accent-zinc-950" />
+                            <span>
+                              I agree to the{' '}
+                              <button type="button" onClick={() => setView('terms')} className="font-medium text-zinc-950 underline underline-offset-4">Terms of Use</button> and{' '}
+                              <button type="button" onClick={() => setView('privacy')} className="font-medium text-zinc-950 underline underline-offset-4">Privacy Policy</button>.
+                            </span>
+                          </label>
+                          {errors.terms && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{errors.terms}</p>}
+                        </div>
+                      )}
+
+                      {errors.form && <FormError message={errors.form} />}
+
+                      <SubmitButton loading={busy === 'otp-send'} disabled={busy !== null && busy !== 'otp-send'}>
+                        Send 6-digit SMS code
+                      </SubmitButton>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleVerifyOtp} noValidate className="space-y-4">
+                      <div className="flex items-start gap-3 rounded-xl border border-violet-200 bg-violet-50/70 p-3.5 text-xs text-violet-900">
+                        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-700" />
+                        <div>
+                          <p className="font-semibold">Code sent to {otpTargetPhone}</p>
+                          <p className="mt-0.5 text-violet-700">Enter the 6-digit verification code from your SMS.</p>
+                        </div>
+                      </div>
+
+                      <Field id="otp-code" label="6-digit verification code" error={errors.otp}>
+                        <input
+                          id="otp-code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          placeholder="123456"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          aria-invalid={Boolean(errors.otp) || undefined}
+                          className={`${inputClass(Boolean(errors.otp))} text-center font-mono text-lg tracking-[0.4em]`}
+                        />
+                      </Field>
+
+                      {errors.form && <FormError message={errors.form} />}
+
+                      <SubmitButton loading={busy === 'otp-verify'} disabled={busy !== null && busy !== 'otp-verify'}>
+                        {isSignup ? 'Verify & create account' : 'Verify & sign in'}
+                      </SubmitButton>
+
+                      <div className="flex items-center justify-between text-xs text-zinc-500">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearPhoneRecaptcha();
+                            setOtpConfirmation(null);
+                            setOtpCode('');
+                            setErrors({});
+                          }}
+                          className="font-medium text-zinc-700 hover:text-zinc-950"
+                        >
+                          Change phone number
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy !== null}
+                          onClick={(e) => void handleSendOtp(e as unknown as FormEvent)}
+                          className="font-semibold text-violet-700 hover:underline disabled:opacity-50"
+                        >
+                          Resend code
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={continueWithGoogle}
+                    disabled={busy !== null}
+                    className="mt-5 inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white text-[15px] font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                  >
+                    <GoogleLogo />
+                    Continue with Google
+                  </button>
+
+                  <div className="my-5 flex items-center gap-3 text-xs text-zinc-400">
+                    <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                    or with email
+                    <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+                  </div>
+
+                  <form onSubmit={submitEmail} noValidate className="space-y-4">
+                    {isSignup && (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field id="auth-name" label="Full name" error={errors.name}>
+                          <input id="auth-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={Boolean(errors.name) || undefined} className={inputClass(Boolean(errors.name))} />
+                        </Field>
+                        <Field id="auth-phone" label="Phone" error={errors.phone}>
+                          <input
+                            id="auth-phone"
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="tel"
+                            placeholder="07XX XXX XXX"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            aria-invalid={Boolean(errors.phone) || undefined}
+                            className={inputClass(Boolean(errors.phone))}
+                          />
+                        </Field>
+                      </div>
+                    )}
+
+                    <Field id="auth-email" label="Email" error={errors.email}>
+                      <input
+                        id="auth-email"
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        aria-invalid={Boolean(errors.email) || undefined}
+                        className={inputClass(Boolean(errors.email))}
+                      />
+                    </Field>
+
+                    <Field
+                      id="auth-password"
+                      label="Password"
+                      error={errors.password}
+                      aside={
+                        !isSignup && (
+                          <button type="button" onClick={() => { setErrors({}); setView('forgot'); }} className="text-sm font-medium text-zinc-600 underline-offset-4 hover:text-zinc-950 hover:underline">
+                            Forgot password?
+                          </button>
+                        )
+                      }
+                    >
+                      <PasswordInput
+                        id="auth-password"
+                        value={password}
+                        onChange={setPassword}
+                        autoComplete={isSignup ? 'new-password' : 'current-password'}
+                        invalid={Boolean(errors.password)}
+                        placeholder={isSignup ? 'At least 8 characters' : undefined}
+                      />
+                    </Field>
+
+                    {isSignup && (
+                      <Field id="auth-confirm" label="Confirm password" error={errors.confirm}>
+                        <PasswordInput id="auth-confirm" value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={Boolean(errors.confirm)} />
+                      </Field>
+                    )}
+
+                    {isSignup && role === 'landlord' && (
+                      <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
+                        <LandlordSignupFields value={landlord} onChange={setLandlord} />
+                        {errors.payout && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{errors.payout}</p>}
+                      </div>
+                    )}
+
+                    {!isSignup && (
+                      <label className="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700">
+                        <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 accent-zinc-950" />
+                        Keep me signed in
+                      </label>
+                    )}
+
+                    {isSignup && (
+                      <div>
+                        <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-6 text-zinc-600">
+                          <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 accent-zinc-950" />
+                          <span>
+                            I agree to the{' '}
+                            <button type="button" onClick={() => setView('terms')} className="font-medium text-zinc-950 underline underline-offset-4">Terms of Use</button> and{' '}
+                            <button type="button" onClick={() => setView('privacy')} className="font-medium text-zinc-950 underline underline-offset-4">Privacy Policy</button>.
+                          </span>
+                        </label>
+                        {errors.terms && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{errors.terms}</p>}
+                      </div>
+                    )}
+
+                    {errors.form && <FormError message={errors.form} />}
+
+                    <SubmitButton loading={busy === 'email'} disabled={busy !== null && busy !== 'email'}>
+                      {isSignup ? (role === 'landlord' && landlord.tier !== 'free' ? 'Create account and continue to payment' : 'Create account') : 'Sign in'}
+                    </SubmitButton>
+                  </form>
+                </>
+              )}
+
+              <p className="mt-6 text-center text-sm text-zinc-500">
+                {isSignup ? 'Already have an account? ' : "Don't have an account? "}
+                <button type="button" onClick={() => switchMode(isSignup ? 'signin' : 'signup')} className="font-semibold text-zinc-950 underline-offset-4 hover:underline">
+                  {isSignup ? 'Sign in' : 'Create one'}
+                </button>
+              </p>
             </div>
-
-            <form onSubmit={submit} noValidate className="space-y-4">
-              {isSignup && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field id="auth-name" label="Full name" error={errors.name}>
-                    <input id="auth-name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={Boolean(errors.name) || undefined} className={inputClass(Boolean(errors.name))} />
-                  </Field>
-                  <Field id="auth-phone" label="Phone" error={errors.phone}>
-                    <input
-                      id="auth-phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="07XX XXX XXX"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      aria-invalid={Boolean(errors.phone) || undefined}
-                      className={inputClass(Boolean(errors.phone))}
-                    />
-                  </Field>
-                </div>
-              )}
-
-              <Field id="auth-email" label="Email" error={errors.email}>
-                <input
-                  id="auth-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  aria-invalid={Boolean(errors.email) || undefined}
-                  className={inputClass(Boolean(errors.email))}
-                />
-              </Field>
-
-              <Field
-                id="auth-password"
-                label="Password"
-                error={errors.password}
-                aside={
-                  !isSignup && (
-                    <button type="button" onClick={() => { setErrors({}); setView('forgot'); }} className="text-sm font-medium text-zinc-600 underline-offset-4 hover:text-zinc-950 hover:underline">
-                      Forgot password?
-                    </button>
-                  )
-                }
-              >
-                <PasswordInput
-                  id="auth-password"
-                  value={password}
-                  onChange={setPassword}
-                  autoComplete={isSignup ? 'new-password' : 'current-password'}
-                  invalid={Boolean(errors.password)}
-                  placeholder={isSignup ? 'At least 8 characters' : undefined}
-                />
-              </Field>
-
-              {isSignup && (
-                <Field id="auth-confirm" label="Confirm password" error={errors.confirm}>
-                  <PasswordInput id="auth-confirm" value={confirm} onChange={setConfirm} autoComplete="new-password" invalid={Boolean(errors.confirm)} />
-                </Field>
-              )}
-
-              {isSignup && role === 'landlord' && (
-                <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
-                  <LandlordSignupFields value={landlord} onChange={setLandlord} />
-                  {errors.payout && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{errors.payout}</p>}
-                </div>
-              )}
-
-              {!isSignup && (
-                <label className="flex cursor-pointer items-center gap-2.5 text-sm text-zinc-700">
-                  <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded border-zinc-300 accent-zinc-950" />
-                  Keep me signed in
-                </label>
-              )}
-
-              {isSignup && (
-                <div>
-                  <label className="flex cursor-pointer items-start gap-2.5 text-sm leading-6 text-zinc-600">
-                    <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 rounded border-zinc-300 accent-zinc-950" />
-                    <span>
-                      I agree to the{' '}
-                      <button type="button" onClick={() => setView('terms')} className="font-medium text-zinc-950 underline underline-offset-4">Terms of Use</button> and{' '}
-                      <button type="button" onClick={() => setView('privacy')} className="font-medium text-zinc-950 underline underline-offset-4">Privacy Policy</button>.
-                    </span>
-                  </label>
-                  {errors.terms && <p role="alert" className="mt-1.5 text-xs font-medium text-red-600">{errors.terms}</p>}
-                </div>
-              )}
-
-              {errors.form && <FormError message={errors.form} />}
-
-              <SubmitButton loading={busy === 'email'} disabled={busy !== null && busy !== 'email'}>
-                {isSignup ? (role === 'landlord' && landlord.tier !== 'free' ? 'Create account and continue to payment' : 'Create account') : 'Sign in'}
-              </SubmitButton>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-zinc-500">
-              {isSignup ? 'Already have an account? ' : "Don't have an account? "}
-              <button type="button" onClick={() => switchMode(isSignup ? 'signin' : 'signup')} className="font-semibold text-zinc-950 underline-offset-4 hover:underline">
-                {isSignup ? 'Sign in' : 'Create one'}
-              </button>
-            </p>
-          </div>
-        )}
+          )}
         </div>
       </DialogContent>
     </Dialog>

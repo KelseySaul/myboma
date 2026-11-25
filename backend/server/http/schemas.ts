@@ -3,6 +3,14 @@ import {z} from 'zod';
 export const uuidSchema = z.string().uuid();
 export const emailSchema = z.string().email().max(320);
 export const absoluteUrlSchema = z.string().url().max(2048);
+/** Accepts either a full http(s) URL or a relative /api/.../files/... path returned by POST /uploads. */
+export const mediaUrlSchema = z
+  .string()
+  .max(2048)
+  .refine(
+    (value) => /^https?:\/\//i.test(value) || /^\/api(?:\/(?:web|mobile))?\/files\/[^\s]+$/.test(value),
+    {message: 'Must be a valid http(s) URL or uploaded file path'},
+  );
 export const phoneSchema = z
   .string()
   .max(20)

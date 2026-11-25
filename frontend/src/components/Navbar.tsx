@@ -4,6 +4,7 @@ import type { UserProfile, UserRole } from '../App';
 import { getPlatformBranding } from '../lib/api';
 import { tenantConfig } from '../config/tenant';
 import { useUnreadCount } from '../lib/queries';
+import { resolveMediaUrl } from '../lib/fileUrl';
 import AccountMenu from './AccountMenu';
 
 interface NavbarProps {
@@ -75,7 +76,7 @@ export default function Navbar({
                 className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-slate-900 text-xs font-bold text-white shadow-xs transition hover:ring-2 hover:ring-slate-900/20 active:scale-95 dark:bg-slate-50 dark:text-slate-900"
               >
                 {profile?.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={resolveMediaUrl(profile.avatarUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   profile?.displayName?.charAt(0).toUpperCase() || 'U'
                 )}

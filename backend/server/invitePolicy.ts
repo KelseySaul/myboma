@@ -8,7 +8,7 @@ import {createHash, randomBytes} from 'node:crypto';
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const INVITE_IDENTIFIER_PREFIX = 'invite:';
 
-export type InviteRole = 'tenant' | 'landlord' | 'hunter' | 'admin';
+export type InviteRole = 'tenant' | 'landlord' | 'hunter' | 'admin' | 'caretaker';
 
 /** Profile fields the inviter chose that are applied when the invitee accepts. */
 export type InviteProfileOverrides = Partial<{
@@ -23,6 +23,7 @@ export type InviteProfileOverrides = Partial<{
   subscriptionPlan: string | null;
   subscriptionStatus: 'none' | 'pending' | 'active' | 'expired' | 'suspended';
   subscriptionExpiresAt: string | null;
+  propertyIds: string[];
 }>;
 
 export type InvitePayload = {
@@ -67,7 +68,7 @@ export const parseInvitePayload = (value: string): InvitePayload | null => {
   try {
     const parsed = JSON.parse(value) as InvitePayload;
     if (parsed?.v !== 1 || typeof parsed.email !== 'string' || !parsed.email.includes('@')) return null;
-    if (!['tenant', 'landlord', 'hunter', 'admin'].includes(parsed.role)) return null;
+    if (!['tenant', 'landlord', 'hunter', 'admin', 'caretaker'].includes(parsed.role)) return null;
     return {...parsed, email: parsed.email.trim().toLowerCase(), profile: parsed.profile ?? {}};
   } catch {
     return null;

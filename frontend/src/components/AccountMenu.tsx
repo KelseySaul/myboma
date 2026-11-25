@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { Bell, Building2, Compass, LogOut, Search, Settings, ShieldCheck, Users } from 'lucide-react';
+import { Bell, Building2, Compass, LogOut, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { clearQueryCache } from '../lib/queryClient';
 const VIEW_AS: { role: UserRole; label: string; icon: typeof Users }[] = [
   { role: 'admin', label: 'Admin', icon: ShieldCheck },
   { role: 'landlord', label: 'Landlord', icon: Building2 },
+  { role: 'caretaker', label: 'Caretaker', icon: Wrench },
   { role: 'tenant', label: 'Tenant', icon: Users },
   { role: 'hunter', label: 'House hunter', icon: Search },
 ];
