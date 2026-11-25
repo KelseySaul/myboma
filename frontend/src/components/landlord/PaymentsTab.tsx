@@ -102,7 +102,7 @@ export default function PaymentsTab(props: PaymentsTabProps) {
 
       <div className={`grid gap-4 sm:grid-cols-2 ${cards.length === 5 ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}>
         {cards.map((card) => (
-          <div key={card.label} className={`rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 ${card.label === 'Received this month' || card.label === 'Short-stay income this month' ? 'finance-highlight' : ''}`}>
+          <div key={card.label} className={`rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 finance-highlight`}>
             <p className="text-sm text-zinc-500">{card.label}</p>
             <p className="mt-2 text-xl font-bold tabular-nums text-zinc-950 dark:text-white">{kes(card.value)}</p>
           </div>
