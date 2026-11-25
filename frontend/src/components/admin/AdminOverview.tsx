@@ -148,7 +148,7 @@ function OverviewContent({
             key={label}
             type="button"
             onClick={() => onNavigate(tab)}
-            className="group rounded-2xl border border-zinc-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md active:translate-y-0 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+            className={`group rounded-2xl border border-zinc-200 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md active:translate-y-0 sm:p-5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 ${label === 'Rent this month' ? 'finance-highlight' : ''}`}
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-500 sm:text-sm dark:text-zinc-400">{label}</span>
@@ -321,7 +321,7 @@ function TrendChart({ trend }: { trend: Overview['trend'] }) {
                   {metric === 'collected' ? compactKes(value) : value}
                 </span>
                 <span
-                  className={`w-full max-w-12 rounded-t-lg transition-all duration-500 ${active ? 'bg-gradient-to-t from-teal-800 to-teal-500' : 'bg-teal-300/70 group-hover:bg-teal-400 dark:bg-teal-800'}`}
+                  className={`w-full max-w-12 rounded-t-lg transition-all duration-500 ${active ? 'bg-gradient-to-t from-emerald-800 to-emerald-500' : 'bg-teal-300/70 group-hover:bg-teal-400 dark:bg-teal-800'}`}
                   style={{ height: `${Math.max((value / max) * 100, value > 0 ? 6 : 2)}%` }}
                 />
                 <span className="text-xs text-zinc-500">{monthLabel(point.month)}</span>

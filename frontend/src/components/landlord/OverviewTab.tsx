@@ -153,7 +153,7 @@ export default function OverviewTab(props: OverviewTabProps) {
             key={label}
             type="button"
             onClick={() => (tab === 'maintenance' && !props.maintenanceEnabled ? props.onUpgrade() : props.onOpenTab(tab))}
-            className="group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-950 hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-500"
+            className={`group rounded-2xl border border-zinc-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-950 hover:shadow-lg hover:shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-500 ${label === 'Collected this month' ? 'finance-highlight' : ''}`}
           >
             <div className="flex items-center justify-between">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">{label}</span>
@@ -163,7 +163,7 @@ export default function OverviewTab(props: OverviewTabProps) {
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{note}</p>
             {label === 'Collected this month' && month.expected > 0 && (
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                <div className="h-full rounded-full bg-zinc-950 transition-all duration-700 dark:bg-white" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
+                <div className="h-full rounded-full bg-emerald-400 transition-all duration-700" style={{ width: `${Math.min(collectedPct, 100)}%` }} />
               </div>
             )}
           </button>
@@ -286,7 +286,7 @@ function RentChart({ months }: { months: { label: string; total: number; count: 
               )}
               <div
                 className={`w-full rounded-t-lg transition-all duration-500 ${
-                  hovered === index ? 'bg-gradient-to-t from-teal-800 to-teal-500' : 'bg-teal-300/75 dark:bg-teal-800'
+                  hovered === index ? 'bg-gradient-to-t from-emerald-800 to-emerald-500' : 'bg-teal-300/75 dark:bg-teal-800'
                 } ${index === months.length - 1 && hovered === null ? '!bg-teal-600' : ''}`}
                 style={{ height: `${height}%` }}
               />
