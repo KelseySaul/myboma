@@ -918,12 +918,12 @@ export default function App() {
 
             <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3.5">
               <div>
-                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Day to day</p>
+                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Rent &amp; operations</p>
                 <div className="space-y-0.5">
                   {[
-                    { id: 'maintenance', label: 'Repairs & maintenance', icon: faTools },
                     { id: 'finances',    label: 'Rent & payments',       icon: faWallet },
                     { id: 'tenants',     label: 'Tenants',               icon: faUsers },
+                    { id: 'maintenance', label: 'Maintenance',           icon: faTools },
                     { id: 'automations', label: 'Notifications',         icon: faBell },
                   ].map((item) => {
                     const isActive = activeTab === item.id;
@@ -954,7 +954,7 @@ export default function App() {
 
               {profile?.isSuperAdmin && (
                 <div>
-                  <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Administration</p>
+                  <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Platform governance</p>
                   <div className="space-y-0.5">
                     {[
                       { id: 'platforms', label: 'Platforms',    icon: faGlobe },
@@ -1138,37 +1138,71 @@ export default function App() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3.5">
-              <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Workspace</p>
-              {[
-                { id: 'caretakers',  label: 'Caretakers & reports', icon: faUsers },
-                { id: 'pending',     label: 'Pending invites',      icon: faLink },
-                { id: 'maintenance', label: 'Repairs',              icon: faTools },
-                { id: 'automations', label: 'Notifications',        icon: faBell },
-              ].map((item) => {
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
-                        : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
-                      <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
-                    </span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
+            <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-3.5">
+              <div>
+                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">People</p>
+                <div className="space-y-0.5">
+                  {[
+                    { id: 'caretakers',  label: 'Caretakers & reports', icon: faUsers },
+                    { id: 'pending',     label: 'Pending invites',      icon: faLink },
+                  ].map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                            : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
+                          <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Finance &amp; operations</p>
+                <div className="space-y-0.5">
+                  {[
+                    { id: 'maintenance', label: 'Maintenance',   icon: faTools },
+                    { id: 'automations', label: 'Notifications', icon: faBell },
+                  ].map((item) => {
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-violet-50 font-semibold text-[#5B21B6] dark:bg-violet-500/15 dark:text-violet-300'
+                            : 'font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-[#5B21B6] text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-white/8 dark:text-zinc-400'}`}>
+                          <FontAwesomeIcon icon={item.icon} className="h-3 w-3" />
+                        </span>
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </nav>
 
             <div className="border-t border-zinc-100 bg-zinc-50/70 p-3 space-y-1 dark:border-white/[0.07] dark:bg-white/[0.02]">

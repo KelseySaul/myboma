@@ -26,6 +26,8 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: DATABASE_RLS
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_DATABASE_URL
@@ -60,3 +62,19 @@ services:
         value: G-QP7T3HCSPF
       - key: ONESIGNAL_REST_API_KEY
         sync: false
+      - key: PESAPAL_ENV
+        value: production
+      - key: PESAPAL_CONSUMER_KEY
+        sync: false
+      - key: PESAPAL_CONSUMER_SECRET
+        sync: false
+      - key: PESAPAL_CURRENCY
+        value: KES
+      - key: PESAPAL_COUNTRY_CODE
+        value: KE
+      - key: PESAPAL_BRANCH
+        value: MyBoma
+      - key: PESAPAL_AUTO_REGISTER_IPN
+        value: "true"
+      - key: PESAPAL_IPN_METHOD
+        value: GET

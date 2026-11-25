@@ -436,16 +436,27 @@ export type PesapalTransactionStatus = {
 
 export const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
+const isPlaceholderEnv = (value?: string | null) => {
+  const v = (value || '').trim();
+  return !v || /^your[-_]/i.test(v) || v.includes('your-domain.com');
+};
+
+let pesapalIpnCache: {url: string; ipnId: string} | null = null;
+
 export const pesapalBaseUrl = () =>
   process.env.PESAPAL_ENV === 'production'
     ? 'https://pay.pesapal.com/v3'
     : 'https://cybqa.pesapal.com/pesapalv3';
 
 export const getPesapalCallbackUrl = () =>
-  process.env.PESAPAL_CALLBACK_URL || `${trimTrailingSlash(appBaseUrl)}/api/payments/pesapal/callback`;
+  !isPlaceholderEnv(process.env.PESAPAL_CALLBACK_URL)
+    ? process.env.PESAPAL_CALLBACK_URL!.trim()
+    : `${trimTrailingSlash(appBaseUrl)}/api/payments/pesapal/callback`;
 
 export const getPesapalIpnUrl = () =>
-  process.env.PESAPAL_IPN_URL || `${trimTrailingSlash(appBaseUrl)}/api/webhooks/pesapal/ipn`;
+  !isPlaceholderEnv(process.env.PESAPAL_IPN_URL)
+    ? process.env.PESAPAL_IPN_URL!.trim()
+    : `${trimTrailingSlash(appBaseUrl)}/api/webhooks/pesapal/ipn`;
 
 export const getPesapalAccessToken = async () => {
   const key = process.env.PESAPAL_CONSUMER_KEY;
@@ -509,14 +520,39 @@ export const pesapalApiFetch = async <T>(path: string, init: RequestInit = {}) =
 };
 
 export const getPesapalNotificationId = async () => {
-  if (process.env.PESAPAL_NOTIFICATION_ID) return process.env.PESAPAL_NOTIFICATION_ID;
+  if (!isPlaceholderEnv(process.env.PESAPAL_NOTIFICATION_ID)) {
+    return process.env.PESAPAL_NOTIFICATION_ID!.trim();
+  }
 
   const ipnUrl = getPesapalIpnUrl();
-  const registered = await pesapalApiFetch<Array<{url?: string; ipn_id?: string}>>('/api/URLSetup/GetIpnList');
-  const existing = registered.find((item) => item.url === ipnUrl && item.ipn_id);
-  if (existing?.ipn_id) return existing.ipn_id;
+  if (pesapalIpnCache && pesapalIpnCache.url === ipnUrl) {
+    return pesapalIpnCache.ipnId;
+  }
 
-  if (process.env.PESAPAL_AUTO_REGISTER_IPN !== 'true') {
+  const registered = await pesapalApiFetch<Array<{url?: string; ipn_id?: string; ipn_status?: number}>>('/api/URLSetup/GetIpnList');
+  const list = Array.isArray(registered) ? registered : [];
+  const exactActive = list.find((item) => item.url === ipnUrl && item.ipn_id && item.ipn_status === 1);
+  const exactAny = list.find((item) => item.url === ipnUrl && item.ipn_id);
+  const existing = exactActive ?? exactAny;
+  if (existing?.ipn_id) {
+    pesapalIpnCache = {url: ipnUrl, ipnId: existing.ipn_id};
+    return existing.ipn_id;
+  }
+
+  // Pesapal production refuses to register non-HTTPS localhost URLs; reuse an existing active
+  // IPN during local development so checkout redirection can still be verified end-to-end.
+  const isLocalUrl = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(ipnUrl);
+  if (isLocalUrl) {
+    const activeFallback =
+      list.find((item) => item.ipn_id && item.ipn_status === 1 && item.url?.includes('/api/webhooks/pesapal/ipn')) ??
+      list.find((item) => item.ipn_id && item.ipn_status === 1);
+    if (activeFallback?.ipn_id) {
+      pesapalIpnCache = {url: ipnUrl, ipnId: activeFallback.ipn_id};
+      return activeFallback.ipn_id;
+    }
+  }
+
+  if (process.env.PESAPAL_AUTO_REGISTER_IPN === 'false') {
     throw new Error('Pesapal notification ID is not configured. Register the IPN URL and set PESAPAL_NOTIFICATION_ID.');
   }
 
@@ -533,6 +569,7 @@ export const getPesapalNotificationId = async () => {
     throw new Error(created.message || 'Pesapal IPN registration did not return an IPN ID.');
   }
 
+  pesapalIpnCache = {url: ipnUrl, ipnId: created.ipn_id};
   return created.ipn_id;
 };
 

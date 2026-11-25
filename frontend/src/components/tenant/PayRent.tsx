@@ -85,12 +85,13 @@ export default function PayRent({ payment, landlord, defaultPhone = '', onSubmit
 
   return (
     <div className="space-y-2">
-      <Button className="finance-cta h-12 w-full text-base" onClick={() => setStkOpen(true)} disabled={Boolean(busy)}>
-        <Smartphone /> Pay with M-Pesa
+      <Button className="finance-cta h-12 w-full text-base" onClick={() => payByCard('pesapal')} disabled={Boolean(busy)}>
+        {busy === 'card' ? <Loader2 className="animate-spin" /> : <CreditCard />}
+        {busy === 'card' ? 'Opening Pesapal…' : 'Pay with M-Pesa or Card (Pesapal)'}
       </Button>
       <div className={`grid gap-2 ${hasBankDetails ? 'grid-cols-2' : 'grid-cols-1'}`}>
-        <Button variant="outline" className="h-11" onClick={() => payByCard('pesapal')} disabled={Boolean(busy)}>
-          {busy === 'card' ? <Loader2 className="animate-spin" /> : <CreditCard />} Pay by card
+        <Button variant="outline" className="h-11" onClick={() => setStkOpen(true)} disabled={Boolean(busy)}>
+          <Smartphone /> M-Pesa STK prompt
         </Button>
         {hasBankDetails && (
           <Button variant="outline" className="h-11" onClick={() => setBankOpen(true)} disabled={Boolean(busy)}>

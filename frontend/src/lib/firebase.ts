@@ -29,7 +29,7 @@ export const formatPhoneToE164 = (raw: string): string | null => {
 };
 
 let recaptchaInstance: RecaptchaVerifier | null = null;
-let recaptchaContainerId: string | null = null;
+let recaptchaHostEl: HTMLElement | null = null;
 
 async function getFirebaseAuth() {
   if (!isFirebasePhoneConfigured()) {
@@ -55,8 +55,32 @@ export function clearPhoneRecaptcha() {
       /* ignore teardown errors */
     }
     recaptchaInstance = null;
-    recaptchaContainerId = null;
   }
+  if (recaptchaHostEl) {
+    try {
+      recaptchaHostEl.remove();
+    } catch {
+      /* ignore DOM teardown errors */
+    }
+    recaptchaHostEl = null;
+  }
+}
+
+/**
+ * Mounts a fresh ephemeral DOM element for Firebase RecaptchaVerifier so reCAPTCHA can
+ * never throw "reCAPTCHA has already been rendered in this element" on retries or modal re-opens.
+ */
+function createFreshRecaptchaElement(containerId: string): HTMLElement {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    throw new Error('Could not initialize verification widget. Please refresh the page and try again.');
+  }
+  container.replaceChildren();
+  const freshEl = document.createElement('div');
+  freshEl.id = `${containerId}-widget-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  container.appendChild(freshEl);
+  recaptchaHostEl = freshEl;
+  return freshEl;
 }
 
 export async function sendFirebasePhoneOtp(phoneInput: string, containerId: string): Promise<{
@@ -71,22 +95,28 @@ export async function sendFirebasePhoneOtp(phoneInput: string, containerId: stri
   const auth = await getFirebaseAuth();
   const { RecaptchaVerifier, signInWithPhoneNumber } = await import('firebase/auth');
 
-  if (recaptchaInstance && recaptchaContainerId !== containerId) {
-    clearPhoneRecaptcha();
-  }
-  if (!recaptchaInstance) {
-    recaptchaInstance = new RecaptchaVerifier(auth, containerId, {
-      size: 'invisible',
-    });
-    recaptchaContainerId = containerId;
-  }
+  // Always reset and attach to a brand-new child node to avoid duplicate reCAPTCHA render errors.
+  clearPhoneRecaptcha();
+  const mountEl = createFreshRecaptchaElement(containerId);
+  recaptchaInstance = new RecaptchaVerifier(auth, mountEl, {
+    size: 'invisible',
+    'expired-callback': () => {
+      clearPhoneRecaptcha();
+    },
+  });
 
   try {
+    await recaptchaInstance.render();
     const confirmation = await signInWithPhoneNumber(auth, e164Phone, recaptchaInstance);
     return { e164Phone, confirmation };
   } catch (err: any) {
     clearPhoneRecaptcha();
     const code = String(err?.code || '');
+    if (code === 'auth/billing-not-enabled') {
+      throw new Error(
+        'Firebase requires the Blaze (pay-as-you-go) plan to send live SMS to Kenyan numbers, or add a test phone number in Firebase Console → Authentication → Sign-in method → Phone.',
+      );
+    }
     if (code === 'auth/too-many-requests') {
       throw new Error('Too many SMS attempts. Please wait a few minutes and try again.');
     }
@@ -98,6 +128,9 @@ export async function sendFirebasePhoneOtp(phoneInput: string, containerId: stri
     }
     if (code === 'auth/unauthorized-domain') {
       throw new Error('Add this domain under Firebase Console → Authentication → Settings → Authorized domains.');
+    }
+    if (code === 'auth/captcha-check-failed') {
+      throw new Error('reCAPTCHA verification failed. Check that this domain is authorized in Firebase Console and try again.');
     }
     throw new Error(err?.message || 'Could not send the SMS verification code.');
   }

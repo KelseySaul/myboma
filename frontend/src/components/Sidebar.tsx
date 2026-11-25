@@ -2,10 +2,12 @@ import { useState } from 'react';
 import {
   BedDouble,
   Bell,
+  Bookmark,
   Building2,
   ChevronRight,
   ClipboardList,
   Globe,
+  Heart,
   Home,
   LayoutGrid,
   Mail,
@@ -49,21 +51,35 @@ interface NavSection {
 }
 
 function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: UserProfile): NavSection[] {
-  const dashboardItem: NavItem = { id: 'dashboard', label: 'Overview', icon: LayoutGrid };
+  const overviewItem: NavItem = { id: 'dashboard', label: 'Overview', icon: LayoutGrid };
 
   switch (role) {
     case 'landlord': {
       const features = profile ? getSubscriptionFeatures(profile) : { maintenanceHub: true };
       return [
-        { title: 'Manage', items: [dashboardItem, { id: 'properties', label: 'Properties', icon: Home }] },
         {
-          title: 'Day to day',
+          title: 'Overview',
+          items: [overviewItem],
+        },
+        {
+          title: 'Portfolio',
           items: [
-            { id: 'finances', label: 'Rent & payments', icon: Wallet },
-            ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: Wrench }] : []),
+            { id: 'properties', label: 'Properties & units', icon: Building2 },
+          ],
+        },
+        {
+          title: 'People',
+          items: [
             { id: 'tenants', label: 'Tenants', icon: Users },
             { id: 'caretakers', label: 'Caretakers & reports', icon: UserCheck },
             { id: 'pending', label: 'Pending invites', icon: Mail },
+          ],
+        },
+        {
+          title: 'Finance & operations',
+          items: [
+            { id: 'finances', label: 'Rent & payments', icon: Wallet },
+            ...(features.maintenanceHub ? [{ id: 'maintenance', label: 'Maintenance', icon: Wrench }] : []),
             { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
@@ -72,11 +88,19 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
     case 'caretaker':
       return [
         {
-          title: 'Property operations',
+          title: 'Overview',
+          items: [overviewItem],
+        },
+        {
+          title: 'Field work',
           items: [
-            dashboardItem,
             { id: 'repairs', label: 'Repairs & issues', icon: Wrench },
             { id: 'reports', label: 'Reports to landlord', icon: ClipboardList },
+          ],
+        },
+        {
+          title: 'Updates',
+          items: [
             { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
@@ -84,40 +108,50 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
     case 'hunter':
       return [
         {
-          title: 'Browse',
+          title: 'Explore',
           items: [
-            dashboardItem,
-            { id: 'all', label: 'All homes', icon: Home },
+            { id: 'all', label: 'All listings', icon: Home },
             { id: 'residential', label: 'Homes', icon: Building2 },
             { id: 'commercial', label: 'Commercial', icon: Building2 },
             { id: 'bnb', label: 'Short stays', icon: BedDouble },
           ],
         },
+        {
+          title: 'My lists',
+          items: [
+            { id: 'saved', label: 'Saved for later', icon: Bookmark },
+            { id: 'liked', label: 'Liked homes', icon: Heart },
+          ],
+        },
       ];
-    case 'admin':
+    case 'admin': {
+      const isAgencyManager = !isSuperAdmin && !profile?.isAdmin;
       return [
         {
-          title: 'People & properties',
+          title: 'Overview',
+          items: [overviewItem],
+        },
+        {
+          title: isAgencyManager ? 'Clients & portfolio' : 'Accounts & portfolio',
           items: [
-            dashboardItem,
-            { id: 'registered', label: 'Users', icon: Users },
+            { id: 'registered', label: isAgencyManager ? 'Landlords & users' : 'Users', icon: Users },
+            { id: 'properties', label: 'Properties & buildings', icon: Building2 },
             { id: 'pending', label: 'Pending invites', icon: Mail },
-            { id: 'properties', label: 'Properties', icon: Building2 },
           ],
         },
         {
-          title: 'Day to day',
+          title: 'Rent & operations',
           items: [
-            { id: 'maintenance', label: 'Maintenance', icon: Wrench },
             { id: 'finances', label: 'Rent & payments', icon: Wallet },
             { id: 'tenants', label: 'Tenants', icon: UserCheck },
+            { id: 'maintenance', label: 'Maintenance', icon: Wrench },
             { id: 'automations', label: 'Notifications', icon: Bell },
           ],
         },
         ...(isSuperAdmin
           ? [
               {
-                title: 'Administration',
+                title: 'Platform governance',
                 items: [
                   { id: 'platforms', label: 'Platforms', icon: Globe },
                   { id: 'audit', label: 'Activity log', icon: ClipboardList },
@@ -126,20 +160,26 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
             ]
           : []),
       ];
+    }
     case 'tenant':
       return [
         {
           title: 'My home',
           items: [
-            dashboardItem,
+            { id: 'dashboard', label: 'Home', icon: Home },
             { id: 'finances', label: 'Rent & payments', icon: Wallet },
+          ],
+        },
+        {
+          title: 'Support & alerts',
+          items: [
             { id: 'maintenance', label: 'Repairs', icon: Wrench },
             { id: 'notices', label: 'Notices', icon: Bell },
           ],
         },
       ];
     default:
-      return [{ title: 'Main', items: [dashboardItem] }];
+      return [{ title: 'Main', items: [overviewItem] }];
   }
 }
 

@@ -16,7 +16,7 @@ async function main() {
     process.exit(1);
   }
   const sqlText = readFileSync(file, 'utf8');
-  const pool = new Pool({connectionString});
+  const pool = new Pool({connectionString, connectionTimeoutMillis: 30_000});
   try {
     await pool.query(sqlText);
     console.log(`Applied migration: ${file}`);

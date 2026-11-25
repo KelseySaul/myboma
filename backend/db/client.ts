@@ -21,8 +21,9 @@ const pool = new Pool({
   connectionString,
   // With DATABASE_RLS=true each in-flight authenticated request holds one connection.
   max: Number(process.env.DATABASE_POOL_MAX || 10),
-  idleTimeoutMillis: 10_000,
-  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 15_000,
+  // Neon scale-to-zero cold starts + TLS can exceed 10s on high-latency links.
+  connectionTimeoutMillis: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS || 25_000),
 });
 
 // An idle connection dropped by Neon must not crash the process; the pool reconnects.

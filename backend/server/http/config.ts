@@ -56,7 +56,7 @@ export const nonSecretConfigStatus = () => ({
   pesapal: Boolean(
     process.env.PESAPAL_CONSUMER_KEY &&
       process.env.PESAPAL_CONSUMER_SECRET &&
-      (process.env.PESAPAL_NOTIFICATION_ID || process.env.PESAPAL_IPN_URL),
+      !/^your[-_]/i.test(process.env.PESAPAL_CONSUMER_KEY),
   ),
   mpesa: Boolean(
     process.env.MPESA_CONSUMER_KEY &&
