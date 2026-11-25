@@ -1047,3 +1047,36 @@ aside[class*="sticky"] {
   backdrop-filter: blur(18px);
 }
 .dark .app-shell main section.rounded-2xl { background: rgba(24, 36, 39, .88); }
+
+/* A lightly blurred photograph sits behind translucent workspace surfaces. */
+.app-shell { position: relative; isolation: isolate; background: #dbe8e2; }
+.app-shell::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  background: url('/workspace-house.webp') center / cover no-repeat;
+  filter: blur(4px);
+  pointer-events: none;
+}
+.dark .app-shell { background: #142521; }
+.dark .app-shell::before { filter: blur(4px) brightness(.48); }
+.app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
+.app-shell main button.group.stat-tint, .app-shell main .stat-tint {
+  background: rgba(255, 255, 255, .48);
+  border-color: rgba(255, 255, 255, .6);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: inset 0 1px rgba(255,255,255,.65), 0 8px 24px rgba(15,23,42,.1);
+}
+.dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
+.dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint {
+  background: rgba(15, 30, 29, .65);
+  border-color: rgba(255,255,255,.17);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
+  .app-shell main button.group.stat-tint, .app-shell main .stat-tint { background: #f8fbfa; }
+  .dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
+  .dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint { background: #223b3b; }
+}
