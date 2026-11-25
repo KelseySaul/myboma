@@ -9,6 +9,7 @@ import LandlordSubscriptionPay from './LandlordSubscriptionPay';
 import {
   addPropertyManager,
   assignTenant,
+  type AssignTenantOptions,
   cancelLandlordInvitation,
   createBuilding,
   createExpense,
@@ -340,7 +341,13 @@ export default function LandlordDashboard({
     });
   };
 
-  const inviteTenant = async (values: { email: string; name: string; phone: string; propertyId: string }) => {
+  const inviteTenant = async (values: {
+    email: string;
+    name: string;
+    phone: string;
+    propertyId: string;
+    initialPayments?: AssignTenantOptions;
+  }) => {
     const targetLandlordId = isSuperAdminScoped && selectedAccountIds.length === 1 ? selectedAccountIds[0] : profile.uid;
     const result = await provisionUser({
       email: values.email,
@@ -351,7 +358,7 @@ export default function LandlordDashboard({
       landlordId: targetLandlordId,
     });
     logAudit('TENANT_INVITE', 'user', values.email);
-    if (values.propertyId !== 'none') await assignTenant(values.propertyId, values.email);
+    if (values.propertyId !== 'none') await assignTenant(values.propertyId, values.email, values.initialPayments);
     await refresh();
     toast.success(result.existing ? `${values.email} already has an account and was added to your tenants` : `Invite sent to ${values.email}`);
   };
@@ -436,10 +443,18 @@ export default function LandlordDashboard({
     });
   };
 
-  const assignToUnit = async (propertyId: string, email: string) => {
-    await assignTenant(propertyId, email);
+  const assignToUnit = async (propertyId: string, email: string, options?: AssignTenantOptions) => {
+    const res = await assignTenant(propertyId, email, options);
     await refresh();
-    toast.success('Tenant assigned. Their first rent invoice has been created.');
+    if (options?.prepaidMonths && options.prepaidMonths > 0) {
+      toast.success(
+        `Tenant assigned. ${options.prepaidMonths} ${options.prepaidMonths === 1 ? 'month' : 'months'} of rent recorded as paid${res.nextDueDate ? ` (next invoice due ${res.nextDueDate})` : ''}.`,
+      );
+    } else if (options?.depositPaid) {
+      toast.success('Tenant assigned with security deposit recorded.');
+    } else {
+      toast.success('Tenant assigned. Their first rent invoice has been created.');
+    }
   };
 
   const tenantMoveOut = (tenant: Tenant) =>

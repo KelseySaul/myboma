@@ -4,12 +4,13 @@ import { ArrowLeft, Building2, Home, KeyRound, Mail, MailCheck, Phone, ShieldChe
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { authClient, getAuthPersistence, setAuthPersistence } from '../../lib/auth-client';
-import { exchangeFirebasePhoneToken } from '../../lib/api';
+import { exchangeFirebaseGoogleToken, exchangeFirebasePhoneToken } from '../../lib/api';
 import {
   clearPhoneRecaptcha,
   FIREBASE_PROJECT_ID,
   isFirebasePhoneConfigured,
   sendFirebasePhoneOtp,
+  signInWithFirebaseGoogle,
   verifyFirebasePhoneOtp,
 } from '../../lib/firebase';
 import { LEGAL_DOCUMENTS, PRIVACY_VERSION, TERMS_VERSION } from '../../../../shared/legalDocuments';
@@ -270,14 +271,26 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     }
     inFlight.current = true;
     setBusy('google');
+    setErrors({});
     if (isSignup && role === 'landlord') localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlord));
     if (isSignup) recordTermsAcceptance();
     setAuthPersistence(isSignup ? true : rememberMe);
     try {
-      const { error } = await authClient.signIn.social({ provider: 'google', callbackURL: window.location.origin });
-      if (error) setErrors({ form: friendlyAuthError(error, 'Google sign-in is not available right now.') });
-    } catch {
-      setErrors({ form: 'Google sign-in is not available right now.' });
+      const { idToken } = await signInWithFirebaseGoogle();
+      const result = await exchangeFirebaseGoogleToken({
+        idToken,
+        mode: isSignup ? 'signup' : 'signin',
+        intendedRole: isSignup ? role : undefined,
+        rememberMe: isSignup ? true : rememberMe,
+      });
+      toast.success(result.isNewUser ? 'Account created with Google.' : 'Signed in with Google.');
+      onOpenChange(false);
+      window.location.reload();
+    } catch (err: any) {
+      const message = err?.message || 'Google sign-in is not available right now.';
+      if (message !== 'Google sign-in was cancelled.') {
+        setErrors({ form: message });
+      }
     } finally {
       inFlight.current = false;
       setBusy(null);

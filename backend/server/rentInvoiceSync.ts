@@ -8,6 +8,7 @@ import {and, eq, lt} from 'drizzle-orm';
 import {db, schema} from '../db/client.ts';
 import {activeLeaseIdsByProperty} from './leases.ts';
 import {
+  addMonthsToBillingDate,
   billingDateInDays,
   billingMonthKey,
   billingToday,
@@ -50,6 +51,138 @@ export const refreshAllOverdueStatuses = async () => {
     .where(and(eq(schema.rentPayments.status, 'pending'), lt(schema.rentPayments.dueDate, billingToday())))
     .returning({id: schema.rentPayments.id});
   return updated.length;
+};
+
+export interface InitialAssignmentPaymentOptions {
+  depositPaid?: boolean;
+  depositAmount?: number | null;
+  prepaidMonths?: number;
+  paymentMethod?: 'mpesa' | 'cash' | 'bank';
+  paymentReference?: string;
+}
+
+/**
+ * Pure planner for initial rent invoices when assigning a tenant to a unit.
+ * When the landlord records advance rent months (`prepaidMonths > 0`), each covered month
+ * is marked `paid` immediately and the next unpaid `pending` invoice is scheduled after the
+ * prepaid window — preventing accidental arrears/overdue emails during paid-up months.
+ */
+export const planInitialAssignmentInvoices = (
+  property: RentableProperty,
+  tenantId: string,
+  options: InitialAssignmentPaymentOptions = {},
+  todayIso = billingToday(),
+) => {
+  const prepaidMonths = Math.max(0, Math.min(24, Math.floor(options.prepaidMonths ?? 0)));
+  const normalizedTenant = tenantId.trim().toLowerCase();
+  const amount = Number(property.price || 0);
+  const methodLabel =
+    options.paymentMethod === 'mpesa' ? 'M-Pesa' : options.paymentMethod === 'bank' ? 'Bank transfer' : 'Cash';
+  const refSuffix = options.paymentReference?.trim() ? ` · Ref: ${options.paymentReference.trim()}` : '';
+  const depositSuffix =
+    options.depositPaid && (options.depositAmount ?? 0) > 0
+      ? ` · Deposit KES ${Number(options.depositAmount).toLocaleString('en-KE')} paid`
+      : options.depositPaid
+        ? ' · Deposit paid'
+        : '';
+
+  if (prepaidMonths === 0) {
+    const dueDate = addMonthsToBillingDate(todayIso, 1);
+    return {
+      paidRows: [] as Array<{dueDate: string; amount: number; manualNote: string}>,
+      nextPendingDueDate: dueDate,
+      tenantId: normalizedTenant,
+      amount,
+    };
+  }
+
+  const paidRows: Array<{dueDate: string; amount: number; manualNote: string}> = [];
+  for (let i = 0; i < prepaidMonths; i += 1) {
+    const dueDate = addMonthsToBillingDate(todayIso, i);
+    const monthTag = prepaidMonths === 1 ? 'First month rent paid on move-in' : `Advance rent paid on move-in (month ${i + 1} of ${prepaidMonths})`;
+    paidRows.push({
+      dueDate,
+      amount,
+      manualNote: `${monthTag} · ${methodLabel}${refSuffix}${i === 0 ? depositSuffix : ''}`,
+    });
+  }
+
+  const nextPendingDueDate = addMonthsToBillingDate(todayIso, prepaidMonths);
+  return {
+    paidRows,
+    nextPendingDueDate,
+    tenantId: normalizedTenant,
+    amount,
+  };
+};
+
+/**
+ * Records any move-in prepaid rent months (marked `paid`) and schedules the next unpaid invoice
+ * so the tenant never receives false arrears reminders for months already covered.
+ */
+export const recordInitialAssignmentInvoices = async (
+  property: RentableProperty,
+  tenantId: string,
+  leaseId: string | null,
+  existingPayments: RentPaymentRow[],
+  options: InitialAssignmentPaymentOptions = {},
+) => {
+  if (!isRentableUnit({...property, tenantId})) {
+    return {paidCreated: 0, nextDueDate: null as string | null};
+  }
+
+  const plan = planInitialAssignmentInvoices(property, tenantId, options);
+  const now = new Date();
+  let paidCreated = 0;
+
+  for (const row of plan.paidRows) {
+    const monthKey = billingMonthKey(row.dueDate);
+    if (propertyHasInvoiceForMonth(existingPayments, property.id, monthKey)) continue;
+    const inserted = await db
+      .insert(schema.rentPayments)
+      .values({
+        landlordId: property.landlordId,
+        platformId: property.platformId ?? null,
+        leaseId,
+        tenantId: plan.tenantId,
+        propertyId: property.id,
+        amount: String(row.amount),
+        dueDate: row.dueDate,
+        status: 'paid',
+        paidAt: now,
+        paymentProvider: 'manual',
+        providerReference: options.paymentReference?.trim() || 'MOVE-IN-PREPAID',
+        paymentMetadata: {
+          note: row.manualNote,
+          moveInPrepaid: true,
+          paymentMethod: options.paymentMethod ?? 'cash',
+          depositPaid: Boolean(options.depositPaid),
+          depositAmount: options.depositPaid ? (options.depositAmount ?? null) : null,
+        },
+        createdAt: now,
+      })
+      .onConflictDoNothing()
+      .returning({id: schema.rentPayments.id});
+    if (inserted.length > 0) {
+      paidCreated += 1;
+      existingPayments.push({
+        id: inserted[0].id,
+        propertyId: property.id,
+        tenantId: plan.tenantId,
+        dueDate: row.dueDate,
+        status: 'paid',
+      });
+    }
+  }
+
+  const nextMonthKey = billingMonthKey(plan.nextPendingDueDate);
+  if (!propertyHasInvoiceForMonth(existingPayments, property.id, nextMonthKey)) {
+    const payload = buildRentInvoicePayload(property, plan.tenantId, plan.nextPendingDueDate);
+    payload.status = 'pending';
+    await insertInvoices([payload]);
+  }
+
+  return {paidCreated, nextDueDate: plan.nextPendingDueDate};
 };
 
 export const ensureRentInvoiceForProperty = async (

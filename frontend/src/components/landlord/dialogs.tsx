@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { AssignTenantOptions } from '../../lib/api';
+import { addMonthsToBillingDate, billingToday } from '../../../../shared/rentInvoices';
 import MapPicker from '../MapPicker';
 import type { Building, Property, PropertyType } from './types';
 import { ActionButton, Field, inputClass } from './ui';
@@ -97,22 +99,210 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest | 
   );
 }
 
+/* Move-in advance payments helper ------------------------------------------ */
+
+interface MoveInPaymentState {
+  depositPaid: boolean;
+  depositAmount: string;
+  advanceRentPaid: boolean;
+  prepaidMonths: string;
+  paymentMethod: 'mpesa' | 'cash' | 'bank';
+  paymentReference: string;
+}
+
+const defaultMoveInPayment = (unitRent?: number | null): MoveInPaymentState => ({
+  depositPaid: false,
+  depositAmount: unitRent ? String(Math.round(Number(unitRent))) : '',
+  advanceRentPaid: false,
+  prepaidMonths: '1',
+  paymentMethod: 'mpesa',
+  paymentReference: '',
+});
+
+const toAssignTenantOptions = (state: MoveInPaymentState): AssignTenantOptions => {
+  const months = state.advanceRentPaid ? Math.max(1, Math.min(24, Math.floor(Number(state.prepaidMonths) || 1))) : 0;
+  const depositNum = state.depositPaid ? Math.max(0, Number(state.depositAmount) || 0) : undefined;
+  return {
+    depositPaid: state.depositPaid || undefined,
+    depositAmount: depositNum,
+    prepaidMonths: months > 0 ? months : undefined,
+    paymentMethod: state.depositPaid || months > 0 ? state.paymentMethod : undefined,
+    paymentReference: (state.depositPaid || months > 0) && state.paymentReference.trim() ? state.paymentReference.trim() : undefined,
+  };
+};
+
+function MoveInPaymentFields({
+  value,
+  onChange,
+  unitRent,
+}: {
+  value: MoveInPaymentState;
+  onChange: (next: MoveInPaymentState) => void;
+  unitRent?: number | null;
+}) {
+  const monthsCount = value.advanceRentPaid ? Math.max(1, Math.min(24, Math.floor(Number(value.prepaidMonths) || 1))) : 0;
+  const nextDueIso = addMonthsToBillingDate(billingToday(), Math.max(1, monthsCount));
+  const nextDueFormatted = new Date(`${nextDueIso}T00:00:00Z`).toLocaleDateString('en-KE', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const showMethod = value.depositPaid || value.advanceRentPaid;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-zinc-200/90 bg-zinc-50/70 p-3.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+      <div>
+        <p className="text-xs font-semibold text-zinc-900 dark:text-white">Initial payments already received</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-zinc-500">
+          Record deposit or advance rent so the tenant is never sent arrears emails for months already paid.
+        </p>
+      </div>
+
+      {/* Security Deposit Toggle */}
+      <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-zinc-800 dark:text-zinc-200">
+        <input
+          type="checkbox"
+          checked={value.depositPaid}
+          onChange={(e) =>
+            onChange({
+              ...value,
+              depositPaid: e.target.checked,
+              depositAmount:
+                e.target.checked && !value.depositAmount && unitRent ? String(Math.round(Number(unitRent))) : value.depositAmount,
+            })
+          }
+          className="h-4 w-4 rounded border-zinc-300 accent-[#5B21B6]"
+        />
+        Security deposit already paid
+      </label>
+
+      {value.depositPaid && (
+        <div className="pl-6">
+          <Field label="Deposit amount (KES)">
+            <input
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={value.depositAmount}
+              onChange={(e) => onChange({ ...value, depositAmount: e.target.value })}
+              placeholder={unitRent ? String(Math.round(Number(unitRent))) : 'e.g. 25000'}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Advance Rent Months Toggle */}
+      <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-zinc-800 dark:text-zinc-200">
+        <input
+          type="checkbox"
+          checked={value.advanceRentPaid}
+          onChange={(e) => onChange({ ...value, advanceRentPaid: e.target.checked })}
+          className="h-4 w-4 rounded border-zinc-300 accent-[#5B21B6]"
+        />
+        Rent already paid (first month or multiple months in advance)
+      </label>
+
+      {value.advanceRentPaid && (
+        <div className="space-y-2.5 pl-6">
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { months: '1', label: '1st month' },
+              { months: '2', label: '2 months' },
+              { months: '3', label: '3 months' },
+              { months: '6', label: '6 months' },
+              { months: '12', label: '12 months' },
+            ].map((preset) => (
+              <button
+                key={preset.months}
+                type="button"
+                onClick={() => onChange({ ...value, prepaidMonths: preset.months })}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                  value.prepaidMonths === preset.months
+                    ? 'bg-[#5B21B6] text-white'
+                    : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200'
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <Field label="Number of months paid (1–24)">
+            <input
+              type="number"
+              min={1}
+              max={24}
+              inputMode="numeric"
+              value={value.prepaidMonths}
+              onChange={(e) => onChange({ ...value, prepaidMonths: e.target.value })}
+              className={inputClass}
+            />
+          </Field>
+        </div>
+      )}
+
+      {showMethod && (
+        <div className="grid gap-2.5 pt-1 sm:grid-cols-2">
+          <Field label="Paid via">
+            <select
+              className={inputClass}
+              value={value.paymentMethod}
+              onChange={(e) => onChange({ ...value, paymentMethod: e.target.value as 'mpesa' | 'cash' | 'bank' })}
+            >
+              <option value="mpesa">M-Pesa</option>
+              <option value="cash">Cash</option>
+              <option value="bank">Bank transfer</option>
+            </select>
+          </Field>
+          <Field label="Reference (optional)">
+            <input
+              className={inputClass}
+              value={value.paymentReference}
+              onChange={(e) => onChange({ ...value, paymentReference: e.target.value })}
+              placeholder="e.g. M-Pesa code or receipt #"
+              maxLength={160}
+            />
+          </Field>
+        </div>
+      )}
+
+      {value.advanceRentPaid && (
+        <p className="rounded-lg border border-violet-200/80 bg-violet-50/70 px-3 py-2 text-[11px] leading-4 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/15 dark:text-violet-200">
+          <strong>{monthsCount} {monthsCount === 1 ? 'month' : 'months'}</strong> will be marked as paid. Next rent invoice will be scheduled for{' '}
+          <strong>{nextDueFormatted}</strong> — zero arrears notices before then.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* Invite tenant ------------------------------------------------------------ */
 
 export function InviteTenantDialog({ open, onClose, vacantUnits, onInvite }: {
   open: boolean;
   onClose: () => void;
   vacantUnits: Property[];
-  onInvite: (values: { email: string; name: string; phone: string; propertyId: string }) => Promise<void>;
+  onInvite: (values: {
+    email: string;
+    name: string;
+    phone: string;
+    propertyId: string;
+    initialPayments?: AssignTenantOptions;
+  }) => Promise<void>;
 }) {
   const [values, setValues] = useState({ email: '', name: '', phone: '', propertyId: 'none' });
+  const [moveIn, setMoveIn] = useState<MoveInPaymentState>(() => defaultMoveInPayment());
   const { busy, error, setError, submit } = useSubmit(onClose);
   useEffect(() => {
     if (open) {
       setValues({ email: '', name: '', phone: '', propertyId: 'none' });
+      setMoveIn(defaultMoveInPayment());
       setError(null);
     }
   }, [open]);
+
+  const selectedUnit = vacantUnits.find((p) => p.id === values.propertyId);
 
   return (
     <FormDialog
@@ -126,7 +316,15 @@ export function InviteTenantDialog({ open, onClose, vacantUnits, onInvite }: {
       onSubmit={() => {
         if (!EMAIL_RE.test(values.email.trim())) return setError('Enter a valid email address.');
         if (values.name.trim().length < 2) return setError("Enter the tenant's name.");
-        submit(() => onInvite({ ...values, email: values.email.trim().toLowerCase(), name: values.name.trim(), phone: values.phone.trim() }));
+        submit(() =>
+          onInvite({
+            ...values,
+            email: values.email.trim().toLowerCase(),
+            name: values.name.trim(),
+            phone: values.phone.trim(),
+            initialPayments: values.propertyId !== 'none' ? toAssignTenantOptions(moveIn) : undefined,
+          }),
+        );
       }}
     >
       <Field label="Full name">
@@ -139,12 +337,26 @@ export function InviteTenantDialog({ open, onClose, vacantUnits, onInvite }: {
         <input className={inputClass} type="tel" value={values.phone} onChange={(e) => setValues({ ...values, phone: e.target.value })} placeholder="+254 7xx xxx xxx" />
       </Field>
       {vacantUnits.length > 0 && (
-        <Field label="Unit (optional)" hint="Assigning a unit creates their first rent invoice.">
-          <select className={inputClass} value={values.propertyId} onChange={(e) => setValues({ ...values, propertyId: e.target.value })}>
+        <Field label="Unit (optional)" hint="Assigning a unit now lets you record any deposit or advance rent paid.">
+          <select
+            className={inputClass}
+            value={values.propertyId}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              const unit = vacantUnits.find((u) => u.id === nextId);
+              setValues({ ...values, propertyId: nextId });
+              if (unit && !moveIn.depositAmount) {
+                setMoveIn((prev) => ({ ...prev, depositAmount: String(Math.round(Number(unit.price || 0))) }));
+              }
+            }}
+          >
             <option value="none">Assign later</option>
             {vacantUnits.map((p) => <option key={p.id} value={p.id}>{p.title}{p.unitNumber ? ` (${p.unitNumber})` : ''}</option>)}
           </select>
         </Field>
+      )}
+      {values.propertyId !== 'none' && (
+        <MoveInPaymentFields value={moveIn} onChange={setMoveIn} unitRent={selectedUnit?.price} />
       )}
     </FormDialog>
   );
@@ -159,39 +371,55 @@ export function AssignDialog({ open, onClose, fixedProperty, fixedEmail, vacantU
   fixedEmail?: string | null;
   vacantUnits: Property[];
   tenantOptions: { email: string; name: string }[];
-  onAssign: (propertyId: string, email: string) => Promise<void>;
+  onAssign: (propertyId: string, email: string, options?: AssignTenantOptions) => Promise<void>;
 }) {
   const [propertyId, setPropertyId] = useState('');
   const [email, setEmail] = useState('');
+  const [moveIn, setMoveIn] = useState<MoveInPaymentState>(() => defaultMoveInPayment(fixedProperty?.price));
   const { busy, error, setError, submit } = useSubmit(onClose);
   useEffect(() => {
     if (open) {
-      setPropertyId(fixedProperty?.id ?? vacantUnits[0]?.id ?? '');
+      const initialUnit = fixedProperty ?? vacantUnits[0] ?? null;
+      setPropertyId(initialUnit?.id ?? '');
       setEmail(fixedEmail ?? tenantOptions[0]?.email ?? '');
+      setMoveIn(defaultMoveInPayment(initialUnit?.price));
       setError(null);
     }
-  }, [open]);
+  }, [open, fixedProperty]);
+
+  const activeUnit = fixedProperty ?? vacantUnits.find((p) => p.id === propertyId) ?? null;
 
   return (
     <FormDialog
       open={open}
       onClose={onClose}
       title="Assign tenant"
-      description="The unit is marked occupied and the tenant's first rent invoice is created."
+      description="Mark the unit occupied and optionally record deposit or advance rent already received."
       submitLabel="Assign"
       busy={busy}
       error={error}
       onSubmit={() => {
         if (!propertyId) return setError('Choose a unit.');
         if (!EMAIL_RE.test(email.trim())) return setError('Choose a tenant or enter their email.');
-        submit(() => onAssign(propertyId, email.trim().toLowerCase()));
+        submit(() => onAssign(propertyId, email.trim().toLowerCase(), toAssignTenantOptions(moveIn)));
       }}
     >
       {fixedProperty ? (
         <p className="rounded-xl bg-zinc-50 px-3 py-2 text-sm dark:bg-zinc-800">Unit: <span className="font-semibold">{fixedProperty.title}</span></p>
       ) : (
         <Field label="Unit">
-          <select className={inputClass} value={propertyId} onChange={(e) => setPropertyId(e.target.value)}>
+          <select
+            className={inputClass}
+            value={propertyId}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              setPropertyId(nextId);
+              const unit = vacantUnits.find((u) => u.id === nextId);
+              if (unit && !moveIn.depositAmount) {
+                setMoveIn((prev) => ({ ...prev, depositAmount: String(Math.round(Number(unit.price || 0))) }));
+              }
+            }}
+          >
             {vacantUnits.length === 0 && <option value="">No vacant units</option>}
             {vacantUnits.map((p) => <option key={p.id} value={p.id}>{p.title}{p.unitNumber ? ` (${p.unitNumber})` : ''}</option>)}
           </select>
@@ -210,6 +438,8 @@ export function AssignDialog({ open, onClose, fixedProperty, fixedEmail, vacantU
           )}
         </Field>
       )}
+
+      <MoveInPaymentFields value={moveIn} onChange={setMoveIn} unitRent={activeUnit?.price} />
     </FormDialog>
   );
 }

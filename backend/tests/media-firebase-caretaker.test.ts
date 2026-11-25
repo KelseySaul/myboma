@@ -5,8 +5,10 @@ import {
   FirebaseTokenError,
   normalizePhoneNumber,
   phoneLookupVariants,
+  validateFirebaseGoogleClaims,
   validateFirebaseTokenClaims,
 } from '../server/services/firebaseAuth.ts';
+import {addMonthsToBillingDate, daysUntilDueDate} from '../../shared/rentInvoices.ts';
 import {assertCanProvision, resolveProvisionedLandlordSubscription} from '../server/provisionPolicy.ts';
 import {parseInvitePayload, serializeInvitePayload} from '../server/invitePolicy.ts';
 
@@ -224,4 +226,59 @@ test('Property Managers (agency admins) can invite landlords, tenants, and caret
       true,
     ),
   );
+});
+
+test('Firebase Google token claim validation accepts verified Google emails and rejects unverified ones', () => {
+  const now = 1_800_000_000;
+  const ok = validateFirebaseGoogleClaims(
+    {alg: 'RS256', kid: 'kid-1'},
+    {
+      aud: 'myboma-c1c8b',
+      iss: 'https://securetoken.google.com/myboma-c1c8b',
+      sub: 'google-uid-42',
+      exp: now + 3600,
+      iat: now - 30,
+      auth_time: now - 30,
+      email: 'Grace.Wanjiku@gmail.com',
+      email_verified: true,
+      name: 'Grace Wanjiku',
+      picture: 'https://lh3.googleusercontent.com/a/photo',
+    },
+    'myboma-c1c8b',
+    now,
+  );
+  assert.equal(ok.uid, 'google-uid-42');
+  assert.equal(ok.email, 'grace.wanjiku@gmail.com');
+  assert.equal(ok.name, 'Grace Wanjiku');
+  assert.equal(ok.picture, 'https://lh3.googleusercontent.com/a/photo');
+
+  assert.throws(
+    () =>
+      validateFirebaseGoogleClaims(
+        {alg: 'RS256', kid: 'kid-1'},
+        {
+          aud: 'myboma-c1c8b',
+          iss: 'https://securetoken.google.com/myboma-c1c8b',
+          sub: 'google-uid-42',
+          exp: now + 3600,
+          iat: now - 30,
+          email: 'unverified@gmail.com',
+          email_verified: false,
+        },
+        'myboma-c1c8b',
+        now,
+      ),
+    FirebaseTokenError,
+  );
+});
+
+test('2-day rent reminder helper and advance-month billing date math clamp month ends accurately', () => {
+  assert.equal(daysUntilDueDate('2026-12-01', '2026-11-29'), 2);
+  assert.equal(daysUntilDueDate('2026-12-01', '2026-12-01'), 0);
+  assert.equal(daysUntilDueDate('2026-12-01', '2026-12-04'), -3);
+
+  assert.equal(addMonthsToBillingDate('2026-11-25', 1), '2026-12-25');
+  assert.equal(addMonthsToBillingDate('2026-11-25', 3), '2027-02-25');
+  assert.equal(addMonthsToBillingDate('2026-01-31', 1), '2026-02-28');
+  assert.equal(addMonthsToBillingDate('2028-01-31', 1), '2028-02-29');
 });

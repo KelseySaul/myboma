@@ -1,4 +1,5 @@
 import {and, eq, gte, inArray, lte, sql} from 'drizzle-orm';
+import {billingDateInDays, billingToday, daysUntilDueDate} from '../../shared/rentInvoices.ts';
 import {db, schema} from '../db/client.ts';
 import {canViewRentPayment} from '../db/authz.ts';
 import {sendPushToEmail} from './services/notify.ts';
@@ -157,11 +158,10 @@ export const handleSendBulkRentReminders = async (
 export const processAutomatedRentReminders = async (deps: NotificationDependencies) => {
   const {sendEmail, insertNotification} = deps;
 
-  // Find pending rent payments where due date is within the next 3 days or already overdue
+  // Notify tenants when rent is 2 days away, due tomorrow/today, or already overdue (Nairobi calendar).
   const today = new Date();
-  const threeDaysFromNow = new Date();
-  threeDaysFromNow.setDate(today.getDate() + 3);
-  const cutoff = threeDaysFromNow.toISOString().split('T')[0];
+  const todayIso = billingToday(today);
+  const twoDaysOutIso = billingDateInDays(2, today);
 
   const rows = await db
     .select({
@@ -173,20 +173,22 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
     .innerJoin(schema.properties, eq(schema.properties.id, schema.rentPayments.propertyId))
     .where(
       and(
-        // Overdue rows must be included: the overdue refresh flips past-due invoices from
-        // 'pending' to 'overdue', which previously silenced every overdue notice.
+        // Only unpaid invoices; prepaid / paid / verifying invoices are never reminded.
         inArray(schema.rentPayments.status, ['pending', 'overdue']),
-        lte(schema.rentPayments.dueDate, cutoff),
+        lte(schema.rentPayments.dueDate, twoDaysOutIso),
       ),
     );
 
   if (rows.length === 0) return;
 
-  // We need to fetch all landlords and check their plans
+  // Check landlord account status so reminders never fire for suspended accounts.
   const landlordIds = [...new Set(rows.map((r) => r.payment.landlordId))];
   const landlords = await db
     .select({
       uid: schema.users.uid,
+      status: schema.users.status,
+      isAdmin: schema.users.isAdmin,
+      isSuperAdmin: schema.users.isSuperAdmin,
       subscriptionPlan: schema.users.subscriptionPlan,
       subscriptionStatus: schema.users.subscriptionStatus,
       subscriptionExpiresAt: schema.users.subscriptionExpiresAt,
@@ -194,21 +196,22 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
     .from(schema.users)
     .where(inArray(schema.users.uid, landlordIds));
 
-  // Automations are a Pro / Pro Plus feature, and only while the plan is paid up.
-  const proLandlordIds = new Set(
+  const activeLandlordIds = new Set(
     landlords
       .filter((l) => {
-        const tier = l.subscriptionPlan?.split(':')[0];
-        const active =
-          l.subscriptionStatus === 'active' && (!l.subscriptionExpiresAt || new Date(l.subscriptionExpiresAt) > today);
-        return active && (tier === 'pro' || tier === 'proplus');
+        if (l.status === 'suspended') return false;
+        if (l.isAdmin || l.isSuperAdmin) return true;
+        const activeSub =
+          l.subscriptionStatus === 'active' &&
+          (!l.subscriptionExpiresAt || new Date(l.subscriptionExpiresAt) > today);
+        return activeSub;
       })
       .map((l) => l.uid),
   );
 
   for (const row of rows) {
     const payment = row.payment;
-    if (!proLandlordIds.has(payment.landlordId)) continue; // Skip if landlord is not on pro/proplus
+    if (!activeLandlordIds.has(payment.landlordId)) continue;
 
     let tenantEmail = String(payment.tenantId);
     let platformId = payment.platformId;
@@ -224,17 +227,32 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
 
     const amount = Number(payment.amount).toLocaleString('en-KE');
     const propertyLabel = row.propertyTitle || row.propertyUnitNumber || 'your unit';
-    const dueDate = new Date(payment.dueDate);
-    const isOverdue = dueDate < today;
+    const daysLeft = daysUntilDueDate(payment.dueDate, todayIso);
+    const dueDateObj = new Date(`${String(payment.dueDate).slice(0, 10)}T00:00:00Z`);
+    const dueDateStr = dueDateObj.toLocaleDateString('en-KE', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    });
 
-    const dueDateStr = dueDate.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'});
+    let title: string;
+    let message: string;
+    if (daysLeft < 0) {
+      title = 'Rent Overdue Notice';
+      message = `Notice: Your rent payment of KES ${amount} for ${propertyLabel} was due on ${dueDateStr} and is currently overdue. Please settle it on MyBoma.`;
+    } else if (daysLeft === 0) {
+      title = 'Rent Due Today';
+      message = `Reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due today (${dueDateStr}). Pay easily via M-Pesa or card on MyBoma.`;
+    } else if (daysLeft === 1) {
+      title = 'Rent Due Tomorrow';
+      message = `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due tomorrow (${dueDateStr}).`;
+    } else {
+      title = 'Rent Due in 2 Days';
+      message = `Friendly reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due in 2 days (${dueDateStr}).`;
+    }
 
-    const title = isOverdue ? 'Rent Overdue Notice' : 'Upcoming Rent Reminder';
-    const message = isOverdue
-      ? `Notice: Your rent payment of KES ${amount} for ${propertyLabel} was due on ${dueDateStr} and is currently overdue.`
-      : `Reminder: Your rent payment of KES ${amount} for ${propertyLabel} is due on ${dueDateStr}.`;
-
-    // Try to avoid spamming everyday: skip if a matching notification went out in the last 24h.
+    // Deduplicate per tenant + property + reminder milestone within the last 24h.
     const since = new Date(today.getTime() - 24 * 60 * 60 * 1000);
     const recentNotifs = await db
       .select({id: schema.notifications.id})
@@ -249,7 +267,7 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
       )
       .limit(1);
 
-    if (recentNotifs.length > 0) continue; // Already reminded today
+    if (recentNotifs.length > 0) continue;
 
     const results = await Promise.allSettled([
       insertNotification({

@@ -55,6 +55,17 @@ export type VerifiedFirebasePhoneToken = {
   expiresAt: number;
 };
 
+export type VerifiedFirebaseGoogleToken = {
+  uid: string;
+  email: string;
+  emailVerified: boolean;
+  name: string | null;
+  picture: string | null;
+  authTime: number;
+  issuedAt: number;
+  expiresAt: number;
+};
+
 export class FirebaseTokenError extends Error {
   constructor(
     public status: number,
@@ -156,6 +167,105 @@ export async function verifyFirebasePhoneIdToken(
   }
 
   const claims = validateFirebaseTokenClaims(header, payload, projectId);
+
+  let certs = await fetchGooglePublicCerts(false);
+  let cert = header.kid ? certs[header.kid] : undefined;
+  if (!cert) {
+    certs = await fetchGooglePublicCerts(true);
+    cert = header.kid ? certs[header.kid] : undefined;
+  }
+  if (!cert) {
+    throw new FirebaseTokenError(401, 'Unknown Firebase signing key.');
+  }
+
+  const signatureBytes = Buffer.from(parts[2].replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+  const verifier = createVerify('RSA-SHA256');
+  verifier.update(`${parts[0]}.${parts[1]}`);
+  verifier.end();
+  if (!verifier.verify(cert, signatureBytes)) {
+    throw new FirebaseTokenError(401, 'Invalid Firebase token signature.');
+  }
+
+  return claims;
+}
+
+/** Pure claim validator for Firebase Google ID tokens (exported for unit tests). */
+export const validateFirebaseGoogleClaims = (
+  header: {alg?: string; kid?: string},
+  payload: Record<string, unknown>,
+  projectId: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): VerifiedFirebaseGoogleToken => {
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string' || !header.kid) {
+    throw new FirebaseTokenError(401, 'Invalid Firebase token header.');
+  }
+  const aud = String(payload.aud ?? '');
+  const iss = String(payload.iss ?? '');
+  const sub = String(payload.sub ?? '');
+  const exp = Number(payload.exp ?? 0);
+  const iat = Number(payload.iat ?? 0);
+  const authTime = Number(payload.auth_time ?? iat);
+
+  if (aud !== projectId) {
+    throw new FirebaseTokenError(401, 'Firebase token project mismatch.');
+  }
+  if (iss !== `https://securetoken.google.com/${projectId}`) {
+    throw new FirebaseTokenError(401, 'Invalid Firebase token issuer.');
+  }
+  if (!sub || sub.length > 128) {
+    throw new FirebaseTokenError(401, 'Invalid Firebase subject.');
+  }
+  if (!Number.isFinite(exp) || exp <= nowSeconds - 30) {
+    throw new FirebaseTokenError(401, 'Your Google sign-in session expired. Please try again.');
+  }
+  if (!Number.isFinite(iat) || iat > nowSeconds + 300) {
+    throw new FirebaseTokenError(401, 'Invalid Firebase token timestamp.');
+  }
+
+  const rawEmail = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+  const emailVerified = payload.email_verified === true;
+  if (!rawEmail || !rawEmail.includes('@') || !emailVerified) {
+    throw new FirebaseTokenError(400, 'Your Google account must have a verified email address.');
+  }
+
+  const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : null;
+  const picture =
+    typeof payload.picture === 'string' && /^https:\/\//i.test(payload.picture.trim())
+      ? payload.picture.trim()
+      : null;
+
+  return {
+    uid: sub,
+    email: rawEmail,
+    emailVerified,
+    name,
+    picture,
+    authTime,
+    issuedAt: iat,
+    expiresAt: exp,
+  };
+};
+
+/** Cryptographically verifies a Firebase Google ID token (RS256 against Google X.509 certs). */
+export async function verifyFirebaseGoogleIdToken(
+  idToken: string,
+  projectId = getFirebaseProjectId(),
+): Promise<VerifiedFirebaseGoogleToken> {
+  const parts = idToken.split('.');
+  if (parts.length !== 3) {
+    throw new FirebaseTokenError(401, 'Malformed Firebase ID token.');
+  }
+
+  let header: {alg?: string; kid?: string};
+  let payload: Record<string, unknown>;
+  try {
+    header = decodeBase64UrlJson<{alg?: string; kid?: string}>(parts[0]);
+    payload = decodeBase64UrlJson<Record<string, unknown>>(parts[1]);
+  } catch {
+    throw new FirebaseTokenError(401, 'Could not decode Firebase ID token.');
+  }
+
+  const claims = validateFirebaseGoogleClaims(header, payload, projectId);
 
   let certs = await fetchGooglePublicCerts(false);
   let cert = header.kid ? certs[header.kid] : undefined;

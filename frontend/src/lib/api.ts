@@ -233,11 +233,30 @@ export const deleteProperty = (id: string) => bffRequest<{deleted: boolean}>(`/l
 export const addPropertyManager = (propertyId: string, email: string, role: 'manager' | 'co-owner' = 'manager') =>
   bffRequest<{added: boolean}>(`/landlord/properties/${propertyId}/managers`, {method: 'POST', body: {email, role}});
 
-export const assignTenant = (propertyId: string, email: string) =>
-  bffRequest<{assigned: boolean; property: Record<string, any>}>('/landlord/tenants/assign', {
-    method: 'POST',
-    body: {propertyId, email},
-  });
+export interface AssignTenantOptions {
+  depositPaid?: boolean;
+  depositAmount?: number;
+  prepaidMonths?: number;
+  paymentMethod?: 'mpesa' | 'cash' | 'bank';
+  paymentReference?: string;
+}
+
+export const assignTenant = (propertyId: string, email: string, options: AssignTenantOptions = {}) =>
+  bffRequest<{assigned: boolean; property: Record<string, any>; paidRecorded?: number; nextDueDate?: string | null}>(
+    '/landlord/tenants/assign',
+    {
+      method: 'POST',
+      body: {
+        propertyId,
+        email,
+        ...(options.depositPaid !== undefined ? {depositPaid: options.depositPaid} : {}),
+        ...(options.depositAmount !== undefined ? {depositAmount: options.depositAmount} : {}),
+        ...(options.prepaidMonths !== undefined ? {prepaidMonths: options.prepaidMonths} : {}),
+        ...(options.paymentMethod ? {paymentMethod: options.paymentMethod} : {}),
+        ...(options.paymentReference?.trim() ? {paymentReference: options.paymentReference.trim()} : {}),
+      },
+    },
+  );
 
 export const unassignTenant = (email: string) =>
   bffRequest<{unassigned: boolean}>(`/landlord/tenants/${encodeURIComponent(email)}/unassign`, {method: 'POST'});
@@ -562,4 +581,26 @@ export const acceptInvite = async (body: {token: string; name: string; phone?: s
     throw error;
   }
   return payload as {ok: true; role: string};
+};
+
+/** Exchanges a Firebase Google signInWithPopup ID token for a MyBoma session cookie + bearer token. */
+export const exchangeFirebaseGoogleToken = async (body: {
+  idToken: string;
+  mode?: 'signin' | 'signup' | 'auto';
+  intendedRole?: 'hunter' | 'landlord' | 'tenant';
+  rememberMe?: boolean;
+}) => {
+  const response = await fetch(`${apiBaseUrl()}/api/auth/google`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Google sign-in failed.');
+  }
+  const bearer = response.headers.get('set-auth-token') || (typeof payload.token === 'string' ? payload.token : null);
+  if (bearer) setStoredToken(bearer);
+  return payload as {ok: true; isNewUser: boolean; token?: string; user: {id: string; email: string; name?: string}};
 };

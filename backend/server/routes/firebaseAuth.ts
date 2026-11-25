@@ -1,17 +1,29 @@
 import {randomUUID} from 'node:crypto';
 import {serializeSignedCookie} from 'better-call';
-import {and, eq, inArray, isNull, sql} from 'drizzle-orm';
+import {and, eq, inArray, isNull, like, sql} from 'drizzle-orm';
 import {type Express} from 'express';
 import {z} from 'zod';
 import {rootDb as db} from '../../db/client.ts';
 import * as schema from '../../db/schema/index.js';
+import {isSuperAdminEmail} from '../../config/superAdmin.ts';
 import {auth} from '../auth.ts';
 import {asyncHandler, credentialLimiter, getValidatedBody, validateBody} from '../http/middleware.ts';
+import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload} from '../invitePolicy.ts';
 import {
   FirebaseTokenError,
   phoneLookupVariants,
+  verifyFirebaseGoogleIdToken,
   verifyFirebasePhoneIdToken,
 } from '../services/firebaseAuth.ts';
+
+const firebaseGoogleAuthSchema = z
+  .object({
+    idToken: z.string().min(20).max(8192),
+    mode: z.enum(['signin', 'signup', 'auto']).optional().default('auto'),
+    intendedRole: z.enum(['hunter', 'landlord', 'tenant']).optional(),
+    rememberMe: z.boolean().optional().default(true),
+  })
+  .strict();
 
 const firebasePhoneAuthSchema = z
   .object({
@@ -220,6 +232,203 @@ export function registerFirebaseAuthRoutes(app: Express) {
         isNewUser: true,
         token: session.token,
         user: {id: uid, email: candidateEmail, phone: verified.phoneNumber},
+      });
+    }),
+  );
+
+  /**
+   * Exchanges a Firebase Google signInWithPopup ID token for a genuine MyBoma Better-Auth session.
+   * Honors pending invitations for verified emails and provisions new accounts cleanly.
+   */
+  app.post(
+    '/api/auth/google',
+    credentialLimiter,
+    validateBody(firebaseGoogleAuthSchema),
+    asyncHandler(async (req, res) => {
+      const body = getValidatedBody<z.infer<typeof firebaseGoogleAuthSchema>>(req);
+
+      let verified;
+      try {
+        verified = await verifyFirebaseGoogleIdToken(body.idToken);
+      } catch (err) {
+        if (err instanceof FirebaseTokenError) {
+          res.status(err.status).json({error: err.message});
+          return;
+        }
+        throw err;
+      }
+
+      const email = verified.email.toLowerCase();
+
+      // 1. Check for existing MyBoma user by Google link or verified email.
+      const existingLinked = await db.query.authAccount.findFirst({
+        where: and(
+          eq(schema.authAccount.providerId, 'firebase-google'),
+          eq(schema.authAccount.accountId, verified.uid),
+        ),
+        columns: {userId: true},
+      });
+
+      const existingUser = existingLinked
+        ? await db.query.users.findFirst({where: eq(schema.users.uid, existingLinked.userId)})
+        : await db.query.users.findFirst({where: sql`lower(${schema.users.email}) = ${email}`});
+
+      if (existingUser) {
+        if (existingUser.status === 'suspended') {
+          res.status(403).json({error: 'This account has been suspended.'});
+          return;
+        }
+
+        const isEnvSuper = isSuperAdminEmail(email);
+        await db.transaction(async (tx) => {
+          if (!existingLinked) {
+            await tx
+              .insert(schema.authAccount)
+              .values({
+                userId: existingUser.uid,
+                accountId: verified.uid,
+                providerId: 'firebase-google',
+              })
+              .onConflictDoNothing();
+          }
+          await tx
+            .update(schema.authUser)
+            .set({
+              emailVerified: true,
+              ...(verified.picture ? {image: verified.picture} : {}),
+            })
+            .where(eq(schema.authUser.id, existingUser.uid));
+
+          const userPatch: Record<string, unknown> = {};
+          if (!existingUser.avatarUrl && verified.picture) userPatch.avatarUrl = verified.picture;
+          if ((!existingUser.displayName || existingUser.displayName === 'User') && verified.name) {
+            userPatch.displayName = verified.name;
+          }
+          if (isEnvSuper && !existingUser.isSuperAdmin) {
+            userPatch.isSuperAdmin = true;
+            userPatch.isAdmin = true;
+            userPatch.role = 'admin';
+          }
+          if (Object.keys(userPatch).length > 0) {
+            await tx.update(schema.users).set(userPatch).where(eq(schema.users.uid, existingUser.uid));
+          }
+        });
+
+        const session = await createBetterAuthSessionForUser(existingUser.uid, req, body.rememberMe);
+        res.setHeader('Set-Cookie', session.setCookies);
+        res.setHeader('set-auth-token', session.token);
+        res.json({
+          ok: true,
+          isNewUser: false,
+          token: session.token,
+          user: {id: existingUser.uid, email: existingUser.email, name: existingUser.displayName},
+        });
+        return;
+      }
+
+      // 2. New user — inspect pending invitation (both invitations table and invite payload token).
+      const pendingInvite = await db.query.invitations.findFirst({
+        where: sql`lower(${schema.invitations.email}) = ${email}`,
+      });
+
+      let inviteProfile: Record<string, any> = {};
+      if (pendingInvite) {
+        const verificationRows = await db
+          .select({value: schema.authVerification.value})
+          .from(schema.authVerification)
+          .where(like(schema.authVerification.identifier, `${INVITE_IDENTIFIER_PREFIX}%`));
+        const matchingPayload = verificationRows
+          .map((row) => parseInvitePayload(row.value))
+          .find((p) => p?.email === email);
+        if (matchingPayload?.profile) inviteProfile = matchingPayload.profile;
+      }
+
+      const isEnvSuper = isSuperAdminEmail(email);
+      const invitedRole = pendingInvite?.role ?? null;
+      const resolvedRole = isEnvSuper
+        ? 'admin'
+        : invitedRole ?? (body.intendedRole === 'landlord' ? 'landlord' : 'hunter');
+      const isAdminFlag = isEnvSuper || invitedRole === 'admin';
+
+      const displayName =
+        verified.name ||
+        pendingInvite?.displayName?.trim() ||
+        email.split('@')[0] ||
+        'User';
+
+      const uid = randomUUID();
+      await db.transaction(async (tx) => {
+        await tx.insert(schema.authUser).values({
+          id: uid,
+          name: displayName,
+          email,
+          emailVerified: true,
+          image: verified.picture,
+        });
+        await tx.insert(schema.authAccount).values({
+          userId: uid,
+          accountId: verified.uid,
+          providerId: 'firebase-google',
+        });
+        await tx.insert(schema.users).values({
+          uid,
+          platformId: pendingInvite?.platformId ?? null,
+          managedByAdminId:
+            inviteProfile.managedByAdminId ??
+            (invitedRole === 'caretaker' || invitedRole === 'landlord' ? (pendingInvite?.landlordId ?? null) : null),
+          rentRecipientId: inviteProfile.rentRecipientId ?? null,
+          email,
+          displayName,
+          role: resolvedRole,
+          isAdmin: isAdminFlag,
+          isSuperAdmin: isEnvSuper,
+          phone: pendingInvite?.phone ?? null,
+          avatarUrl: verified.picture,
+          rentPayoutMethod: inviteProfile.rentPayoutMethod ?? null,
+          mpesaSettlementPhone: inviteProfile.mpesaSettlementPhone ?? null,
+          mpesaSettlementShortCode: inviteProfile.mpesaSettlementShortCode ?? null,
+          bankName: inviteProfile.bankName ?? null,
+          bankAccountNumber: inviteProfile.bankAccountNumber ?? null,
+          bankAccountName: inviteProfile.bankAccountName ?? null,
+          subscriptionPlan: inviteProfile.subscriptionPlan ?? null,
+          subscriptionStatus: inviteProfile.subscriptionStatus ?? 'none',
+          subscriptionExpiresAt: inviteProfile.subscriptionExpiresAt ? new Date(inviteProfile.subscriptionExpiresAt) : null,
+          mustChangePassword: false,
+        });
+
+        if (invitedRole === 'tenant') {
+          await tx
+            .update(schema.leases)
+            .set({tenantUserId: uid})
+            .where(and(sql`lower(${schema.leases.tenantEmail}) = ${email}`, isNull(schema.leases.tenantUserId)));
+        }
+
+        if (invitedRole === 'caretaker' && Array.isArray(inviteProfile.propertyIds) && inviteProfile.propertyIds.length > 0) {
+          const managerOwnerId = inviteProfile.managedByAdminId ?? pendingInvite?.landlordId ?? null;
+          if (managerOwnerId) {
+            await tx
+              .insert(schema.propertyManagers)
+              .values(
+                inviteProfile.propertyIds.map((propertyId: string) => ({
+                  propertyId,
+                  userId: uid,
+                  landlordId: managerOwnerId,
+                  role: 'manager' as const,
+                })),
+              )
+              .onConflictDoNothing();
+          }
+        }
+      });
+
+      const session = await createBetterAuthSessionForUser(uid, req, body.rememberMe);
+      res.setHeader('Set-Cookie', session.setCookies);
+      res.setHeader('set-auth-token', session.token);
+      res.status(201).json({
+        ok: true,
+        isNewUser: true,
+        token: session.token,
+        user: {id: uid, email, name: displayName},
       });
     }),
   );

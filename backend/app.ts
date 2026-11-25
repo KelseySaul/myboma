@@ -79,6 +79,8 @@ app.use(
         frameSrc: [
           "'self'",
           'https://www.google.com',
+          'https://accounts.google.com',
+          'https://apis.google.com',
           'https://www.recaptcha.net',
           'https://*.firebaseapp.com',
         ],
@@ -104,6 +106,8 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
+    // Allow Firebase signInWithPopup (Google OAuth popup) to communicate back to the opener window.
+    crossOriginOpenerPolicy: {policy: 'same-origin-allow-popups'},
   }),
 );
 

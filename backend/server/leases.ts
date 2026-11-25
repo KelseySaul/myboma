@@ -33,8 +33,13 @@ const resolveTenantEmail = async (tenantRef: string) => {
   return user?.email.toLowerCase() ?? ref;
 };
 
+export interface StartLeaseOptions {
+  depositAmount?: number | null;
+  dueDay?: number | null;
+}
+
 /** Ends any active lease on the unit and starts a new one for `tenantRef` (email or uid). */
-export const startLease = async (property: Property, tenantRef: string) => {
+export const startLease = async (property: Property, tenantRef: string, options: StartLeaseOptions = {}) => {
   return db.transaction(async (tx) => {
     // Lock the unit so concurrent assignments serialize, then follow whatever tenant the
     // property row holds NOW: if another request assigned someone else after the caller's
@@ -44,10 +49,30 @@ export const startLease = async (property: Property, tenantRef: string) => {
     ).then((result) => result.rows);
     const effectiveRef = locked?.tenantId ?? tenantRef;
     const [tenantUserId, tenantEmail] = await Promise.all([resolveTenantUserId(effectiveRef), resolveTenantEmail(effectiveRef)]);
+    const depositVal =
+      typeof options.depositAmount === 'number' && Number.isFinite(options.depositAmount) && options.depositAmount >= 0
+        ? String(options.depositAmount)
+        : undefined;
+    const dueDayVal =
+      typeof options.dueDay === 'number' && Number.isInteger(options.dueDay) && options.dueDay >= 1 && options.dueDay <= 28
+        ? options.dueDay
+        : undefined;
+
     const current = await tx.query.leases.findFirst({
       where: and(eq(schema.leases.propertyId, property.id), eq(schema.leases.status, 'active')),
     });
     if (current && (current.tenantEmail === tenantEmail || (tenantUserId && current.tenantUserId === tenantUserId))) {
+      if (depositVal !== undefined || dueDayVal !== undefined) {
+        const [updatedLease] = await tx
+          .update(schema.leases)
+          .set({
+            ...(depositVal !== undefined ? {depositAmount: depositVal} : {}),
+            ...(dueDayVal !== undefined ? {dueDay: dueDayVal} : {}),
+          })
+          .where(eq(schema.leases.id, current.id))
+          .returning();
+        return updatedLease;
+      }
       return current; // same tenant re-assigned: keep the existing tenancy
     }
     if (current) {
@@ -66,6 +91,8 @@ export const startLease = async (property: Property, tenantRef: string) => {
         tenantEmail,
         startDate: billingToday(),
         rentAmount: String(property.price ?? 0),
+        ...(depositVal !== undefined ? {depositAmount: depositVal} : {}),
+        ...(dueDayVal !== undefined ? {dueDay: dueDayVal} : {}),
       })
       .returning();
     return lease;

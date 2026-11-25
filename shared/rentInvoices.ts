@@ -71,6 +71,29 @@ export const billingDateInDays = (days: number, reference = new Date()) => {
   return date.toISOString().split('T')[0];
 };
 
+/**
+ * Adds `monthsOffset` calendar months to a YYYY-MM-DD date while keeping the same day of month
+ * (clamped to the target month's last day, e.g., Jan 31 + 1 month -> Feb 28/29).
+ */
+export const addMonthsToBillingDate = (isoDate: string, monthsOffset: number): string => {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const totalMonths = y * 12 + (m - 1) + monthsOffset;
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonthIndex = ((totalMonths % 12) + 12) % 12;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonthIndex + 1, 0)).getUTCDate();
+  const clampedDay = Math.min(d || 1, lastDayOfTargetMonth);
+  return `${targetYear}-${pad(targetMonthIndex + 1)}-${pad(clampedDay)}`;
+};
+
+/** Signed whole-day difference `dueDate - today` (e.g., 2 when rent is due in 2 days, -1 when 1 day overdue). */
+export const daysUntilDueDate = (dueDate: string, today = billingToday()): number => {
+  const [dy, dm, dd] = String(dueDate).slice(0, 10).split('-').map(Number);
+  const [ty, tm, td] = String(today).slice(0, 10).split('-').map(Number);
+  const dueUtc = Date.UTC(dy, dm - 1, dd);
+  const todayUtc = Date.UTC(ty, tm - 1, td);
+  return Math.round((dueUtc - todayUtc) / 86_400_000);
+};
+
 export const invoiceStatusForDueDate = (dueDate: string, today = billingToday()): RentPaymentStatus =>
   dueDate < today ? 'overdue' : 'pending';
 

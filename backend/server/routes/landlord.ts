@@ -14,7 +14,7 @@ import {
   isSuperAdmin,
 } from '../../db/authz.ts';
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
-import {ensureRentInvoiceForProperty, syncAutomaticRentInvoices} from '../rentInvoiceSync.ts';
+import {ensureRentInvoiceForProperty, recordInitialAssignmentInvoices, syncAutomaticRentInvoices} from '../rentInvoiceSync.ts';
 import {endLeaseForProperty, endLeasesForTenant, startLease} from '../leases.ts';
 import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {insertNotification} from '../services/notify.ts';
@@ -157,7 +157,17 @@ const propertyUpdateSchema = propertyInputSchema
 
 const addManagerSchema = z.object({email: emailSchema, role: z.enum(['manager', 'co-owner']).default('manager')}).strict();
 
-const assignTenantSchema = z.object({propertyId: z.string().uuid(), email: emailSchema}).strict();
+const assignTenantSchema = z
+  .object({
+    propertyId: z.string().uuid(),
+    email: emailSchema,
+    depositPaid: z.boolean().optional(),
+    depositAmount: z.number().min(0).max(50_000_000).optional(),
+    prepaidMonths: z.number().int().min(0).max(24).optional(),
+    paymentMethod: z.enum(['mpesa', 'cash', 'bank']).optional(),
+    paymentReference: z.string().trim().max(160).optional(),
+  })
+  .strict();
 
 const tenantEmailParamSchema = z.object({email: emailSchema}).strict();
 
@@ -805,12 +815,75 @@ export function registerLandlordRoutes(bffRouter: Router) {
         .where(eq(schema.properties.id, body.propertyId))
         .returning();
       invalidatePublicListings();
-      await startLease(updated, tenantEmail);
+
+      const depositAmount =
+        body.depositPaid
+          ? (body.depositAmount !== undefined ? body.depositAmount : Number(updated.price || 0))
+          : body.depositAmount;
+      const lease = await startLease(updated, tenantEmail, {depositAmount});
 
       const payments = await db.query.rentPayments.findMany({where: eq(schema.rentPayments.propertyId, updated.id)});
-      await ensureRentInvoiceForProperty(updated as any, tenantEmail, updated.landlordId, updated.platformId, payments as any, true);
+      const prepaidMonths = body.prepaidMonths ?? 0;
+      let nextDueDate: string | null = null;
+      let paidRecorded = 0;
 
-      res.json({assigned: true, property: updated});
+      if (prepaidMonths > 0 || body.depositPaid) {
+        const result = await recordInitialAssignmentInvoices(
+          updated as any,
+          tenantEmail,
+          lease?.id ?? null,
+          payments as any,
+          {
+            depositPaid: body.depositPaid,
+            depositAmount,
+            prepaidMonths,
+            paymentMethod: body.paymentMethod,
+            paymentReference: body.paymentReference,
+          },
+        );
+        paidRecorded = result.paidCreated;
+        nextDueDate = result.nextDueDate;
+      } else {
+        const resInv = await ensureRentInvoiceForProperty(
+          updated as any,
+          tenantEmail,
+          updated.landlordId,
+          updated.platformId,
+          payments as any,
+          true,
+        );
+        nextDueDate = resInv.created ? resInv.dueDate : null;
+      }
+
+      // Send a clear welcome / payment-status notification to the tenant so they know what's covered.
+      if (prepaidMonths > 0 || body.depositPaid) {
+        const parts: string[] = [];
+        if (body.depositPaid) {
+          parts.push(`security deposit${depositAmount ? ` (KES ${Math.round(depositAmount).toLocaleString('en-KE')})` : ''}`);
+        }
+        if (prepaidMonths > 0) {
+          parts.push(`${prepaidMonths} ${prepaidMonths === 1 ? 'month' : 'months'} of rent`);
+        }
+        const nextDueLabel = nextDueDate
+          ? new Date(`${nextDueDate}T00:00:00Z`).toLocaleDateString('en-KE', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              timeZone: 'UTC',
+            })
+          : null;
+        void insertNotification({
+          recipientEmail: tenantEmail,
+          platformId: updated.platformId ?? null,
+          type: 'receipt',
+          title: 'Move-in payment recorded',
+          message: `Welcome to ${updated.title}! Your ${parts.join(' and ')} ${parts.length === 1 ? 'has' : 'have'} been recorded as paid.${nextDueLabel ? ` Your next rent invoice is due on ${nextDueLabel}.` : ''}`,
+          propertyId: updated.id,
+          read: false,
+        }).catch(() => undefined);
+      }
+
+      res.json({assigned: true, property: updated, paidRecorded, nextDueDate});
     }),
   );
 

@@ -122,3 +122,40 @@ export async function verifyFirebasePhoneOtp(confirmation: ConfirmationResult, c
     throw new Error(err?.message || 'Verification failed. Please try again.');
   }
 }
+
+/** Signs in with Google via Firebase signInWithPopup and returns a fresh verified Firebase ID token. */
+export async function signInWithFirebaseGoogle(): Promise<{
+  idToken: string;
+  email: string | null;
+  displayName: string | null;
+}> {
+  const auth = await getFirebaseAuth();
+  const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const idToken = await result.user.getIdToken(true);
+    return {
+      idToken,
+      email: result.user.email,
+      displayName: result.user.displayName,
+    };
+  } catch (err: any) {
+    const code = String(err?.code || '');
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      throw new Error('Google sign-in was cancelled.');
+    }
+    if (code === 'auth/popup-blocked') {
+      throw new Error('Your browser blocked the Google sign-in popup. Allow popups for this site and try again.');
+    }
+    if (code === 'auth/unauthorized-domain') {
+      throw new Error('Add this domain under Firebase Console → Authentication → Settings → Authorized domains.');
+    }
+    if (code === 'auth/operation-not-allowed') {
+      throw new Error('Enable Google sign-in in Firebase Console → Authentication → Sign-in method.');
+    }
+    throw new Error(err?.message || 'Google sign-in failed. Please try again.');
+  }
+}
