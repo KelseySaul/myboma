@@ -265,11 +265,48 @@ export const apiLimiter = limiter('apiLimiter', {
 });
 
 export const credentialLimiter = limiter('credentialLimiter', {
-  windowMs: 5 * MINUTE,
-  limit: 10,
-  // Successful sign-ins do not count, so only repeated wrong passwords get blocked.
+  windowMs: 15 * MINUTE,
+  limit: 8,
+  // Successful sign-ins do not count here; repeated failed passwords / bad tokens are blocked.
   skipSuccessfulRequests: true,
-  error: 'Too many sign-in attempts. Please wait 5 minutes and try again.',
+  error: 'Too many failed sign-in attempts. Please wait 15 minutes and try again.',
+});
+
+/** Hard ceiling on total sign-in / sign-up bursts from a single IP (even if some succeed). */
+export const signInBurstLimiter = limiter('signInBurstLimiter', {
+  windowMs: 15 * MINUTE,
+  limit: 20,
+  error: 'Too many authentication requests from your connection. Please wait a few minutes and try again.',
+});
+
+/**
+ * Strict cap on verification emails, password-reset links, and OTP code exchanges.
+ * Crucially does NOT skip successful (200) responses, preventing inbox/SMS bombing.
+ */
+export const codeResendLimiter = limiter('codeResendLimiter', {
+  windowMs: 10 * MINUTE,
+  limit: 4,
+  error: 'Too many verification or reset code requests. Please wait 10 minutes before requesting another code.',
+});
+
+export const codeResendHourlyLimiter = limiter('codeResendHourlyLimiter', {
+  windowMs: 60 * MINUTE,
+  limit: 10,
+  error: 'Hourly limit reached for verification and reset codes. Please try again in an hour.',
+});
+
+export const inviteResendLimiter = limiter('inviteResendLimiter', {
+  windowMs: 15 * MINUTE,
+  limit: 5,
+  key: 'session',
+  error: 'Too many invitation resends in a short time. Please wait 15 minutes and try again.',
+});
+
+export const reminderLimiter = limiter('reminderLimiter', {
+  windowMs: 15 * MINUTE,
+  limit: 15,
+  key: 'session',
+  error: 'Too many rent reminders sent recently. Please wait a few minutes before sending more.',
 });
 
 export const publicLimiter = limiter('publicLimiter', {

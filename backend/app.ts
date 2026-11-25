@@ -11,7 +11,16 @@ import {toNodeHandler} from 'better-auth/node';
 import cron from 'node-cron';
 import {auth} from './server/auth.ts';
 import {PORT, deploymentOrigins, isProduction, nonSecretConfigStatus} from './server/http/config.ts';
-import {apiLimiter, authLimiter, credentialLimiter, webhookLimiter, writeLimiter} from './server/http/middleware.ts';
+import {
+  apiLimiter,
+  authLimiter,
+  codeResendHourlyLimiter,
+  codeResendLimiter,
+  credentialLimiter,
+  signInBurstLimiter,
+  webhookLimiter,
+  writeLimiter,
+} from './server/http/middleware.ts';
 import {runDailyJobs} from './server/services/dailyJobs.ts';
 import {staticCacheControl} from './server/http/cache.ts';
 import {stripeWebhookHandler} from './server/services/payments.ts';
@@ -129,15 +138,29 @@ app.use(
 // webhooks are exempt here and keep their own webhookLimiter.
 app.use('/api', apiLimiter);
 
-// Firebase Phone OTP token exchange (parses JSON before Better-Auth's wildcard handler).
-app.post('/api/auth/firebase-phone', express.json({limit: '32kb'}));
+// Firebase Phone OTP & Google token exchanges (parse JSON before Better-Auth's wildcard handler).
+app.post(['/api/auth/firebase-phone', '/api/auth/google'], express.json({limit: '32kb'}));
 registerFirebaseAuthRoutes(app);
 
 // Better-Auth parses its own request body, so it's mounted before express.json() too.
-// Credential endpoints get a tight brute-force budget before anything else runs.
+// Sign-in / sign-up endpoints get both a failed-attempt lockout and a total burst ceiling.
 app.use(
-  ['/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/forget-password', '/api/auth/reset-password', '/api/auth/send-verification-email'],
+  ['/api/auth/sign-in', '/api/auth/sign-up'],
+  signInBurstLimiter,
   credentialLimiter,
+);
+// Resend / reset / verification code routes MUST count 200 responses so attackers cannot
+// spam inboxes or burn email/SMS quota.
+app.use(
+  [
+    '/api/auth/forget-password',
+    '/api/auth/request-password-reset',
+    '/api/auth/reset-password',
+    '/api/auth/send-verification-email',
+    '/api/auth/verify-email',
+  ],
+  codeResendLimiter,
+  codeResendHourlyLimiter,
 );
 app.all('/api/auth/*', toNodeHandler(auth));
 

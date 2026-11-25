@@ -25,6 +25,7 @@ import {
   buildingLimitFor,
   getValidatedBody,
   hasActiveSubscription,
+  inviteResendLimiter,
   inviteSendLimiter,
   isAgencyAdmin,
   recordAudit,
@@ -417,6 +418,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
   bffRouter.post(
     '/landlord/invitations/resend',
     requireAuth,
+    inviteResendLimiter,
     inviteSendLimiter,
     validateBody(z.object({email: emailSchema}).strict()),
     asyncHandler(async (req, res) => {

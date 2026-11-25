@@ -35,7 +35,15 @@ export type LimiterKey = 'ip' | 'session';
 
 export const makeLimiter = (
   name: string,
-  options: {windowMs: number; limit: number; error: string; key?: LimiterKey; skipSuccessfulRequests?: boolean; skip?: (req: Request) => boolean},
+  options: {
+    windowMs: number;
+    limit: number;
+    error: string;
+    key?: LimiterKey;
+    keyGenerator?: (req: Request) => string;
+    skipSuccessfulRequests?: boolean;
+    skip?: (req: Request) => boolean;
+  },
 ) =>
   rateLimit({
     store: sharedRateLimitStore(name),
@@ -46,14 +54,20 @@ export const makeLimiter = (
     skipSuccessfulRequests: options.skipSuccessfulRequests,
     skip: options.skip,
     keyGenerator: (req) => {
+      if (options.keyGenerator) return options.keyGenerator(req);
       if (options.key === 'session') {
         const session = sessionKey(req);
         if (session) return `s:${session}`;
       }
       return `ip:${clientIp(req)}`;
     },
-    handler: (_req, res, _next, opts) => {
-      res.status(opts.statusCode).json({error: options.error});
+    handler: (req, res, _next, opts) => {
+      const resetTime = (req as Request & {rateLimit?: {resetTime?: Date}}).rateLimit?.resetTime;
+      const retryAfterSeconds = resetTime
+        ? Math.max(1, Math.ceil((resetTime.getTime() - Date.now()) / 1000))
+        : Math.ceil(options.windowMs / 1000);
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      res.status(opts.statusCode).json({error: options.error, retryAfterSeconds});
     },
   });
 

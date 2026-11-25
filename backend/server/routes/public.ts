@@ -152,10 +152,17 @@ export function registerPublicRoutes(app: Express) {
             subject: `New enquiry: ${property.title}`,
             template: {
               preheader: `${enquiry.name} is interested in ${property.title}.`,
+              eyebrow: 'New enquiry',
+              tone: 'brand',
               heading: 'You have a new listing enquiry',
               paragraphs: [
-                `${enquiry.name} is interested in ${property.title}. Reply to this email to contact them directly.`,
+                `${enquiry.name} is interested in ${property.title}. You can reply directly to this email or call them using the details below.`,
               ],
+              callout: {
+                label: 'Interested prospect',
+                value: enquiry.name,
+                sublabel: `${property.title} · KES ${price}/${property.type === 'bnb' ? 'night' : 'month'}`,
+              },
               details: [
                 ['Listing', property.title],
                 ['Location', property.location],
@@ -166,7 +173,11 @@ export function registerPublicRoutes(app: Express) {
                 ...(dates ? [['Requested dates', dates] as [string, string]] : []),
                 ...(enquiry.message ? [['Message', enquiry.message] as [string, string]] : []),
               ],
-              button: {label: 'View MyBoma', url: listingUrl},
+              button: {
+                label: 'Open MyBoma dashboard',
+                url: appBaseUrl,
+                hint: 'Click below to manage this listing on MyBoma:',
+              },
               footerNote: 'You received this because you manage this listing on MyBoma.',
             },
           }),
@@ -175,17 +186,23 @@ export function registerPublicRoutes(app: Express) {
             subject: `Your enquiry about ${property.title}`,
             template: {
               preheader: `We sent your enquiry about ${property.title}.`,
+              eyebrow: 'Enquiry sent',
+              tone: 'success',
               heading: 'Your enquiry is on its way',
               paragraphs: [
                 `We sent your enquiry about ${property.title} to ${landlord.displayName || 'the landlord or agent'}.`,
-                'They can reply by email or contact you using the details you supplied. An enquiry is not a booking or reservation.',
+                'They can reply by email or contact you using the phone number you provided. Please note that an enquiry is not yet a confirmed booking.',
               ],
               details: [
                 ['Listing', property.title],
                 ['Location', property.location],
                 ...(dates ? [['Requested dates', dates] as [string, string]] : []),
               ],
-              button: {label: 'Browse MyBoma', url: listingUrl},
+              button: {
+                label: 'Browse more listings',
+                url: listingUrl,
+                hint: 'Keep exploring verified homes and spaces on MyBoma:',
+              },
               footerNote: 'You received this because you submitted a MyBoma listing enquiry.',
             },
           }),
@@ -277,12 +294,22 @@ export function registerPublicRoutes(app: Express) {
         await sendEmail({
           to: data.email,
           subject: 'You are on the MyBoma waitlist',
-          text: [
-            'Thanks for joining the MyBoma waitlist.',
-            '',
-            'We will email you about launch updates and important product news.',
-            `Unsubscribe any time: ${unsubscribeUrl}`,
-          ].join('\n'),
+          template: {
+            preheader: 'Welcome! You are on the MyBoma updates list.',
+            eyebrow: 'Waitlist confirmed',
+            tone: 'brand',
+            heading: "You're on the MyBoma list",
+            paragraphs: [
+              'Thanks for joining MyBoma. We will send you major product launches, new Kenyan rental tools, and early access announcements.',
+            ],
+            button: {
+              label: 'Explore MyBoma',
+              url: appBaseUrl,
+              hint: 'Browse available listings or sign up today:',
+            },
+            closing: [`Changed your mind? Unsubscribe any time here: ${unsubscribeUrl}`],
+            footerNote: 'You received this because you joined the MyBoma waitlist.',
+          },
         });
       } catch (error) {
         console.error(`[Waitlist] Confirmation email failed for ${email}:`, error);
@@ -309,7 +336,20 @@ export function registerPublicRoutes(app: Express) {
           await sendEmail({
             to: signup.email,
             subject: 'Unsubscribe from MyBoma updates',
-            text: `Open this link to unsubscribe: ${appBaseUrl}/?unsubscribe=${signup.unsubscribeToken}`,
+            template: {
+              preheader: 'Confirm your unsubscribe request in one click.',
+              eyebrow: 'Email preferences',
+              tone: 'info',
+              heading: 'Confirm your unsubscribe request',
+              paragraphs: ['Click the button below to stop receiving MyBoma waitlist and launch emails.'],
+              button: {
+                label: 'Confirm unsubscribe',
+                url: `${appBaseUrl}/?unsubscribe=${signup.unsubscribeToken}`,
+                hint: 'Tap below to complete your unsubscribe:',
+              },
+              closing: ['If you did not request this, simply ignore this email and you will stay subscribed.'],
+              footerNote: 'You received this because an unsubscribe was requested for this email address.',
+            },
           }).catch((error) => console.error('[Waitlist] Unsubscribe email failed:', error));
         }
         res.json({status: 'link_sent'});

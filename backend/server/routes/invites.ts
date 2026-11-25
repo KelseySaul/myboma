@@ -1,19 +1,21 @@
 import {type Express} from 'express';
-import rateLimit from 'express-rate-limit';
 import {z} from 'zod';
-import {sharedRateLimitStore} from '../rateLimitStore.ts';
+import {makeLimiter} from '../http/rateLimits.ts';
 import {asyncHandler, getValidatedBody, validateBody} from '../http/middleware.ts';
 import {InviteError, acceptInvite, lookupInvite} from '../inviteService.ts';
 import {maskEmail} from '../invitePolicy.ts';
 
-// Tokens are 256-bit, so guessing is hopeless; this just keeps the endpoints cheap to abuse.
-const inviteLimiter = rateLimit({
-  store: sharedRateLimitStore('inviteLimiter'),
+// Tokens are 256-bit, so guessing is hopeless; tight IP caps prevent probing and abuse.
+const inviteLookupLimiter = makeLimiter('inviteLookupLimiter', {
   windowMs: 15 * 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {error: 'Too many attempts. Please try again later.'},
+  limit: 15,
+  error: 'Too many invitation checks. Please wait 15 minutes and try again.',
+});
+
+const inviteAcceptLimiter = makeLimiter('inviteAcceptLimiter', {
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  error: 'Too many invitation acceptance attempts. Please wait 15 minutes and try again.',
 });
 
 const acceptInviteSchema = z
@@ -35,7 +37,7 @@ const acceptInviteSchema = z
 export function registerInviteRoutes(app: Express) {
   app.get(
     '/api/public/invites/:token',
-    inviteLimiter,
+    inviteLookupLimiter,
     asyncHandler(async (req, res) => {
       const result = await lookupInvite(req.params.token);
       if (result.status === 'invalid') {
@@ -58,7 +60,7 @@ export function registerInviteRoutes(app: Express) {
 
   app.post(
     '/api/public/invites/accept',
-    inviteLimiter,
+    inviteAcceptLimiter,
     validateBody(acceptInviteSchema),
     asyncHandler(async (req, res) => {
       const body = getValidatedBody<z.infer<typeof acceptInviteSchema>>(req);

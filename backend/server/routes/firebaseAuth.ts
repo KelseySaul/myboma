@@ -7,7 +7,15 @@ import {rootDb as db} from '../../db/client.ts';
 import * as schema from '../../db/schema/index.js';
 import {isSuperAdminEmail} from '../../config/superAdmin.ts';
 import {auth} from '../auth.ts';
-import {asyncHandler, credentialLimiter, getValidatedBody, validateBody} from '../http/middleware.ts';
+import {
+  asyncHandler,
+  codeResendHourlyLimiter,
+  codeResendLimiter,
+  credentialLimiter,
+  getValidatedBody,
+  signInBurstLimiter,
+  validateBody,
+} from '../http/middleware.ts';
 import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload} from '../invitePolicy.ts';
 import {
   FirebaseTokenError,
@@ -80,6 +88,9 @@ async function createBetterAuthSessionForUser(
 export function registerFirebaseAuthRoutes(app: Express) {
   app.post(
     '/api/auth/firebase-phone',
+    signInBurstLimiter,
+    codeResendLimiter,
+    codeResendHourlyLimiter,
     credentialLimiter,
     validateBody(firebasePhoneAuthSchema),
     asyncHandler(async (req, res) => {
@@ -242,6 +253,7 @@ export function registerFirebaseAuthRoutes(app: Express) {
    */
   app.post(
     '/api/auth/google',
+    signInBurstLimiter,
     credentialLimiter,
     validateBody(firebaseGoogleAuthSchema),
     asyncHandler(async (req, res) => {

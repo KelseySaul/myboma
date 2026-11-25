@@ -40,6 +40,26 @@ type Errors = Partial<Record<'name' | 'phone' | 'email' | 'password' | 'confirm'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const clean = (value: string) => value.normalize('NFKC').replace(/<[^>]*>/g, '').trim();
 const cleanPhone = (value: string) => clean(value).replace(/[^\d+]/g, '');
+const OTP_COOLDOWN_SECONDS = 60;
+const RESET_COOLDOWN_SECONDS = 60;
+const COOLDOWN_STORAGE_PREFIX = 'myboma_auth_cooldown_';
+
+const readCooldownRemaining = (key: string): number => {
+  try {
+    const until = Number(sessionStorage.getItem(`${COOLDOWN_STORAGE_PREFIX}${key}`) || '0');
+    return until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const writeCooldown = (key: string, seconds: number) => {
+  try {
+    sessionStorage.setItem(`${COOLDOWN_STORAGE_PREFIX}${key}`, String(Date.now() + seconds * 1000));
+  } catch {
+    /* storage unavailable */
+  }
+};
 
 const recordTermsAcceptance = () => {
   const acceptance = { acceptedAt: new Date().toISOString(), termsVersion: TERMS_VERSION, privacyVersion: PRIVACY_VERSION };
@@ -70,8 +90,19 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState<'email' | 'google' | 'reset' | 'otp-send' | 'otp-verify' | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState<number>(() => readCooldownRemaining('otp'));
+  const [resetCooldown, setResetCooldown] = useState<number>(() => readCooldownRemaining('reset'));
   const inFlight = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (otpCooldown <= 0 && resetCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setOtpCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+      setResetCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [otpCooldown > 0, resetCooldown > 0]);
 
   useEffect(() => {
     if (!open) {
@@ -187,6 +218,10 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
   const handleSendOtp = async (event: FormEvent) => {
     event.preventDefault();
     if (inFlight.current) return;
+    if (otpCooldown > 0) {
+      setErrors({ form: `Please wait ${otpCooldown}s before requesting another SMS code.` });
+      return;
+    }
     const next: Errors = {};
     if (cleanPhone(phone).replace('+', '').length < 9) {
       next.phone = 'Enter a valid phone number, e.g. 0712 345 678.';
@@ -215,6 +250,8 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
       setOtpTargetPhone(e164Phone);
       setOtpCode('');
       setErrors({});
+      writeCooldown('otp', OTP_COOLDOWN_SECONDS);
+      setOtpCooldown(OTP_COOLDOWN_SECONDS);
       toast.success(`Verification code sent to ${e164Phone}`);
     } catch (err: any) {
       setErrors({ form: err?.message || 'Could not send SMS code.' });
@@ -300,6 +337,10 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
   const requestReset = async (event: FormEvent) => {
     event.preventDefault();
     if (inFlight.current) return;
+    if (resetCooldown > 0) {
+      setErrors({ form: `Please wait ${resetCooldown}s before requesting another reset link.` });
+      return;
+    }
     if (!EMAIL_RE.test(clean(email))) {
       setErrors({ email: 'Enter a valid email address.' });
       return;
@@ -315,6 +356,9 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
         setErrors({ form: friendlyAuthError(error, '') });
         return;
       }
+      writeCooldown('reset', RESET_COOLDOWN_SECONDS);
+      setResetCooldown(RESET_COOLDOWN_SECONDS);
+      setErrors({});
       setView('forgot-sent');
     } catch {
       setErrors({ form: 'Something went wrong. Check your connection and try again.' });
@@ -376,7 +420,9 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
                       />
                     </Field>
                     {errors.form && <FormError message={errors.form} />}
-                    <SubmitButton loading={busy === 'reset'}>Send reset link</SubmitButton>
+                    <SubmitButton loading={busy === 'reset'} disabled={resetCooldown > 0}>
+                      {resetCooldown > 0 ? `Wait ${resetCooldown}s to resend` : 'Send reset link'}
+                    </SubmitButton>
                   </form>
                 </>
               ) : (
@@ -385,6 +431,18 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
                   <DialogDescription className="mt-1.5">
                     If an account exists for <span className="font-medium text-zinc-950">{clean(email)}</span>, we've sent a link to reset the password. It expires in one hour.
                   </DialogDescription>
+                  {errors.form && <div className="mt-4"><FormError message={errors.form} /></div>}
+                  <div className="mt-5 flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 px-3.5 py-2.5 text-xs text-zinc-600">
+                    <span>Didn&apos;t receive the email?</span>
+                    <button
+                      type="button"
+                      disabled={busy !== null || resetCooldown > 0}
+                      onClick={(e) => void requestReset(e as unknown as FormEvent)}
+                      className="font-semibold text-violet-700 hover:underline disabled:cursor-not-allowed disabled:text-zinc-400 disabled:no-underline"
+                    >
+                      {resetCooldown > 0 ? `Resend in ${resetCooldown}s` : 'Resend link'}
+                    </button>
+                  </div>
                 </>
               )}
               <button type="button" onClick={() => switchMode('signin')} className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 hover:text-zinc-950">
@@ -582,8 +640,8 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
 
                       {errors.form && <FormError message={errors.form} />}
 
-                      <SubmitButton loading={busy === 'otp-send'} disabled={busy !== null && busy !== 'otp-send'}>
-                        Send 6-digit SMS code
+                      <SubmitButton loading={busy === 'otp-send'} disabled={(busy !== null && busy !== 'otp-send') || otpCooldown > 0}>
+                        {otpCooldown > 0 ? `Wait ${otpCooldown}s before sending again` : 'Send 6-digit SMS code'}
                       </SubmitButton>
                     </form>
                   ) : (
@@ -632,11 +690,11 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
                         </button>
                         <button
                           type="button"
-                          disabled={busy !== null}
+                          disabled={busy !== null || otpCooldown > 0}
                           onClick={(e) => void handleSendOtp(e as unknown as FormEvent)}
-                          className="font-semibold text-violet-700 hover:underline disabled:opacity-50"
+                          className="font-semibold text-violet-700 hover:underline disabled:cursor-not-allowed disabled:text-zinc-400 disabled:no-underline"
                         >
-                          Resend code
+                          {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend code'}
                         </button>
                       </div>
                     </form>

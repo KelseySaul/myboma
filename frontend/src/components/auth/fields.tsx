@@ -113,7 +113,11 @@ export function GoogleLogo({ className = 'h-[18px] w-[18px]' }: { className?: st
 /** Turns Better Auth / HTTP errors into plain messages. */
 export function friendlyAuthError(error: { status?: number; code?: string; message?: string } | null | undefined, fallback: string) {
   if (!error) return fallback;
-  if (error.status === 429) return 'Too many attempts. Wait a minute and try again.';
+  if (error.status === 429) {
+    return error.message && !/^\[?[A-Z_]+\]?$/.test(error.message)
+      ? error.message
+      : 'Too many attempts. Please wait a few minutes and try again.';
+  }
   switch (error.code) {
     case 'INVALID_EMAIL_OR_PASSWORD':
       return 'Wrong email or password.';

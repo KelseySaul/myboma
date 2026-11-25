@@ -22,6 +22,7 @@ import {
   getValidatedBody,
   isAgencyAdmin,
   recordAudit,
+  reminderLimiter,
   requireAdmin,
   requireAuth,
   inviteSendLimiter,
@@ -360,6 +361,7 @@ export function registerUserRoutes(bffRouter: Router) {
   bffRouter.post(
     '/notifications/remind-rent',
     requireAuth,
+    reminderLimiter,
     validateBody(z.object({ rentPaymentId: uuidSchema })),
     asyncHandler(async (req, res) => {
       await handleSendRentReminder(req, res, { sendEmail, insertNotification });
@@ -369,6 +371,7 @@ export function registerUserRoutes(bffRouter: Router) {
   bffRouter.post(
     '/notifications/remind-rent/bulk',
     requireAuth,
+    reminderLimiter,
     validateBody(z.object({ rentPaymentIds: z.array(uuidSchema).min(1).max(50) }).strict()),
     asyncHandler(async (req, res) => {
       await handleSendBulkRentReminders(req, res, { sendEmail, insertNotification });

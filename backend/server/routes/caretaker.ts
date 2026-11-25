@@ -3,6 +3,7 @@ import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
 import {canUpdateMaintenanceRequest, isCaretakerOfLandlord} from '../../db/authz.ts';
+import {appBaseUrl} from '../http/config.ts';
 import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {asyncHandler, getValidatedBody, recordAudit, requireAuth, validateBody} from '../http/middleware.ts';
 import {mediaUrlSchema} from '../http/schemas.ts';
@@ -313,18 +314,29 @@ export function registerCaretakerRoutes(bffRouter: Router) {
           template: {
             preheader: alertMsg,
             eyebrow: 'Caretaker report',
+            tone: body.priority === 'urgent' || body.priority === 'high' ? 'danger' : 'info',
             heading: body.title,
             paragraphs: [
-              `${caretakerName} submitted a new report${scopeNote}.`,
+              `${caretakerName} submitted a new field report${scopeNote}.`,
               body.description,
             ],
+            callout: {
+              label: 'Report priority',
+              value: body.priority.toUpperCase(),
+              sublabel: `${body.category.replace('_', ' ')}${propertyLabel ? ` · ${propertyLabel}` : ''}`,
+            },
             details: [
               ['Caretaker', caretakerName],
               ['Category', body.category.replace('_', ' ')],
               ['Priority', body.priority.toUpperCase()],
               ...(propertyLabel ? [['Unit / Building', propertyLabel] as [string, string]] : []),
             ],
-            footerNote: 'Log in to MyBoma to review photos and respond to this report.',
+            button: {
+              label: 'Review report in MyBoma',
+              url: appBaseUrl,
+              hint: 'Open Caretakers & reports to inspect photos and reply:',
+            },
+            footerNote: 'You received this because a caretaker filed a report under your MyBoma account.',
           },
         }),
       ]);

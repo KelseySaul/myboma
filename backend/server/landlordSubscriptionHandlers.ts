@@ -4,6 +4,8 @@ import type {Response} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../db/client.ts';
 import {isSuperAdminEmail, SUPER_ADMIN_EMAILS} from '../config/superAdmin.ts';
+import {appBaseUrl} from './http/config.ts';
+import type {SendEmailInput} from './services/email.ts';
 import type {AuthenticatedRequest} from './types.ts';
 import {
   BILLING_PERIODS,
@@ -98,7 +100,7 @@ const planLabel = (tier: SubscriptionTier, billing: BillingPeriod) => {
 };
 
 export type SubscriptionActivationDeps = {
-  sendEmail: (input: {to?: string | null; subject: string; text: string}) => Promise<void>;
+  sendEmail: (input: SendEmailInput) => Promise<void>;
   insertNotification: (payload: Record<string, unknown>) => Promise<void>;
 };
 
@@ -224,6 +226,9 @@ export const activateLandlordSubscription = async (
     read: false,
   });
 
+  const formattedAmount = `KES ${Number(input.amount).toLocaleString('en-KE')}`;
+  const expiresFormatted = periodEnd.toLocaleDateString('en-KE', {day: 'numeric', month: 'long', year: 'numeric'});
+
   for (const adminEmail of SUPER_ADMIN_EMAILS) {
     await deps.insertNotification({
       recipientEmail: adminEmail,
@@ -236,6 +241,32 @@ export const activateLandlordSubscription = async (
       to: adminEmail,
       subject: `MyBoma landlord subscription — ${receiptNumber}`,
       text: adminReceipt,
+      template: {
+        preheader: `${input.landlordName} activated ${label} (${formattedAmount}).`,
+        eyebrow: 'New subscription',
+        tone: 'success',
+        heading: 'Landlord subscription activated',
+        paragraphs: [`${input.landlordName} (${input.landlordEmail}) completed payment for ${label}.`],
+        callout: {
+          label: 'Subscription paid',
+          value: formattedAmount,
+          sublabel: `${label} · Receipt ${receiptNumber}`,
+        },
+        details: [
+          ['Landlord', input.landlordName],
+          ['Email', input.landlordEmail],
+          ['Plan', label],
+          ['Channel', input.paymentChannel],
+          ['Reference', input.paymentReference],
+          ['Active until', expiresFormatted],
+        ],
+        button: {
+          label: 'Open Super Admin dashboard',
+          url: appBaseUrl,
+          hint: 'View this account and subscription details in MyBoma:',
+        },
+        footerNote: 'You received this because you are a MyBoma super administrator.',
+      },
     });
   }
 
@@ -244,6 +275,37 @@ export const activateLandlordSubscription = async (
       to: input.landlordEmail,
       subject: `MyBoma subscription receipt — ${receiptNumber}`,
       text: landlordReceipt,
+      template: {
+        preheader: `Your ${label} plan is now active until ${expiresFormatted}.`,
+        eyebrow: 'Subscription active',
+        tone: 'success',
+        heading: 'Welcome to your active MyBoma plan',
+        paragraphs: [
+          `Thank you, ${input.landlordName}! Your payment for ${label} has been confirmed and your landlord workspace is active.`,
+        ],
+        callout: {
+          label: 'Amount paid',
+          value: formattedAmount,
+          sublabel: `${label} · Active until ${expiresFormatted}`,
+        },
+        details: [
+          ['Receipt number', receiptNumber],
+          ['Plan', label],
+          ['Payment method', input.paymentChannel],
+          ['Reference', input.paymentReference],
+          ['Active until', expiresFormatted],
+        ],
+        steps: [
+          'Click the "Open your MyBoma dashboard" button below.',
+          'Add properties, invite tenants or caretakers, and track rent status in real time.',
+        ],
+        button: {
+          label: 'Open your MyBoma dashboard',
+          url: appBaseUrl,
+          hint: 'Click below to start managing your properties:',
+        },
+        footerNote: 'Keep this email as your official MyBoma subscription receipt.',
+      },
     });
   }
 

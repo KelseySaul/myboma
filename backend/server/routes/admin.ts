@@ -11,6 +11,7 @@ import {toActor} from '../types.ts';
 import {
   asyncHandler,
   getValidatedBody,
+  inviteResendLimiter,
   inviteSendLimiter,
   isAgencyAdmin,
   recordAudit,
@@ -145,6 +146,8 @@ export function registerAdminRoutes(bffRouter: Router) {
     '/admin/invitations/resend',
     requireAuth,
     requireAdmin,
+    inviteResendLimiter,
+    inviteSendLimiter,
     validateBody(resendInviteSchema),
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
