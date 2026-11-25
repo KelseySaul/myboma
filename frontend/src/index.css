@@ -1080,3 +1080,35 @@ aside[class*="sticky"] {
   .dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
   .dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint { background: #223b3b; }
 }
+
+/* A shared glass finish for navigation, summaries and tables. */
+.app-shell aside {
+  background: rgba(239, 246, 243, .82);
+  border-color: rgba(255,255,255,.55);
+  -webkit-backdrop-filter: blur(24px) saturate(125%);
+  backdrop-filter: blur(24px) saturate(125%);
+}
+.dark .app-shell aside { background: rgba(15, 33, 31, .88); }
+.app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
+.app-shell main button.group.stat-tint, .app-shell main .stat-tint {
+  background: rgba(250, 253, 251, .76);
+  border-color: rgba(255,255,255,.72);
+  -webkit-backdrop-filter: blur(24px) saturate(120%);
+  backdrop-filter: blur(24px) saturate(120%);
+}
+.dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
+.dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint { background: rgba(20, 37, 35, .82); }
+.app-shell main [data-slot="table-container"] {
+  background: rgba(255,255,255,.18);
+  border-color: rgba(255,255,255,.5);
+  box-shadow: none;
+}
+.app-shell main [data-slot="table-header"] { background: rgba(235,244,240,.48); }
+.dark .app-shell main [data-slot="table-container"] { background: rgba(12,25,24,.2); border-color: rgba(255,255,255,.15); }
+.dark .app-shell main [data-slot="table-header"] { background: rgba(35,57,54,.5); }
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell aside, .app-shell main [data-slot="card"], .app-shell main section.rounded-2xl,
+  .app-shell main button.group.stat-tint, .app-shell main .stat-tint, .app-shell main [data-slot="table-container"] { background: #f8fbfa; }
+  .dark .app-shell aside, .dark .app-shell main [data-slot="card"], .dark .app-shell main section.rounded-2xl,
+  .dark .app-shell main button.group.stat-tint, .dark .app-shell main .stat-tint, .dark .app-shell main [data-slot="table-container"] { background: #223b3b; }
+}

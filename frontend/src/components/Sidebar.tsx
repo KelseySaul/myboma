@@ -180,20 +180,20 @@ export default function Sidebar({
       onMouseLeave={() => setExpanded(false)}
       onFocus={() => setExpanded(true)}
       onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setExpanded(false); }}
-      className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-zinc-200/80 bg-white transition-[width] duration-200 dark:border-zinc-800 dark:bg-zinc-950 sm:flex ${
+      className={`relative hidden h-full shrink-0 select-none flex-col justify-between overflow-hidden border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950 sm:flex ${
         collapsed ? 'w-[4.75rem]' : 'w-64'
       }`}
     >
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className={`flex h-14 items-center border-b border-zinc-100 dark:border-zinc-800 ${collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'}`}>
           <img src={tenantConfig.logoUrl} alt="" className="h-7 w-7 shrink-0 object-contain" width="28" height="28" />
           {!collapsed && <span className="font-brand min-w-0 flex-1 truncate text-xl font-semibold leading-none tracking-tight text-zinc-950 dark:text-white">{tenantConfig.appName}</span>}
         </div>
 
-        <nav className={`space-y-4 overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">
+        <nav className={`min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto ${collapsed ? 'p-2 pt-4' : 'p-3'}`} aria-label="Main navigation">
           {navSections.map((section) => (
             <div key={section.title} className="space-y-1">
-              <p className={collapsed ? 'sr-only' : 'px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500'}>
+              <p className={collapsed ? 'sr-only' : 'whitespace-nowrap px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500'}>
                 {section.title}
               </p>
               <div className="space-y-0.5">{section.items.map((item) => <NavButton key={item.id} {...item} />)}</div>
