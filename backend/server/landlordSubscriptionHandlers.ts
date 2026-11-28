@@ -10,6 +10,7 @@ import type {SendEmailInput} from './services/email.ts';
 import type {AuthenticatedRequest} from './types.ts';
 import {
   BILLING_PERIODS,
+  PLAN_SLUG_RE,
   SUBSCRIPTION_TIERS,
   buildSubscriptionReceiptText,
   encodeSubscriptionPlan,
@@ -18,9 +19,11 @@ import {
   isFreePlan,
   FREE_PLAN,
   type BillingPeriod,
+  type BuiltInSubscriptionTier,
   type RentPayoutMethod,
   type SubscriptionTier,
 } from '../../shared/landlordSubscription.ts';
+import {getSubscriptionPlanById} from './services/subscriptionPlans.ts';
 import {
   buildSubscriptionReminderContent,
   classifySubscriptionReminderMilestone,
@@ -37,7 +40,12 @@ export {
   type SubscriptionReminderMilestone,
 };
 
-const tierSchema = z.enum(['basic', 'starter', 'pro', 'proplus']);
+const tierSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(PLAN_SLUG_RE, 'Invalid plan tier')
+  .refine((t) => t !== 'free', {message: 'Use free plan activation for the free tier.'});
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
 const paymentMethodSchema = z.enum(['stripe', 'mpesa', 'pesapal']);
 const rentPayoutMethodSchema = z.enum(['cash', 'mpesa', 'bank']);
@@ -110,8 +118,8 @@ const buildReceiptNumber = () => {
   return `MB-SUB-${stamp}-${rand}`;
 };
 
-const planLabel = (tier: SubscriptionTier, billing: BillingPeriod) => {
-  const tierLabel = SUBSCRIPTION_TIERS[tier].label;
+const planLabel = (tier: SubscriptionTier, billing: BillingPeriod, customLabel?: string | null) => {
+  const tierLabel = customLabel || SUBSCRIPTION_TIERS[tier as BuiltInSubscriptionTier]?.label || tier;
   const billingLabel = BILLING_PERIODS.find((b) => b.id === billing)?.label ?? billing;
   return `${tierLabel} (${billingLabel})`;
 };
@@ -148,7 +156,8 @@ export const activateLandlordSubscription = async (
   periodEnd.setMonth(periodEnd.getMonth() + getBillingMonths(input.billing));
 
   const receiptNumber = buildReceiptNumber();
-  const label = planLabel(input.tier, input.billing);
+  const dbPlan = await getSubscriptionPlanById(input.tier);
+  const label = planLabel(input.tier, input.billing, dbPlan?.label);
   const landlordReceipt = buildSubscriptionReceiptText({
     receiptNumber,
     landlordName: input.landlordName,
@@ -207,10 +216,11 @@ export const activateLandlordSubscription = async (
 
     if (claimed.length === 0) return false;
 
-    // Pro Plus grants the agency-admin role (scoped, plan-backed — see isAgencyAdmin in
-    // app.ts); it never sets isAdmin. Platform admins keep their role whatever they buy.
+    // Agency / Property Manager plans (Pro Plus or any custom plan with agencyAccess) grant
+    // the scoped agency-admin role (`role: 'admin'`, never `isAdmin`). Platform admins keep their role.
     const isPlatformAdmin = Boolean(current?.isAdmin || current?.isSuperAdmin);
-    const nextRole = isPlatformAdmin ? (current?.role ?? 'admin') : input.tier === 'proplus' ? 'admin' : 'landlord';
+    const grantsAgency = Boolean(dbPlan?.agencyAccess || input.tier === 'proplus');
+    const nextRole = isPlatformAdmin ? (current?.role ?? 'admin') : grantsAgency ? 'admin' : 'landlord';
 
     await tx
       .update(schema.users)

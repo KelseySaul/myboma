@@ -2,6 +2,7 @@ import {Capacitor} from '@capacitor/core';
 import {getStoredToken, setStoredToken} from '../lib/auth-client';
 import {resolveMediaUrl} from './fileUrl';
 import {stripImageMetadata} from './imageSanitize';
+import type {DynamicSubscriptionPlan, PlanAudienceType} from '../../../shared/landlordSubscription';
 
 type ApiOptions = Omit<RequestInit, 'body'> & {
   body?: unknown;
@@ -387,7 +388,7 @@ export const provisionUser = (body: {
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountName?: string;
-  subscriptionTier?: 'free' | 'basic' | 'starter' | 'pro' | 'proplus';
+  subscriptionTier?: string;
   subscriptionBilling?: 'monthly' | 'quarterly' | 'yearly';
   propertyIds?: string[];
 }) =>
@@ -437,7 +438,7 @@ export const updatePlatformBranding = (
   });
 
 export const startLandlordSubscriptionCheckout = (body: {
-  tier: 'basic' | 'test' | 'starter' | 'growth' | 'pro' | 'proplus';
+  tier: string;
   billing: 'monthly' | 'quarterly' | 'yearly';
   paymentMethod: 'stripe' | 'mpesa' | 'pesapal';
   phone?: string;
@@ -705,3 +706,36 @@ export const resendSubscriptionReceipt = (paymentId: string) =>
 
 export const getMySubscriptionReceipts = () =>
   bffRequest<MySubscriptionReceipt[]>('/landlord/subscription/receipts');
+
+/** Public active prepaid subscription plans (live DB pricing, unit limits, building limits). */
+export const getPublicSubscriptionPlans = () => publicRequest<DynamicSubscriptionPlan[]>('/api/public/plans');
+
+export interface SubscriptionPlanWritePayload {
+  id?: string;
+  label: string;
+  badge?: string | null;
+  audienceType: PlanAudienceType;
+  description?: string;
+  monthlyPriceKes: number;
+  quarterlyPriceKes?: number | null;
+  yearlyPriceKes?: number | null;
+  maxListings: number | null;
+  maxBuildings: number | null;
+  maintenanceHub: boolean;
+  caretakerAccess: boolean;
+  agencyAccess: boolean;
+  highlights: string[];
+  sortOrder?: number;
+  isActive: boolean;
+}
+
+export const getAdminSubscriptionPlans = () => bffRequest<DynamicSubscriptionPlan[]>('/admin/plans');
+
+export const createAdminSubscriptionPlan = (body: SubscriptionPlanWritePayload) =>
+  bffRequest<DynamicSubscriptionPlan>('/admin/plans', {method: 'POST', body});
+
+export const updateAdminSubscriptionPlan = (id: string, body: Partial<Omit<SubscriptionPlanWritePayload, 'id'>>) =>
+  bffRequest<DynamicSubscriptionPlan>(`/admin/plans/${encodeURIComponent(id)}`, {method: 'PATCH', body});
+
+export const deleteAdminSubscriptionPlan = (id: string) =>
+  bffRequest<{deleted: true}>(`/admin/plans/${encodeURIComponent(id)}`, {method: 'DELETE'});

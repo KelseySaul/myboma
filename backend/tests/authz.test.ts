@@ -54,6 +54,13 @@ describe('canWriteUser', () => {
     const me = actor();
     assert.equal(authz.canWriteUser(me, {uid: me.id, platformId: null, isAdmin: false, isSuperAdmin: false, role: 'landlord'}), true);
   });
+
+  it('no admin or other user can modify a super admin account even in the same platform', () => {
+    const superTarget = {uid: 'super-uid', platformId: 'p1', isAdmin: true, isSuperAdmin: true, role: 'admin'};
+    assert.equal(authz.canWriteUser(actor({id: 'admin-uid', role: 'admin', isAdmin: true, platformId: 'p1'}), superTarget), false);
+    assert.equal(authz.canWriteUser(actor({id: 'other-super', role: 'admin', isAdmin: true, isSuperAdmin: true, platformId: 'p1'}), superTarget), false);
+    assert.equal(authz.canWriteUser(actor({id: 'landlord-uid', role: 'landlord', platformId: 'p1'}), superTarget), false);
+  });
 });
 
 describe('building administration', () => {

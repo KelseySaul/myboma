@@ -116,13 +116,14 @@ export async function canViewUser(actor: Actor, target: UserRow): Promise<boolea
   return Boolean(invitedByActor);
 }
 
-/** Shared by INSERT and UPDATE — the original policies use the identical predicate for both. */
+/** Shared by INSERT and UPDATE — no admin or other user may ever modify a super admin's row. */
 export function canWriteUser(
   actor: Actor,
   row: { uid: string; platformId: string | null; isAdmin: boolean; isSuperAdmin: boolean; role: string },
 ): boolean {
+  if (row.isSuperAdmin && row.uid !== actor.id) return false;
   if (isSuperAdmin(actor)) return true;
-  if (isAdmin(actor) && platformMatches(actor.platformId, row.platformId)) return true;
+  if (isAdmin(actor) && !row.isSuperAdmin && !row.isAdmin && platformMatches(actor.platformId, row.platformId)) return true;
   return (
     row.uid === actor.id &&
     row.isSuperAdmin === false &&

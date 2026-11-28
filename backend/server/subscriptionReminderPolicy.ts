@@ -5,7 +5,8 @@ import {
   isFreePlan,
   parseSubscriptionPlan,
   type BillingPeriod,
-  type SubscriptionTier,
+  type BuiltInSubscriptionTier,
+  type DynamicSubscriptionPlan,
 } from '../../shared/landlordSubscription.ts';
 import type {EmailContent} from './services/email.ts';
 
@@ -34,12 +35,16 @@ export const subscriberAccountType = (user: {
   return 'landlord';
 };
 
-export const formatSubscriptionPlanLabel = (planKey?: string | null): string => {
+export const formatSubscriptionPlanLabel = (
+  planKey?: string | null,
+  plans?: DynamicSubscriptionPlan[],
+): string => {
   if (!planKey) return 'No plan';
   if (isFreePlan(planKey)) return 'Free';
   const parsed = parseSubscriptionPlan(planKey);
   if (!parsed) return planKey;
-  const tierLabel = SUBSCRIPTION_TIERS[parsed.tier as SubscriptionTier].label;
+  const customLabel = plans?.find((p) => p.id === parsed.tier)?.label;
+  const tierLabel = customLabel || SUBSCRIPTION_TIERS[parsed.tier as BuiltInSubscriptionTier]?.label || parsed.tier;
   const billingLabel = BILLING_PERIODS.find((b) => b.id === (parsed.billing as BillingPeriod))?.label ?? parsed.billing;
   return `${tierLabel} (${billingLabel})`;
 };

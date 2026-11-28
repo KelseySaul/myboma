@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Pagination, usePagination } from '@/components/ui/pagination';
-import { formatPlanPrice, getSubscriptionFeatures, SUBSCRIPTION_TIERS, VISIBLE_PLAN_ORDER, type SubscriptionTier } from '../../../shared/landlordSubscription';
+import {
+  DEFAULT_SUBSCRIPTION_PLANS,
+  formatPlanPrice,
+  formatPlanTagline,
+  getSubscriptionFeatures,
+  type SubscriptionTier,
+} from '../../../shared/landlordSubscription';
 import { resolveMediaUrl } from '../lib/fileUrl';
 import {
   provisionUser,
@@ -85,9 +91,10 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSuperAdminAccounts } from '../lib/queries';
+import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSubscriptionPlans, useSuperAdminAccounts } from '../lib/queries';
 import AdminOverview from './admin/AdminOverview';
 import SuperAdminRevenueView from './admin/SuperAdminRevenueView';
+import SuperAdminPlansView from './admin/SuperAdminPlansView';
 import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
 import PhotoCaptureControl from './PhotoCaptureControl';
 import PropertyDescriptionPresets from './PropertyDescriptionPresets';
@@ -165,6 +172,7 @@ const TAB_TITLES: Record<string, { title: string; description: string }> = {
   pending: { title: 'Pending invites', description: "People you've invited who haven't set up their account yet." },
   properties: { title: 'Properties', description: 'Every unit and building, with its landlord and status.' },
   revenue: { title: 'Revenue & accounts', description: 'Self-registered vs created users, subscription earnings, receipts, and renewal reminders.' },
+  plans: { title: 'Plans & pricing', description: 'Update prepaid prices, unit limits, building limits, and add custom plans for landlords & property managers.' },
   platforms: { title: 'Platforms', description: 'Separate workspaces for agencies and their landlords.' },
   audit: { title: 'Activity log', description: 'A record of important actions, newest first.' },
 };
@@ -178,6 +186,7 @@ export default function AdminDashboard({
   onChangeSuperAdminAccountIds,
 }: AdminDashboardProps) {
   const queryClient = useQueryClient();
+  const { data: livePlans = DEFAULT_SUBSCRIPTION_PLANS } = useSubscriptionPlans();
   const isSuperAdminScoped = Boolean(profile.isSuperAdmin && onChangeSuperAdminAccountIds);
   const selectedAccountIds = superAdminAccountIds ?? [];
   const selectedAccountIdsKey = selectedAccountIds.join(',');
@@ -367,6 +376,10 @@ export default function AdminDashboard({
   };
 
   const handlePauseAccountImpl = async (u: any) => {
+    if (u.isSuperAdmin) {
+      toast.error('Super admin accounts cannot be paused.');
+      return;
+    }
     const newStatus = u.status === 'suspended' ? 'active' : 'suspended';
     try {
       await updateUserStatus(u.uid, newStatus);
@@ -377,6 +390,10 @@ export default function AdminDashboard({
   };
 
   const handleDeleteAccountImpl = async (u: any) => {
+    if (u.isSuperAdmin) {
+      toast.error('Super admin accounts cannot be deleted.');
+      return;
+    }
     if (!window.confirm(`Are you sure you want to permanently delete ${u.displayName}?`)) return;
     try {
       await deleteUserAccount(u.uid);
@@ -387,10 +404,12 @@ export default function AdminDashboard({
   };
 
   const handleBulkDeleteUsersImpl = async () => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${selectedUserIds.length} users?`)) return;
+    const deletableIds = selectedUserIds.filter((uid) => !users.find((u) => u.uid === uid)?.isSuperAdmin);
+    if (deletableIds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${deletableIds.length} users?`)) return;
     try {
-      await Promise.all(selectedUserIds.map(uid => deleteUserAccount(uid)));
-      toast.success(`${selectedUserIds.length} accounts deleted successfully`);
+      await Promise.all(deletableIds.map(uid => deleteUserAccount(uid)));
+      toast.success(`${deletableIds.length} accounts deleted successfully`);
       setSelectedUserIds([]);
     } catch (err: any) {
       toast.error(err.message);
@@ -398,9 +417,11 @@ export default function AdminDashboard({
   };
 
   const handleBulkPauseUsersImpl = async () => {
+    const targetIds = selectedUserIds.filter((uid) => !users.find((u) => u.uid === uid)?.isSuperAdmin);
+    if (targetIds.length === 0) return;
     try {
       await Promise.all(
-        selectedUserIds.map(uid => {
+        targetIds.map(uid => {
           const user = users.find(u => u.uid === uid);
           if (user) {
             const newStatus = user.status === 'suspended' ? 'active' : 'suspended';
@@ -409,7 +430,7 @@ export default function AdminDashboard({
           return Promise.resolve();
         })
       );
-      toast.success(`${selectedUserIds.length} accounts paused/unpaused successfully`);
+      toast.success(`${targetIds.length} accounts paused/unpaused successfully`);
       setSelectedUserIds([]);
     } catch (err: any) {
       toast.error(err.message);
@@ -434,14 +455,17 @@ export default function AdminDashboard({
   };
 
   const toggleUserSelection = (uid: string) => {
+    const target = users.find((u) => u.uid === uid);
+    if (target?.isSuperAdmin) return;
     setSelectedUserIds(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
   };
 
   const toggleAllUsers = () => {
-    if (selectedUserIds.length === users.length && users.length > 0) {
+    const selectableUids = users.filter((u) => !u.isSuperAdmin).map((u) => u.uid);
+    if (selectedUserIds.length === selectableUids.length && selectableUids.length > 0) {
       setSelectedUserIds([]);
     } else {
-      setSelectedUserIds(users.map(u => u.uid));
+      setSelectedUserIds(selectableUids);
     }
   };
 
@@ -1381,11 +1405,13 @@ export default function AdminDashboard({
                                     value={inviteForm.subscriptionTier || 'pro'}
                                     onChange={(e) => setInviteForm({ ...inviteForm, subscriptionTier: e.target.value as SubscriptionTier })}
                                   >
-                                    {VISIBLE_PLAN_ORDER.map((tierId) => {
-                                      const info = SUBSCRIPTION_TIERS[tierId];
-                                      const priceLabel = info.monthlyBaseKes === 0 ? 'KES 0 (Up to 2 units · 1 building)' : `${formatPlanPrice(info.monthlyBaseKes)}/mo`;
+                                    {livePlans.map((info) => {
+                                      const priceLabel =
+                                        info.monthlyPriceKes === 0
+                                          ? `KES 0 (${formatPlanTagline(info.maxListings, info.maxBuildings)})`
+                                          : `${formatPlanPrice(info.monthlyPriceKes)}/mo`;
                                       return (
-                                        <option key={tierId} value={tierId}>
+                                        <option key={info.id} value={info.id}>
                                           {info.label} — {priceLabel}
                                         </option>
                                       );
@@ -1408,7 +1434,10 @@ export default function AdminDashboard({
                                 )}
                               </div>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                {SUBSCRIPTION_TIERS[inviteForm.subscriptionTier || 'pro'].tagline}
+                                {(() => {
+                                  const picked = livePlans.find((p) => p.id === (inviteForm.subscriptionTier || 'pro'));
+                                  return picked ? formatPlanTagline(picked.maxListings, picked.maxBuildings) : '';
+                                })()}
                               </p>
                             </div>
                           )}
@@ -1521,7 +1550,13 @@ export default function AdminDashboard({
                   <TableBody>
                     {currentUsers.map((u, i) => (
                       <TableRow key={i} className={`hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors ${selectedUserIds.includes(u.uid) ? 'bg-slate-50 dark:bg-slate-800/40' : ''}`}>
-                        <TableCell className="hidden px-4 sm:table-cell"><Checkbox checked={selectedUserIds.includes(u.uid)} onCheckedChange={() => toggleUserSelection(u.uid)} /></TableCell>
+                        <TableCell className="hidden px-4 sm:table-cell">
+                          {u.isSuperAdmin ? (
+                            <span className="inline-block h-4 w-4" aria-hidden />
+                          ) : (
+                            <Checkbox checked={selectedUserIds.includes(u.uid)} onCheckedChange={() => toggleUserSelection(u.uid)} />
+                          )}
+                        </TableCell>
                         <TableCell className="px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center text-xs font-bold shrink-0 border border-slate-200/60 dark:border-slate-700">
@@ -1542,31 +1577,42 @@ export default function AdminDashboard({
                           </TableCell>
                         )}
                         <TableCell className="px-4 py-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger render={
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
-                                <FontAwesomeIcon icon={faEllipsisVertical} className="h-3.5 w-3.5" />
-                              </Button>
-                            } />
-                            <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
-                              <DropdownMenuLabel className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-slate-800" />
-                              {onImpersonate && !u.isSuperAdmin && u.uid !== profile.uid && (
-                                <DropdownMenuItem onClick={() => onImpersonate(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
-                                  <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-slate-400" /> View as this user
+                          {u.isSuperAdmin ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                              <FontAwesomeIcon icon={faShieldAlt} className="h-2.5 w-2.5" />
+                              Protected
+                            </span>
+                          ) : !profile.isSuperAdmin && u.isAdmin ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-1 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                              Admin
+                            </span>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
+                                  <FontAwesomeIcon icon={faEllipsisVertical} className="h-3.5 w-3.5" />
+                                </Button>
+                              } />
+                              <DropdownMenuContent align="end" className="w-48 rounded-xl p-1 shadow-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900">
+                                <DropdownMenuLabel className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Actions</DropdownMenuLabel>
+                                <DropdownMenuSeparator className="my-1 bg-slate-100 dark:bg-slate-800" />
+                                {onImpersonate && profile.isSuperAdmin && !u.isSuperAdmin && u.uid !== profile.uid && (
+                                  <DropdownMenuItem onClick={() => onImpersonate(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                    <FontAwesomeIcon icon={faEye} className="mr-2 h-3.5 w-3.5 text-slate-400" /> View as this user
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onClick={() => { setSelectedUserForRole(u); setUpdateRoleForm({ role: u.role }); setIsUpdateRoleOpen(true); }} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                  <FontAwesomeIcon icon={faUserShield} className="mr-2 h-3.5 w-3.5 text-slate-400" /> Change Role
                                 </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => { setSelectedUserForRole(u); setUpdateRoleForm({ role: u.role }); setIsUpdateRoleOpen(true); }} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800">
-                                <FontAwesomeIcon icon={faUserShield} className="mr-2 h-3.5 w-3.5 text-slate-400" /> Change Role
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handlePauseAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20">
-                                <FontAwesomeIcon icon={u.status === 'suspended' ? faCheckCircle : faTimesCircle} className="mr-2 h-3.5 w-3.5" /> {u.status === 'suspended' ? 'Activate Account' : 'Pause Access'}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleDeleteAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20">
-                                <FontAwesomeIcon icon={faTrash} className="mr-2 h-3.5 w-3.5" /> Delete Account
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                <DropdownMenuItem onClick={() => handlePauseAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20">
+                                  <FontAwesomeIcon icon={u.status === 'suspended' ? faCheckCircle : faTimesCircle} className="mr-2 h-3.5 w-3.5" /> {u.status === 'suspended' ? 'Activate Account' : 'Pause Access'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDeleteAccount(u)} className="text-xs font-semibold cursor-pointer rounded-lg px-2.5 py-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20">
+                                  <FontAwesomeIcon icon={faTrash} className="mr-2 h-3.5 w-3.5" /> Delete Account
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -2375,6 +2421,11 @@ export default function AdminDashboard({
         {/* ── SUPER ADMIN REVENUE & ACCOUNTS TAB ── */}
         {activeTab === 'revenue' && profile.isSuperAdmin && (
           <SuperAdminRevenueView />
+        )}
+
+        {/* ── SUPER ADMIN PLANS & PRICING TAB ── */}
+        {activeTab === 'plans' && profile.isSuperAdmin && (
+          <SuperAdminPlansView />
         )}
 
         {/* ── NETWORK TAB ── */}

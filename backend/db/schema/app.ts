@@ -438,3 +438,29 @@ export const platformMemberships = pgTable('platform_memberships', {
   unique('platform_memberships_platform_user_uq').on(t.platformId, t.userId),
   index('platform_memberships_user_idx').on(t.userId),
 ]);
+
+/**
+ * Dynamic prepaid subscription plans editable by Super Admins (prices, unit limits,
+ * building limits, feature flags, and unlimited custom tiers).
+ */
+export const subscriptionPlans = pgTable('subscription_plans', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+  badge: text('badge'),
+  audienceType: text('audienceType').notNull().default('landlord'),
+  description: text('description').notNull().default(''),
+  monthlyPriceKes: integer('monthlyPriceKes').notNull().default(0),
+  quarterlyPriceKes: integer('quarterlyPriceKes'),
+  yearlyPriceKes: integer('yearlyPriceKes'),
+  maxListings: integer('maxListings'),
+  maxBuildings: integer('maxBuildings'),
+  maintenanceHub: boolean('maintenanceHub').notNull().default(true),
+  caretakerAccess: boolean('caretakerAccess').notNull().default(false),
+  agencyAccess: boolean('agencyAccess').notNull().default(false),
+  highlights: jsonb('highlights').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  sortOrder: integer('sortOrder').notNull().default(0),
+  isActive: boolean('isActive').notNull().default(true),
+  isSystem: boolean('isSystem').notNull().default(false),
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+});

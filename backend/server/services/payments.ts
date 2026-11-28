@@ -12,12 +12,12 @@ import {
   saveLandlordPayoutProfile,
 } from '../landlordSubscriptionHandlers.ts';
 import {
-  getSubscriptionAmount,
+  getDynamicPlanAmount,
   parseSubscriptionPlan,
-  SUBSCRIPTION_TIERS,
   type BillingPeriod,
   type SubscriptionTier,
 } from '../../../shared/landlordSubscription.ts';
+import {getSubscriptionPlanById} from './subscriptionPlans.ts';
 import type {RentPaymentRecord, UserProfileRecord} from '../types.ts';
 import {allowedRedirectOrigins, appBaseUrl} from '../http/config.ts';
 import {asyncHandler, getValidatedBody, recordAudit, sanitizeString} from '../http/middleware.ts';
@@ -1315,13 +1315,22 @@ export const stripeWebhookHandler = asyncHandler(async (req, res) => {
 export const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res) => {
   const body = getValidatedBody<z.infer<typeof landlordSubscriptionCheckoutSchema>>(req);
   const actor = req.profile!;
-  const amount = getSubscriptionAmount(body.tier as SubscriptionTier, body.billing as BillingPeriod);
+  const plan = await getSubscriptionPlanById(body.tier);
+  if (!plan || !plan.isActive || plan.monthlyPriceKes <= 0) {
+    res.status(400).json({error: 'This subscription plan is not available for paid checkout.'});
+    return;
+  }
+  const amount = getDynamicPlanAmount(plan, body.billing as BillingPeriod);
+  if (amount <= 0) {
+    res.status(400).json({error: 'Selected billing cycle has no payable amount.'});
+    return;
+  }
 
   await saveLandlordPayoutProfile(actor.uid, body);
 
   const pending = await createPendingSubscriptionPayment({
     landlordId: actor.uid,
-    tier: body.tier as SubscriptionTier,
+    tier: plan.id as SubscriptionTier,
     billing: body.billing as BillingPeriod,
     amount,
     paymentChannel: body.paymentMethod,
@@ -1336,7 +1345,7 @@ export const initiateLandlordSubscriptionCheckout = asyncHandler(async (req, res
     assertAllowedRedirectUrl(body.successUrl, allowedRedirectOrigins);
     assertAllowedRedirectUrl(body.cancelUrl, allowedRedirectOrigins);
 
-    const label = `${SUBSCRIPTION_TIERS[body.tier as SubscriptionTier].label} plan`;
+    const label = `${plan.label} plan`;
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       success_url:

@@ -7,11 +7,13 @@ import {
   getCaretakerDashboard,
   getImpersonatedUser,
   getLandlordDashboard,
+  getPublicSubscriptionPlans,
   getSession,
   getSuperAdminAccounts,
   getTenantDashboard,
   getUnreadNotificationCount,
 } from './api';
+import { DEFAULT_SUBSCRIPTION_PLANS, type DynamicSubscriptionPlan } from '../../../shared/landlordSubscription';
 import { DASHBOARD_POLL_MS, LISTINGS_POLL_MS, PROFILE_POLL_MS, UNREAD_POLL_MS } from './polling';
 
 const accountKey = (accountIds?: string[]) =>
@@ -34,6 +36,7 @@ export const queryKeys = {
   superAdminAccounts: (uid: string) => ['admin', 'accounts', uid] as const,
   auditLogs: (params: { uid: string; userId: string }) => ['admin', 'audit-logs', params.uid, params.userId] as const,
   availableProperties: () => ['properties', 'available'] as const,
+  publicPlans: () => ['public', 'plans'] as const,
   /** Shared by Navbar and Sidebar so both badges come from one request. */
   unreadCount: (identity: string | null | undefined) => ['notifications', 'unread-count', identity ?? null] as const,
   unreadCountAll: () => ['notifications', 'unread-count'] as const,
@@ -162,6 +165,15 @@ export const useAvailableProperties = () =>
     initialDataUpdatedAt: () => readStoredListings()?.savedAt,
     staleTime: 60_000,
     refetchInterval: LISTINGS_POLL_MS,
+  });
+
+export const useSubscriptionPlans = () =>
+  useQuery<DynamicSubscriptionPlan[]>({
+    queryKey: queryKeys.publicPlans(),
+    queryFn: getPublicSubscriptionPlans,
+    placeholderData: DEFAULT_SUBSCRIPTION_PLANS,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 
 /** Unread notification count for the signed-in user — or, while impersonating, for the

@@ -32,6 +32,14 @@ import {
   sendSubscriptionRenewalReminder,
   subscriberAccountType,
 } from '../landlordSubscriptionHandlers.ts';
+import {
+  createSubscriptionPlan,
+  createSubscriptionPlanSchema,
+  deleteSubscriptionPlan,
+  listSubscriptionPlans,
+  updateSubscriptionPlan,
+  updateSubscriptionPlanSchema,
+} from '../services/subscriptionPlans.ts';
 import {insertNotification, sendEmail} from '../services/notify.ts';
 
 const resendInviteSchema = z.object({email: emailSchema}).strict();
@@ -604,10 +612,14 @@ export function registerAdminRoutes(bffRouter: Router) {
     asyncHandler(async (req, res) => {
       const target = await db.query.users.findFirst({
         where: eq(schema.users.uid, req.params.uid),
-        columns: {uid: true, email: true},
+        columns: {uid: true, email: true, isSuperAdmin: true},
       });
       if (!target) {
         res.status(404).json({error: 'User not found'});
+        return;
+      }
+      if (target.isSuperAdmin) {
+        res.status(403).json({error: 'Super admin accounts cannot be impersonated.'});
         return;
       }
       await recordAudit(req.profile!, 'ADMIN_IMPERSONATE_START', 'user', target.uid, {targetEmail: target.email});
@@ -648,16 +660,19 @@ export function registerAdminRoutes(bffRouter: Router) {
       const roleValue = isSuper ? 'admin' : role;
       const nextIsAdmin = roleValue === 'admin' || isSuper;
 
+      // Super admin accounts are immutable from the user management role endpoint so no
+      // admin or other user can ever edit or demote a super admin account.
+      if (target.isSuperAdmin) {
+        res.status(403).json({error: 'Super admin accounts cannot be modified.'});
+        return;
+      }
+
       // Privilege changes are super-admin only: granting/revoking admin, touching a super
       // admin, or changing one's own role would otherwise let an admin escalate or lock
       // out the platform owner.
       const touchesPrivilege = nextIsAdmin || target.isAdmin || target.isSuperAdmin;
       if (!actor.isSuperAdmin && (touchesPrivilege || target.uid === actor.id)) {
         res.status(403).json({error: 'Only a super admin can change admin privileges or your own role.'});
-        return;
-      }
-      if (actor.isSuperAdmin && target.uid === actor.id && !isSuper) {
-        res.status(400).json({error: 'You cannot remove your own super admin role.'});
         return;
       }
 
@@ -1116,6 +1131,72 @@ export function registerAdminRoutes(bffRouter: Router) {
         receiptNumber: result.receiptNumber,
       });
       res.json({ok: true, email: result.email, receiptNumber: result.receiptNumber, message: `Receipt ${result.receiptNumber} sent to ${result.email}.`});
+    }),
+  );
+
+  /** Super Admin lists all prepaid subscription plans (including hidden/inactive) + live subscriber counts. */
+  bffRouter.get(
+    '/admin/plans',
+    requireAuth,
+    requireSuperAdmin,
+    asyncHandler(async (_req, res) => {
+      const [plans, users] = await Promise.all([
+        listSubscriptionPlans({includeInactive: true}),
+        db.select({subscriptionPlan: schema.users.subscriptionPlan, subscriptionStatus: schema.users.subscriptionStatus}).from(schema.users),
+      ]);
+      const counts = new Map<string, number>();
+      for (const u of users) {
+        if (u.subscriptionStatus !== 'active') continue;
+        const parsed = parseSubscriptionPlan(u.subscriptionPlan);
+        if (!parsed) continue;
+        counts.set(parsed.tier, (counts.get(parsed.tier) ?? 0) + 1);
+      }
+      res.json(plans.map((p) => ({...p, subscriberCount: counts.get(p.id) ?? 0})));
+    }),
+  );
+
+  /** Super Admin creates a new custom prepaid plan (takes effect immediately across DB, limits, and checkout). */
+  bffRouter.post(
+    '/admin/plans',
+    requireAuth,
+    requireSuperAdmin,
+    validateBody(createSubscriptionPlanSchema),
+    asyncHandler(async (req, res) => {
+      const body = getValidatedBody<z.infer<typeof createSubscriptionPlanSchema>>(req);
+      const created = await createSubscriptionPlan(body);
+      await recordAudit(req.profile!, 'SUBSCRIPTION_PLAN_CREATE', 'subscription_plan', created.id, {
+        label: created.label,
+        monthlyPriceKes: created.monthlyPriceKes,
+        maxListings: created.maxListings,
+        maxBuildings: created.maxBuildings,
+      });
+      res.status(201).json(created);
+    }),
+  );
+
+  /** Super Admin updates an existing prepaid plan's pricing, unit/building limits, features, or visibility. */
+  bffRouter.patch(
+    '/admin/plans/:id',
+    requireAuth,
+    requireSuperAdmin,
+    validateBody(updateSubscriptionPlanSchema),
+    asyncHandler(async (req, res) => {
+      const body = getValidatedBody<z.infer<typeof updateSubscriptionPlanSchema>>(req);
+      const updated = await updateSubscriptionPlan(req.params.id, body);
+      await recordAudit(req.profile!, 'SUBSCRIPTION_PLAN_UPDATE', 'subscription_plan', updated.id, body);
+      res.json(updated);
+    }),
+  );
+
+  /** Super Admin deletes an unused custom prepaid plan. */
+  bffRouter.delete(
+    '/admin/plans/:id',
+    requireAuth,
+    requireSuperAdmin,
+    asyncHandler(async (req, res) => {
+      const result = await deleteSubscriptionPlan(req.params.id);
+      await recordAudit(req.profile!, 'SUBSCRIPTION_PLAN_DELETE', 'subscription_plan', req.params.id);
+      res.json(result);
     }),
   );
 }

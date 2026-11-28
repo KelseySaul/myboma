@@ -16,14 +16,16 @@ import { clearQueryCache } from '../lib/queryClient';
 import { promptForPush, type UserProfile } from '../App';
 import {
   BILLING_PERIODS,
+  DEFAULT_SUBSCRIPTION_PLANS,
+  formatPlanLimitSummary,
   formatPlanPrice,
-  getSubscriptionAmount,
+  getDynamicPlanAmount,
   parseSubscriptionPlan,
-  SUBSCRIPTION_TIERS,
   type BillingPeriod,
   type PaidSubscriptionTier,
   type RentPayoutMethod,
 } from '../../../shared/landlordSubscription';
+import { useSubscriptionPlans } from '../lib/queries';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,7 +41,6 @@ type SettingsProfile = UserProfile & {
 };
 
 const PHONE = /^\+?[\d\s]{9,16}$/;
-const PAID_TIERS: PaidSubscriptionTier[] = ['basic', 'starter', 'pro', 'proplus'];
 
 /* Shared bits ------------------------------------------------------------ */
 
@@ -419,15 +420,24 @@ function PayoutSection({ profile }: { profile: SettingsProfile }) {
 /* Landlord plan ---------------------------------------------------------- */
 
 function PlanSection({ profile }: { profile: SettingsProfile }) {
+  const { data: livePlans = DEFAULT_SUBSCRIPTION_PLANS } = useSubscriptionPlans();
+  const plans = livePlans.length > 0 ? livePlans : DEFAULT_SUBSCRIPTION_PLANS;
+  const paidPlans = plans.filter((p) => p.monthlyPriceKes > 0);
   const plan = parseSubscriptionPlan(profile.subscriptionPlan ?? null);
-  const tier = plan ? SUBSCRIPTION_TIERS[plan.tier] : null;
+  const tier = plan ? plans.find((p) => p.id === plan.tier) ?? null : null;
   const active = profile.subscriptionStatus === 'active';
   const expires = profile.subscriptionExpiresAt ? new Date(profile.subscriptionExpiresAt) : null;
   const [open, setOpen] = useState(false);
+  const defaultPaidTier =
+    (plan && plan.tier !== 'free' && paidPlans.some((p) => p.id === plan.tier) ? plan.tier : null) ||
+    (profile.role === 'admin' ? paidPlans.find((p) => p.agencyAccess)?.id : null) ||
+    paidPlans[0]?.id ||
+    'starter';
   const [choice, setChoice] = useState<{ tier: PaidSubscriptionTier; billing: BillingPeriod }>({
-    tier: plan && plan.tier !== 'free' ? plan.tier : profile.role === 'admin' ? 'proplus' : 'starter',
+    tier: defaultPaidTier,
     billing: 'monthly',
   });
+  const selectedPaidPlan = paidPlans.find((p) => p.id === choice.tier) ?? paidPlans[0];
   const [receipts, setReceipts] = useState<MySubscriptionReceipt[]>([]);
 
   useEffect(() => {
@@ -521,14 +531,13 @@ function PlanSection({ profile }: { profile: SettingsProfile }) {
             <DialogDescription>Pay once for the period you pick. Nothing renews automatically.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2 sm:grid-cols-2">
-            {PAID_TIERS.map((id) => {
-              const t = SUBSCRIPTION_TIERS[id];
-              const selected = choice.tier === id;
+            {paidPlans.map((t) => {
+              const selected = (selectedPaidPlan?.id ?? choice.tier) === t.id;
               return (
                 <button
-                  key={id}
+                  key={t.id}
                   type="button"
-                  onClick={() => setChoice((c) => ({ ...c, tier: id }))}
+                  onClick={() => setChoice((c) => ({ ...c, tier: t.id }))}
                   aria-pressed={selected}
                   className={`rounded-xl border p-3 text-left transition ${
                     selected ? 'border-zinc-950 ring-1 ring-zinc-950 dark:border-white dark:ring-white' : 'border-zinc-200 hover:border-zinc-400 dark:border-zinc-700'
@@ -536,9 +545,14 @@ function PlanSection({ profile }: { profile: SettingsProfile }) {
                 >
                   <span className="flex items-baseline justify-between gap-2">
                     <span className="font-semibold text-zinc-950 dark:text-white">{t.label}</span>
-                    <span className="text-sm tabular-nums text-zinc-700 dark:text-zinc-200">{formatPlanPrice(t.monthlyBaseKes)}/mo</span>
+                    <span className="text-sm tabular-nums text-zinc-700 dark:text-zinc-200">{formatPlanPrice(t.monthlyPriceKes)}/mo</span>
                   </span>
-                  <span className="mt-1 block text-xs text-zinc-500">{t.highlights.join(' · ')}</span>
+                  <span className="mt-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                    {formatPlanLimitSummary(t.maxListings, t.maxBuildings)}
+                  </span>
+                  {t.highlights.length > 0 && (
+                    <span className="mt-1 block text-xs text-zinc-500">{t.highlights.slice(0, 3).join(' · ')}</span>
+                  )}
                 </button>
               );
             })}
@@ -561,11 +575,11 @@ function PlanSection({ profile }: { profile: SettingsProfile }) {
             ))}
           </div>
           <p className="text-sm text-zinc-700 dark:text-zinc-200">
-            Total: <strong className="tabular-nums">{formatPlanPrice(getSubscriptionAmount(choice.tier, choice.billing))}</strong>
+            Total: <strong className="tabular-nums">{formatPlanPrice(selectedPaidPlan ? getDynamicPlanAmount(selectedPaidPlan, choice.billing) : 0)}</strong>
           </p>
           <LandlordSubscriptionPay
             payload={{
-              tier: choice.tier,
+              tier: selectedPaidPlan?.id ?? choice.tier,
               billing: choice.billing,
               rentPayoutMethod: profile.rentPayoutMethod || 'cash',
               mpesaSettlementPhone: profile.mpesaSettlementPhone || undefined,

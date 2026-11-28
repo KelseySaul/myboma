@@ -151,4 +151,14 @@ describe('subscription request schemas', () => {
     });
     assert.equal(result.success, false);
   });
+
+  it('accepts Super-Admin-created custom paid plan slugs at checkout', () => {
+    const result = subscriptions.landlordSubscriptionCheckoutSchema.safeParse({
+      tier: 'estate-50',
+      billing: 'yearly',
+      paymentMethod: 'pesapal',
+      rentPayoutMethod: 'cash',
+    });
+    assert.equal(result.success, true);
+  });
 });

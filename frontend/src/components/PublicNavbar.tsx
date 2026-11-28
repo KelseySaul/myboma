@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Bookmark, Menu, Search, X } from 'lucide-react';
+import { Menu, Search, X } from 'lucide-react';
 import { tenantConfig } from '../config/tenant';
-import { getSavedForLaterIds, SAVED_LISTINGS_EVENT } from '../lib/savedListings';
 import SiteSearch from './search/SiteSearch';
 
 export const SHOW_SAVED_EVENT = 'myboma:show-saved';
@@ -24,19 +23,8 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
   const [visible, setVisible] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [savedCount, setSavedCount] = useState(() => getSavedForLaterIds().size);
   const previousScrollTop = useRef(0);
   const isNative = Capacitor.isNativePlatform();
-
-  useEffect(() => {
-    const syncSaved = () => setSavedCount(getSavedForLaterIds().size);
-    window.addEventListener(SAVED_LISTINGS_EVENT, syncSaved);
-    window.addEventListener('storage', syncSaved);
-    return () => {
-      window.removeEventListener(SAVED_LISTINGS_EVENT, syncSaved);
-      window.removeEventListener('storage', syncSaved);
-    };
-  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -75,15 +63,6 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
   const dark = overHero && !scrolled;
   const path = window.location.pathname;
 
-  const openSavedHomes = () => {
-    setMobileMenuOpen(false);
-    if (window.location.pathname !== '/') {
-      window.location.assign('/?saved=1');
-      return;
-    }
-    window.dispatchEvent(new CustomEvent(SHOW_SAVED_EVENT));
-  };
-
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 px-3 transition-transform duration-200 ease-out sm:px-6 ${visible ? 'translate-y-0' : '-translate-y-[calc(100%+1rem)]'}`}
@@ -117,21 +96,6 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
             >
               <Search className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={openSavedHomes}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-xl px-2.5 text-sm font-medium transition ${
-                dark ? 'text-white/85 hover:bg-white/15 hover:text-white' : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'
-              }`}
-            >
-              <Bookmark className="h-4 w-4" />
-              <span>Saved</span>
-              {savedCount > 0 && (
-                <span className={`rounded-full px-1.5 py-0.2 text-[11px] font-semibold tabular-nums ${dark ? 'bg-white/20 text-white' : 'bg-violet-50 text-violet-700'}`}>
-                  {savedCount}
-                </span>
-              )}
-            </button>
             {LINKS.map((link) => {
               const active = path === link.href;
               return (
@@ -163,21 +127,6 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
           </div>
 
           <div className="flex items-center gap-1 sm:hidden">
-            <button
-              type="button"
-              aria-label="Saved for later"
-              onClick={openSavedHomes}
-              className={`relative flex h-9 w-9 items-center justify-center rounded-xl transition ${
-                dark ? 'text-white hover:bg-white/15' : 'text-zinc-800 hover:bg-zinc-100'
-              }`}
-            >
-              <Bookmark className="h-4 w-4" />
-              {savedCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#5B21B6] px-1 text-[9px] font-bold text-white">
-                  {savedCount > 9 ? '9+' : savedCount}
-                </span>
-              )}
-            </button>
             <button
               type="button"
               aria-label="Search homes"
@@ -231,23 +180,6 @@ export default function PublicNavbar({ onLoginClick, overHero = false }: PublicN
                   </a>
                 );
               })}
-              <button
-                type="button"
-                onClick={openSavedHomes}
-                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-sm font-medium ${
-                  dark ? 'text-white/85 hover:bg-white/10' : 'text-zinc-700 hover:bg-zinc-50'
-                }`}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Bookmark className="h-4 w-4" />
-                  Saved for later
-                </span>
-                {savedCount > 0 && (
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${dark ? 'bg-white/15 text-white' : 'bg-violet-50 text-violet-700'}`}>
-                    {savedCount}
-                  </span>
-                )}
-              </button>
             </div>
             <div className={`mt-2 border-t pt-2 ${dark ? 'border-white/10' : 'border-zinc-100'}`}>
               <button

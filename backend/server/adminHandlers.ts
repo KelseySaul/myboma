@@ -201,7 +201,11 @@ export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response
     res.status(404).json({error: 'User not found'});
     return;
   }
-  if ((target.isSuperAdmin || target.isAdmin) && !actor.isSuperAdmin) {
+  if (target.isSuperAdmin) {
+    res.status(403).json({error: 'Super admin accounts cannot be paused or suspended.'});
+    return;
+  }
+  if (target.isAdmin && !actor.isSuperAdmin) {
     res.status(403).json({error: 'Cannot modify another admin account'});
     return;
   }
@@ -238,8 +242,8 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
       return;
     }
 
-    if (targetUser.isSuperAdmin && !actor.isSuperAdmin) {
-      res.status(403).json({error: 'Cannot delete a super admin'});
+    if (targetUser.isSuperAdmin) {
+      res.status(403).json({error: 'Super admin accounts cannot be deleted.'});
       return;
     }
 

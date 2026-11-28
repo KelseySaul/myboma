@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {PLAN_SLUG_RE} from '../../shared/landlordSubscription.ts';
 import type {UserProfileRecord} from './types.ts';
 
 const emailSchema = z.string().email().max(320);
@@ -30,8 +31,13 @@ export const provisionUserSchema = z
     bankName: z.string().optional(),
     bankAccountNumber: z.string().optional(),
     bankAccountName: z.string().optional(),
-    /** Super admin option when creating a landlord: assign an explicit subscription tier & cycle. */
-    subscriptionTier: z.enum(['free', 'basic', 'starter', 'pro', 'proplus']).optional(),
+    /** Super admin option when creating a landlord: assign any built-in or custom plan slug. */
+    subscriptionTier: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(PLAN_SLUG_RE, 'Invalid subscription plan ID')
+      .optional(),
     subscriptionBilling: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
     /** Optional units assigned to a caretaker upon invitation acceptance. */
     propertyIds: z.array(z.string().uuid()).max(200).optional(),
@@ -84,7 +90,7 @@ export const assertCanProvision = (
 
 /** Computes subscription profile fields when a super admin picks a plan for a newly invited landlord. */
 export const resolveProvisionedLandlordSubscription = (
-  tier?: 'free' | 'basic' | 'starter' | 'pro' | 'proplus',
+  tier?: string,
   billing: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
   now = new Date(),
 ) => {

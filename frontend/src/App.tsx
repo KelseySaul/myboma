@@ -865,7 +865,7 @@ export default function App() {
                 </button>
               );})}
               {(() => {
-                const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'revenue', 'platforms', 'audit', 'settings'].includes(activeTab);
+                const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'revenue', 'plans', 'platforms', 'audit', 'settings'].includes(activeTab);
                 return (
                   <button
                     type="button"
@@ -971,6 +971,7 @@ export default function App() {
                   <div className="space-y-0.5">
                     {[
                       { id: 'revenue',   label: 'Revenue & accounts', icon: faWallet },
+                      { id: 'plans',     label: 'Plans & pricing',    icon: faBolt },
                       { id: 'platforms', label: 'Platforms',          icon: faGlobe },
                       { id: 'audit',     label: 'Activity log',       icon: faClipboardList },
                     ].map((item) => {

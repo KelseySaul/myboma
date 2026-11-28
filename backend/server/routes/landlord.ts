@@ -14,6 +14,7 @@ import {
   isSuperAdmin,
 } from '../../db/authz.ts';
 import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
+import {resolveLivePlanEntitlements} from '../services/subscriptionPlans.ts';
 import {ensureRentInvoiceForProperty, recordInitialAssignmentInvoices, syncAutomaticRentInvoices} from '../rentInvoiceSync.ts';
 import {endLeaseForProperty, endLeasesForTenant, startLease} from '../leases.ts';
 import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
@@ -549,7 +550,7 @@ export function registerLandlordRoutes(bffRouter: Router) {
         return;
       }
       const {landlordId, platformId} = owner;
-      const bLimit = buildingLimitFor(owner.owner);
+      const {maxBuildings: bLimit} = await resolveLivePlanEntitlements(owner.owner);
       if (bLimit !== null) {
         const [{count}] = await db
           .select({count: sql<number>`count(*)::int`})
@@ -640,8 +641,8 @@ export function registerLandlordRoutes(bffRouter: Router) {
       }
       const {landlordId, platformId} = owner;
 
-      // Plan unit limits, enforced server-side (previously only checked in the browser).
-      const limit = unitLimitFor(owner.owner);
+      // Plan unit limits, enforced server-side against live database subscription plans.
+      const {maxListings: limit} = await resolveLivePlanEntitlements(owner.owner);
       if (limit !== null) {
         const [{count}] = await db
           .select({count: sql<number>`count(*)::int`})
@@ -966,16 +967,12 @@ export function registerLandlordRoutes(bffRouter: Router) {
         res.status(403).json({error: 'Forbidden'});
         return;
       }
-      // The maintenance hub is a Pro/Pro Plus feature of the unit owner's plan.
+      // The maintenance hub is controlled by the unit owner's live subscription plan.
       if (!actor.isAdmin && !actor.isSuperAdmin && actor.role !== 'caretaker') {
         const owner = await db.query.users.findFirst({where: eq(schema.users.uid, request.landlordId)});
-        const tier = parseSubscriptionPlan(owner?.subscriptionPlan)?.tier;
-        const entitled =
-          Boolean(owner) &&
-          hasActiveSubscription(owner as unknown as UserProfileRecord) &&
-          Boolean(tier && SUBSCRIPTION_TIERS[tier].features.maintenanceHub);
-        if (!entitled && !(owner && (owner.isAdmin || owner.isSuperAdmin))) {
-          res.status(402).json({error: 'The maintenance hub requires a Pro or Pro Plus plan.'});
+        const entitlements = owner ? await resolveLivePlanEntitlements(owner) : null;
+        if (!entitlements?.maintenanceHub && !(owner && (owner.isAdmin || owner.isSuperAdmin))) {
+          res.status(402).json({error: 'The maintenance hub is not included in your current plan. Upgrade to unlock it.'});
           return;
         }
       }

@@ -70,72 +70,66 @@ export function LandingHero({ onBrowse, onStartLandlord, onSearch }: HeroProps) 
         className="absolute inset-0 -z-10 bg-gradient-to-b from-black/68 via-black/45 to-black/78"
       />
 
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <div className="mx-auto max-w-3xl text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <h1 className="text-[2.35rem] font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-[4.15rem]">
+          <h1 className="text-[2.4rem] font-extrabold leading-[1.14] tracking-tight text-white sm:text-6xl sm:leading-[1.1] lg:text-[4.25rem]">
             Find your next home.
-            <br />
-            <span className="text-zinc-300">Manage rentals simply.</span>
+            <span className="mt-2.5 block text-zinc-300 sm:mt-3.5">Manage rentals simply.</span>
           </h1>
-
-          <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-200/90 sm:mt-6 sm:text-lg sm:leading-8">
-            Browse verified spaces across Kenya, or run your rentals with{' '}
-            <span className="whitespace-nowrap font-semibold text-white">M-Pesa</span> rent tracking, caretaker reports, and automated reminders.
-          </p>
 
           {/* Clean Hero Search Bar */}
           <form
             onSubmit={submitSearch}
-            className="mx-auto mt-7 flex max-w-xl flex-col gap-2 rounded-2xl border border-white/15 bg-white/95 p-1.5 shadow-2xl shadow-black/35 sm:flex-row sm:items-center"
+            className="mx-auto mt-10 flex max-w-xl flex-col gap-2.5 rounded-2xl border border-white/15 bg-white/95 p-2 shadow-2xl shadow-black/35 sm:mt-12 sm:flex-row sm:items-center sm:gap-2"
           >
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
               <input
                 type="search"
                 value={heroQuery}
                 onChange={(e) => setHeroQuery(e.target.value)}
                 placeholder="Try “Kilimani 2br”, “Westlands office” or “under 45k”…"
                 aria-label="Search homes and spaces"
-                className="h-11 w-full rounded-xl bg-transparent pl-10 pr-3 text-sm font-medium text-zinc-950 placeholder:text-zinc-400 outline-none"
+                className="h-12 w-full rounded-xl bg-transparent pl-11 pr-3 text-sm font-medium text-zinc-950 placeholder:text-zinc-400 outline-none"
               />
             </div>
             <button
               type="submit"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4C1D95] active:scale-[0.98]"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#5B21B6] px-7 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4C1D95] active:scale-[0.98]"
             >
               Search homes
             </button>
           </form>
 
-          <div className="mt-5 flex flex-col justify-center gap-2.5 sm:flex-row sm:gap-3">
+          <div className="mt-7 flex flex-col justify-center gap-3.5 sm:mt-8 sm:flex-row sm:gap-4">
             <button
               type="button"
               onClick={onBrowse}
-              className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-6 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 active:scale-[0.98]"
+              className="inline-flex h-12 items-center justify-center rounded-xl bg-white px-7 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100 active:scale-[0.98]"
             >
               Browse listings
             </button>
             <button
               type="button"
               onClick={onStartLandlord}
-              className="group inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/25 bg-black/25 px-6 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/15 active:scale-[0.98]"
+              className="group inline-flex h-12 items-center justify-center gap-2.5 rounded-xl border border-white/25 bg-black/25 px-7 text-sm font-semibold text-white backdrop-blur-xs transition hover:bg-white/15 active:scale-[0.98]"
             >
               List your property free
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </button>
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-zinc-300">
-            <span className="inline-flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-zinc-200" />
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3.5 text-xs font-medium text-zinc-300 sm:mt-12 sm:text-sm">
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-zinc-200" />
               Direct from landlords &amp; managers
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Smartphone className="h-3.5 w-3.5 text-zinc-200" />
+            <span className="inline-flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-zinc-200" />
               M-Pesa &amp; card reconciliation
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-zinc-200" />
+            <span className="inline-flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-zinc-200" />
               Free forever for up to 2 units
             </span>
           </div>

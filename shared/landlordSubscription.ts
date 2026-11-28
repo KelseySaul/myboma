@@ -1,9 +1,79 @@
-export type SubscriptionTier = 'free' | 'basic' | 'starter' | 'pro' | 'proplus';
+export type BuiltInSubscriptionTier = 'free' | 'basic' | 'starter' | 'pro' | 'proplus';
+/** Built-in or Super-Admin-created custom plan slug (e.g. 'free', 'starter', 'estate-50'). */
+export type SubscriptionTier = BuiltInSubscriptionTier | (string & {});
 /** Tiers bought through checkout. 'free' is activated without payment and never expires. */
-export type PaidSubscriptionTier = Exclude<SubscriptionTier, 'free'>;
+export type PaidSubscriptionTier = Exclude<BuiltInSubscriptionTier, 'free'> | (string & {});
 export type BillingPeriod = 'monthly' | 'quarterly' | 'yearly';
 export type SubscriptionPaymentMethod = 'stripe' | 'mpesa' | 'pesapal';
 export type RentPayoutMethod = 'cash' | 'mpesa' | 'bank';
+export type PlanAudienceType = 'landlord' | 'property_manager' | 'both';
+
+export const PLAN_SLUG_RE = /^[a-z0-9][a-z0-9_-]{1,47}$/;
+
+export interface DynamicSubscriptionPlan {
+  id: string;
+  label: string;
+  badge?: string | null;
+  audienceType: PlanAudienceType;
+  description: string;
+  monthlyPriceKes: number;
+  quarterlyPriceKes: number | null;
+  yearlyPriceKes: number | null;
+  maxListings: number | null;
+  maxBuildings: number | null;
+  maintenanceHub: boolean;
+  caretakerAccess: boolean;
+  agencyAccess: boolean;
+  highlights: string[];
+  sortOrder: number;
+  isActive: boolean;
+  isSystem: boolean;
+  subscriberCount?: number;
+}
+
+export const formatPlanLimitSummary = (maxListings: number | null, maxBuildings: number | null): string => {
+  const unitsPart =
+    maxListings === null ? 'Unlimited Units' : `Up to ${maxListings} ${maxListings === 1 ? 'Unit' : 'Units'}`;
+  const buildingsPart =
+    maxBuildings === null
+      ? 'Unlimited Buildings'
+      : maxBuildings === 1
+        ? '1 Building'
+        : `Up to ${maxBuildings} Buildings`;
+  if (maxListings === null && maxBuildings === null) return 'Unlimited Units & Buildings';
+  return `${unitsPart} (${buildingsPart})`;
+};
+
+export const formatPlanTagline = (maxListings: number | null, maxBuildings: number | null): string => {
+  const unitsPart =
+    maxListings === null ? 'Unlimited units' : `Up to ${maxListings} ${maxListings === 1 ? 'unit' : 'units'}`;
+  const buildingsPart =
+    maxBuildings === null
+      ? 'unlimited buildings'
+      : maxBuildings === 1
+        ? '1 building'
+        : `up to ${maxBuildings} buildings`;
+  if (maxListings === null && maxBuildings === null) return 'Unlimited units & buildings';
+  return `${unitsPart} · ${buildingsPart}`;
+};
+
+export const getDynamicPlanAmount = (
+  plan: { monthlyPriceKes: number; quarterlyPriceKes?: number | null; yearlyPriceKes?: number | null },
+  billing: BillingPeriod,
+): number => {
+  if (plan.monthlyPriceKes <= 0) return 0;
+  if (billing === 'yearly') {
+    return typeof plan.yearlyPriceKes === 'number' && plan.yearlyPriceKes >= 0
+      ? Math.round(plan.yearlyPriceKes)
+      : Math.round(plan.monthlyPriceKes * 10);
+  }
+  if (billing === 'quarterly') {
+    return typeof plan.quarterlyPriceKes === 'number' && plan.quarterlyPriceKes >= 0
+      ? Math.round(plan.quarterlyPriceKes)
+      : Math.round(plan.monthlyPriceKes * 2.7);
+  }
+  return Math.round(plan.monthlyPriceKes);
+};
 
 export type SubscriptionFeatures = {
   maxListings: number | null;
@@ -27,9 +97,9 @@ export interface SubscriptionTierConfig {
   highlights: string[];
 }
 
-export const VISIBLE_PLAN_ORDER: SubscriptionTier[] = ['free', 'starter', 'pro', 'proplus'];
+export const VISIBLE_PLAN_ORDER: BuiltInSubscriptionTier[] = ['free', 'starter', 'pro', 'proplus'];
 
-export const SUBSCRIPTION_TIERS: Record<SubscriptionTier, SubscriptionTierConfig> = {
+export const SUBSCRIPTION_TIERS: Record<BuiltInSubscriptionTier, SubscriptionTierConfig> = {
   free: {
     id: 'free',
     label: 'Free',
@@ -148,19 +218,52 @@ export const BILLING_PERIODS: { id: BillingPeriod; label: string; months: number
   { id: 'yearly', label: 'Yearly (Prepaid)', months: 12, multiplier: 10 },
 ];
 
+export const DEFAULT_SUBSCRIPTION_PLANS: DynamicSubscriptionPlan[] = VISIBLE_PLAN_ORDER.map((id, idx) => {
+  const cfg = SUBSCRIPTION_TIERS[id];
+  return {
+    id,
+    label: cfg.label,
+    badge: cfg.badge ?? null,
+    audienceType: id === 'proplus' ? 'property_manager' : 'landlord',
+    description: cfg.audience,
+    monthlyPriceKes: cfg.monthlyBaseKes,
+    quarterlyPriceKes: cfg.monthlyBaseKes === 0 ? 0 : Math.round(cfg.monthlyBaseKes * 2.7),
+    yearlyPriceKes: typeof cfg.yearlyKes === 'number' ? cfg.yearlyKes : Math.round(cfg.monthlyBaseKes * 10),
+    maxListings: cfg.features.maxListings,
+    maxBuildings: cfg.features.maxBuildings,
+    maintenanceHub: cfg.features.maintenanceHub,
+    caretakerAccess: cfg.features.caretakerAccess,
+    agencyAccess: cfg.features.agencyAccess,
+    highlights: [...cfg.highlights],
+    sortOrder: (idx + 1) * 10,
+    isActive: true,
+    isSystem: id === 'free',
+  };
+});
+
 export const encodeSubscriptionPlan = (tier: SubscriptionTier, billing: BillingPeriod) => `${tier}:${billing}`;
 
 export const parseSubscriptionPlan = (plan?: string | null): { tier: SubscriptionTier; billing: BillingPeriod } | null => {
   if (!plan) return null;
   if (plan === 'free') return { tier: 'free', billing: 'monthly' };
   if (!plan.includes(':')) return null;
-  const [tier, billing] = plan.split(':') as [SubscriptionTier, BillingPeriod];
-  if (!SUBSCRIPTION_TIERS[tier] || !BILLING_PERIODS.some((b) => b.id === billing)) return null;
+  const [rawTier, billing] = plan.split(':') as [string, BillingPeriod];
+  const tier = rawTier.trim().toLowerCase();
+  if (!PLAN_SLUG_RE.test(tier) || !BILLING_PERIODS.some((b) => b.id === billing)) return null;
   return { tier, billing };
 };
 
-export const getSubscriptionAmount = (tier: SubscriptionTier, billing: BillingPeriod) => {
-  const cfg = SUBSCRIPTION_TIERS[tier];
+export const getSubscriptionAmount = (
+  tier: SubscriptionTier,
+  billing: BillingPeriod,
+  plans?: DynamicSubscriptionPlan[],
+) => {
+  if (plans?.length) {
+    const found = plans.find((p) => p.id === tier);
+    if (found) return getDynamicPlanAmount(found, billing);
+  }
+  const cfg = SUBSCRIPTION_TIERS[tier as BuiltInSubscriptionTier];
+  if (!cfg) return 0;
   if (billing === 'yearly' && typeof cfg.yearlyKes === 'number') return cfg.yearlyKes;
   const period = BILLING_PERIODS.find((b) => b.id === billing)!;
   return Math.round(cfg.monthlyBaseKes * period.multiplier);
@@ -171,16 +274,32 @@ export const getBillingMonths = (billing: BillingPeriod) =>
 
 export const formatPlanPrice = (amount: number) => `KES ${amount.toLocaleString('en-KE')}`;
 
-export const getSubscriptionFeatures = (profile: {
-  subscriptionPlan?: string | null;
-  role?: string;
-  isAdmin?: boolean;
-  isSuperAdmin?: boolean;
-}): SubscriptionFeatures => {
+export const getSubscriptionFeatures = (
+  profile: {
+    subscriptionPlan?: string | null;
+    role?: string;
+    isAdmin?: boolean;
+    isSuperAdmin?: boolean;
+  },
+  plans?: DynamicSubscriptionPlan[],
+): SubscriptionFeatures => {
   if (profile.isSuperAdmin || profile.isAdmin) {
     return SUBSCRIPTION_TIERS.proplus.features;
   }
   const parsed = parseSubscriptionPlan(profile.subscriptionPlan);
+  if (parsed && plans?.length) {
+    const matched = plans.find((p) => p.id === parsed.tier);
+    if (matched) {
+      return {
+        maxListings: matched.maxListings,
+        maxBuildings: matched.maxBuildings,
+        maintenanceHub: matched.maintenanceHub,
+        caretakerAccess: matched.caretakerAccess,
+        agencyAccess: matched.agencyAccess,
+        label: matched.label,
+      };
+    }
+  }
   if (profile.role === 'admin' && parsed?.tier === 'proplus') {
     return SUBSCRIPTION_TIERS.proplus.features;
   }
@@ -190,7 +309,16 @@ export const getSubscriptionFeatures = (profile: {
   if (!parsed) {
     return { ...SUBSCRIPTION_TIERS.free.features, label: 'Free' };
   }
-  return SUBSCRIPTION_TIERS[parsed.tier].features;
+  const builtIn = SUBSCRIPTION_TIERS[parsed.tier as BuiltInSubscriptionTier];
+  if (builtIn) return builtIn.features;
+  return {
+    maxListings: null,
+    maxBuildings: null,
+    maintenanceHub: true,
+    caretakerAccess: true,
+    agencyAccess: false,
+    label: parsed.tier,
+  };
 };
 
 export const FREE_PLAN = encodeSubscriptionPlan('free', 'monthly');

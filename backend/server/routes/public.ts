@@ -23,6 +23,7 @@ import {runDailyJobs} from '../services/dailyJobs.ts';
 import {streamStoredObject} from '../services/files.ts';
 import {sendEmail} from '../services/notify.ts';
 import {handleMpesaB2cResult, handleMpesaCallback, handlePesapalCallback, handlePesapalIpn} from '../services/payments.ts';
+import {listSubscriptionPlans} from '../services/subscriptionPlans.ts';
 
 const waitlistSignupSchema = z
   .object({
@@ -101,6 +102,17 @@ export function registerPublicRoutes(app: Express) {
     }),
   );
   app.get('/api/legal', publicLimiter, (_req, res) => res.json(LEGAL_DOCUMENTS));
+
+  /** Public catalog of active prepaid plans (prices, unit limits, building limits, features). */
+  app.get(
+    '/api/public/plans',
+    publicLimiter,
+    asyncHandler(async (_req, res) => {
+      const plans = await listSubscriptionPlans({includeInactive: false});
+      res.setHeader('Cache-Control', 'public, max-age=30');
+      res.json(plans);
+    }),
+  );
 
   /**
    * Lets a visitor ask about an available listing without creating an account.

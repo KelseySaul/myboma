@@ -96,10 +96,12 @@ export const hasActiveSubscription = (profile: UserProfileRecord) =>
   profile.subscriptionStatus === 'active' &&
   (!profile.subscriptionExpiresAt || new Date(profile.subscriptionExpiresAt).getTime() > Date.now());
 
-/** Pro Plus "agency admin": role 'admin' earned by a paid, unexpired Pro Plus plan (not a platform admin). */
+/** Pro Plus / Agency "property manager": role 'admin' earned by an active paid agency plan (not a staff admin). */
 export const isAgencyAdmin = (profile: UserProfileRecord) =>
   profile.role === 'admin' &&
-  parseSubscriptionPlan(profile.subscriptionPlan)?.tier === 'proplus' &&
+  !profile.isAdmin &&
+  !profile.isSuperAdmin &&
+  !isFreePlan(profile.subscriptionPlan) &&
   hasActiveSubscription(profile);
 
 /** Unit limit for the caller's plan; null = unlimited. Platform admins are unlimited. */
@@ -107,7 +109,8 @@ export const unitLimitFor = (profile: UserProfileRecord): number | null => {
   if (profile.isSuperAdmin || profile.isAdmin) return null;
   const parsed = parseSubscriptionPlan(profile.subscriptionPlan);
   if (!parsed || !hasActiveSubscription(profile)) return 0;
-  return SUBSCRIPTION_TIERS[parsed.tier].features.maxListings;
+  const builtIn = SUBSCRIPTION_TIERS[parsed.tier as keyof typeof SUBSCRIPTION_TIERS];
+  return builtIn ? builtIn.features.maxListings : null;
 };
 
 /** Building limit for the caller's plan; null = unlimited. Platform admins are unlimited. */
@@ -115,7 +118,8 @@ export const buildingLimitFor = (profile: UserProfileRecord): number | null => {
   if (profile.isSuperAdmin || profile.isAdmin) return null;
   const parsed = parseSubscriptionPlan(profile.subscriptionPlan);
   if (!parsed || !hasActiveSubscription(profile)) return 0;
-  return SUBSCRIPTION_TIERS[parsed.tier].features.maxBuildings;
+  const builtIn = SUBSCRIPTION_TIERS[parsed.tier as keyof typeof SUBSCRIPTION_TIERS];
+  return builtIn ? builtIn.features.maxBuildings : null;
 };
 
 /** Free-plan landlords get up to 2 units and 1 building. Platform admins never are. */
@@ -175,6 +179,10 @@ export const requireAuth = asyncHandler(async (req, res, next) => {
     const target = await db.query.users.findFirst({where: eq(schema.users.uid, impersonateUid)});
     if (!target) {
       res.status(404).json({error: 'Impersonated user not found'});
+      return;
+    }
+    if (target.isSuperAdmin) {
+      res.status(403).json({error: 'Super admin accounts cannot be impersonated.'});
       return;
     }
     req.impersonator = profile;

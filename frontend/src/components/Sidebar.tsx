@@ -9,6 +9,7 @@ import {
   Globe,
   Heart,
   Home,
+  Layers,
   LayoutGrid,
   Mail,
   PanelLeftClose,
@@ -155,6 +156,7 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
                 title: 'Platform governance',
                 items: [
                   { id: 'revenue', label: 'Revenue & accounts', icon: TrendingUp },
+                  { id: 'plans', label: 'Plans & pricing', icon: Layers },
                   { id: 'platforms', label: 'Platforms', icon: Globe },
                   { id: 'audit', label: 'Activity log', icon: ClipboardList },
                 ],

@@ -1,14 +1,15 @@
 import { Banknote, Building, Check, Smartphone } from 'lucide-react';
 import {
-  SUBSCRIPTION_TIERS,
-  VISIBLE_PLAN_ORDER,
   BILLING_PERIODS,
-  getSubscriptionAmount,
+  DEFAULT_SUBSCRIPTION_PLANS,
+  formatPlanLimitSummary,
   formatPlanPrice,
+  getDynamicPlanAmount,
   type PendingLandlordSubscription,
   type RentPayoutMethod,
   type BillingPeriod,
 } from '../../../shared/landlordSubscription';
+import { useSubscriptionPlans } from '../lib/queries';
 import { Field, inputClass } from './auth/fields';
 
 export type LandlordSignupFormState = PendingLandlordSubscription;
@@ -42,9 +43,11 @@ const PAYOUT_METHODS: { id: RentPayoutMethod; label: string; icon: typeof Bankno
 
 /** Plan choice and rent payout details, used in sign-up and on the subscription screen. */
 export default function LandlordSignupFields({ value, onChange, showPayment = false, paymentSlot }: LandlordSignupFieldsProps) {
+  const { data: livePlans = DEFAULT_SUBSCRIPTION_PLANS } = useSubscriptionPlans();
+  const plans = livePlans.length > 0 ? livePlans : DEFAULT_SUBSCRIPTION_PLANS;
   const patch = (partial: Partial<LandlordSignupFormState>) => onChange({ ...value, ...partial });
-  const isFree = value.tier === 'free';
-  const tiers = VISIBLE_PLAN_ORDER;
+  const selectedPlan = plans.find((p) => p.id === value.tier) ?? plans[0];
+  const isFree = value.tier === 'free' || (selectedPlan?.monthlyPriceKes ?? 0) === 0;
 
   return (
     <div className="space-y-6">
@@ -53,17 +56,18 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
         <p className="mt-0.5 text-xs text-zinc-500">You can change plans later.</p>
 
         <div role="radiogroup" aria-label="Plan" className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700">
-          {tiers.map((tierId, index) => {
-            const tier = SUBSCRIPTION_TIERS[tierId];
-            const selected = value.tier === tierId;
-            const price = tierId === 'free' ? 'Free' : `${formatPlanPrice(getSubscriptionAmount(tierId, value.billing))}`;
+          {plans.map((plan, index) => {
+            const selected = value.tier === plan.id;
+            const amount = getDynamicPlanAmount(plan, value.billing);
+            const price = plan.monthlyPriceKes === 0 ? 'Free' : formatPlanPrice(amount);
+            const limitSummary = formatPlanLimitSummary(plan.maxListings, plan.maxBuildings);
             return (
               <button
-                key={tierId}
+                key={plan.id}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                onClick={() => patch({ tier: tierId })}
+                onClick={() => patch({ tier: plan.id })}
                 className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${index ? 'border-t border-zinc-200 dark:border-zinc-700' : ''} ${
                   selected ? 'bg-zinc-50 dark:bg-zinc-800' : 'hover:bg-zinc-50/70 dark:hover:bg-zinc-800/60'
                 }`}
@@ -78,20 +82,22 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline justify-between gap-3">
                     <span className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-950 dark:text-white">{tier.label}</span>
-                      {tier.badge && (
+                      <span className="text-sm font-semibold text-zinc-950 dark:text-white">{plan.label}</span>
+                      {plan.badge && (
                         <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-600/15 dark:bg-violet-500/15 dark:text-violet-300">
-                          {tier.badge}
+                          {plan.badge}
                         </span>
                       )}
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-950 dark:text-white">
                       {price}
-                      {tierId !== 'free' && <span className="font-normal text-zinc-500"> / {PERIOD_SHORT[value.billing]}</span>}
+                      {plan.monthlyPriceKes > 0 && <span className="font-normal text-zinc-500"> / {PERIOD_SHORT[value.billing]}</span>}
                     </span>
                   </span>
-                  <span className="mt-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300">{tier.limitSummary}</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{tier.highlights.slice(0, 3).join(' · ')}</span>
+                  <span className="mt-0.5 block text-[11px] font-medium text-zinc-600 dark:text-zinc-300">{limitSummary}</span>
+                  {plan.highlights.length > 0 && (
+                    <span className="mt-0.5 block text-xs leading-5 text-zinc-500">{plan.highlights.slice(0, 3).join(' · ')}</span>
+                  )}
                 </span>
               </button>
             );
@@ -99,7 +105,9 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
         </div>
 
         {isFree ? (
-          <p className="mt-3 text-xs text-zinc-500">No payment needed. Up to 2 units (1 building), free for as long as you use it.</p>
+          <p className="mt-3 text-xs text-zinc-500">
+            No payment needed. {formatPlanLimitSummary(selectedPlan?.maxListings ?? 2, selectedPlan?.maxBuildings ?? 1)}, free for as long as you use it.
+          </p>
         ) : (
           <div className="mt-3">
             <div role="radiogroup" aria-label="Billing period" className="grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
@@ -122,7 +130,7 @@ export default function LandlordSignupFields({ value, onChange, showPayment = fa
               })}
             </div>
             <p className="mt-2 text-xs text-zinc-500">
-              Prepaid, {formatPlanPrice(getSubscriptionAmount(value.tier, value.billing))} for {PERIOD_SHORT[value.billing]}. It does not renew
+              Prepaid, {formatPlanPrice(getDynamicPlanAmount(selectedPlan, value.billing))} for {PERIOD_SHORT[value.billing]}. It does not renew
               automatically. You pay by card or M-Pesa after creating your account.
             </p>
           </div>

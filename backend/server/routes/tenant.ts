@@ -7,7 +7,7 @@ import {toActor, type UserProfileRecord} from '../types.ts';
 import {normalizeMediaArray, normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {asyncHandler, getValidatedBody, hasActiveSubscription, requireAuth, validateBody} from '../http/middleware.ts';
 import {insertNotification} from '../services/notify.ts';
-import {parseSubscriptionPlan, SUBSCRIPTION_TIERS} from '../../../shared/landlordSubscription.ts';
+import {resolveLivePlanEntitlements} from '../services/subscriptionPlans.ts';
 
 const createMaintenanceRequestSchema = z
   .object({
@@ -83,16 +83,14 @@ export function registerTenantRoutes(bffRouter: Router) {
         orderBy: desc(schema.leases.startDate),
       });
 
-      // Repairs are part of the unit owner's plan (Pro / Pro Plus); platform admins always have them.
+      // Repairs are controlled by the unit owner's live plan; platform admins always have them.
       let repairsEnabled = false;
       if (property) {
         const owner = await db.query.users.findFirst({where: eq(schema.users.uid, property.landlordId)});
-        const tier = parseSubscriptionPlan(owner?.subscriptionPlan)?.tier;
-        repairsEnabled =
-          Boolean(owner?.isAdmin || owner?.isSuperAdmin) ||
-          (Boolean(owner) &&
-            hasActiveSubscription(owner as unknown as UserProfileRecord) &&
-            Boolean(tier && SUBSCRIPTION_TIERS[tier].features.maintenanceHub));
+        if (owner) {
+          const entitlements = await resolveLivePlanEntitlements(owner);
+          repairsEnabled = Boolean(owner.isAdmin || owner.isSuperAdmin || entitlements.maintenanceHub);
+        }
       }
 
       const normalizedProperties = tenantProperties.map((p) => ({
