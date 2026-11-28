@@ -10,9 +10,9 @@ import {Resend} from 'resend';
 
 const OFFICIAL_SITE_URL = 'https://myboma.org';
 const configuredSiteUrl = process.env.APP_BASE_URL?.trim();
-// Links must point users at the official site even if APP_BASE_URL still names a previous
-// public host (Render's hostname or the old kelseysaul.dev subdomain). Local URLs are untouched.
-const SITE_URL = (configuredSiteUrl && !/(^|\/\/)(myboma\.onrender\.com|myboma\.kelseysaul\.dev)\/?$/i.test(configuredSiteUrl)
+// Links must point users at the official site even if APP_BASE_URL names Render's own
+// hostname. Local development URLs remain untouched.
+const SITE_URL = (configuredSiteUrl && !/(^|\/\/)myboma\.onrender\.com\/?$/i.test(configuredSiteUrl)
   ? configuredSiteUrl
   : OFFICIAL_SITE_URL
 ).replace(/\/$/, '');
