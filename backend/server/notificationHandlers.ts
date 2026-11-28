@@ -103,32 +103,15 @@ async function dispatchRentReminderForPayment(
       subject: `${title}: KES ${amount} for ${propertyLabel}`,
       template: {
         preheader: message,
-        eyebrow: isOverdue ? 'Action required' : 'Rent reminder',
-        tone: isOverdue ? 'danger' : 'warning',
-        heading: isOverdue ? 'Your rent payment is overdue' : 'Your rent payment is coming up',
+        heading: title,
         paragraphs: [message],
-        callout: {
-          label: isOverdue ? 'Overdue balance' : 'Rent amount due',
-          value: `KES ${amount}`,
-          sublabel: `${propertyLabel} · Due ${dueDateStr}`,
-        },
         details: [
           ['Property', propertyLabel],
-          ['Amount due', `KES ${amount}`],
+          ['Amount', `KES ${amount}`],
           ['Due date', dueDateStr],
-          ['Status', isOverdue ? 'Overdue' : 'Due soon'],
         ],
-        steps: [
-          'Tap the "Pay rent on MyBoma" button below.',
-          'Sign in to your tenant dashboard and choose M-Pesa or card.',
-          'Your official receipt is generated automatically once paid.',
-        ],
-        button: {
-          label: 'Pay rent on MyBoma',
-          url: appBaseUrl,
-          hint: 'Click below to open your invoice and pay securely:',
-        },
-        footerNote: 'You received this reminder because you have an active rent invoice on MyBoma.',
+        button: {label: 'Pay rent', url: appBaseUrl},
+        footerNote: 'Already paid? You can ignore this reminder.',
       },
     }),
   ]);
@@ -314,32 +297,15 @@ export const processAutomatedRentReminders = async (deps: NotificationDependenci
         subject: `${title}: KES ${amount} for ${propertyLabel}`,
         template: {
           preheader: message,
-          eyebrow: daysLeft < 0 ? 'Overdue rent' : 'Rent reminder',
-          tone: daysLeft < 0 ? 'danger' : 'warning',
           heading: title,
           paragraphs: [message],
-          callout: {
-            label: daysLeft < 0 ? 'Overdue amount' : 'Amount due',
-            value: `KES ${amount}`,
-            sublabel: `${propertyLabel} · Due ${dueDateStr}`,
-          },
           details: [
             ['Property', propertyLabel],
-            ['Amount due', `KES ${amount}`],
+            ['Amount', `KES ${amount}`],
             ['Due date', dueDateStr],
-            ['Status', daysLeft < 0 ? 'Overdue' : daysLeft === 0 ? 'Due today' : daysLeft === 1 ? 'Due tomorrow' : 'Due in 2 days'],
           ],
-          steps: [
-            'Click the "Pay rent on MyBoma" button below.',
-            'Sign in to your account and pay via M-Pesa, Airtel Money, or card.',
-            'Your invoice updates to Paid automatically.',
-          ],
-          button: {
-            label: 'Pay rent on MyBoma',
-            url: appBaseUrl,
-            hint: 'Tap the button below to view and pay your rent:',
-          },
-          footerNote: 'Already paid? Open MyBoma to check your receipt or submit your M-Pesa code.',
+          button: {label: 'Pay rent', url: appBaseUrl},
+          footerNote: 'Already paid? You can ignore this reminder.',
         },
       }),
     ]);

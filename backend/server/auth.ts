@@ -162,32 +162,14 @@ export const auth = betterAuth({
         to: user.email,
         subject: 'Reset your MyBoma password',
         template: {
-          preheader: 'Tap the button inside to choose a new password. This link expires in 1 hour.',
-          eyebrow: 'Account security',
-          tone: 'warning',
+          preheader: 'The link expires in 1 hour.',
           heading: 'Reset your password',
           paragraphs: [
-            'We received a request to reset the password for your MyBoma account.',
+            'Someone asked to reset the password for your MyBoma account. If that was you, use the button below to choose a new one. The link works once and expires in 1 hour.',
           ],
-          callout: {
-            label: 'Security notice',
-            value: 'Link expires in 1 hour',
-            sublabel: 'Single-use link for ' + user.email,
-          },
-          steps: [
-            'Click the "Choose a new password" button below.',
-            'Enter a strong password (at least 8 characters).',
-            'Sign back in to your MyBoma dashboard.',
-          ],
-          button: {
-            label: 'Choose a new password',
-            url,
-            hint: 'Click the button below to reset your password:',
-          },
-          closing: [
-            "If you didn't ask for this reset, simply ignore this email — your password will stay unchanged.",
-          ],
-          footerNote: 'You received this because a password reset was requested for this email address.',
+          button: {label: 'Choose a new password', url},
+          closing: ["If you didn't ask for this, ignore this email and your password stays the same."],
+          footerNote: `Sent to ${user.email} because a password reset was requested.`,
         },
       });
     },
@@ -200,24 +182,12 @@ export const auth = betterAuth({
         to: user.email,
         subject: 'Verify your MyBoma email',
         template: {
-          preheader: 'Tap the button inside to confirm your email address and activate MyBoma.',
-          eyebrow: 'Confirm your email',
-          tone: 'brand',
-          heading: 'Welcome to MyBoma — confirm your email',
-          paragraphs: [
-            'Thanks for signing up! Confirming your email activates your account and unlocks notifications and invitations.',
-          ],
-          steps: [
-            'Click the "Verify email address" button below.',
-            'You will be signed straight into MyBoma automatically.',
-          ],
-          button: {
-            label: 'Verify email address',
-            url,
-            hint: 'Tap the purple button below to finish setting up your account:',
-          },
-          closing: ['If you did not create a MyBoma account, you can safely ignore this email.'],
-          footerNote: 'You received this because an account was created with this email address.',
+          preheader: 'Confirm your email to finish signing up.',
+          heading: 'Confirm your email address',
+          paragraphs: ['Please confirm this email address to finish creating your MyBoma account.'],
+          button: {label: 'Confirm email', url},
+          closing: ['If you did not sign up for MyBoma, you can ignore this email.'],
+          footerNote: `Sent to ${user.email} because an account was created with this address.`,
         },
       });
     },
