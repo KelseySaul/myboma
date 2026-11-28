@@ -20,6 +20,7 @@ const HunterDashboard = lazy(() => import('./components/HunterDashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const SettingsPage = lazy(() => import('./components/SettingsPage'));
 const AboutPage = lazy(() => import('./components/AboutPage'));
+const ContactPage = lazy(() => import('./components/ContactPage'));
 const PublicLegalPage = lazy(() => import('./components/PublicLegalPage'));
 const InvitePage = lazy(() => import('./components/InvitePage'));
 const ResetPasswordPage = lazy(() => import('./components/ResetPasswordPage'));
@@ -487,6 +488,47 @@ export default function App() {
         </div>
       )}
       <Toaster />
+      </div>
+    );
+  }
+
+  if (window.location.pathname === '/contact') {
+    return (
+      <div className="db app-shell app-shell-public min-h-screen bg-white">
+        <PublicNavbar
+          onLoginClick={() => {
+            if (user) {
+              window.location.assign('/');
+              return;
+            }
+            setPublicAuthIntent({ mode: 'signin' });
+            setIsAuthOpen(true);
+          }}
+          overHero
+        />
+        <main>
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-200 border-t-violet-700" />
+              </div>
+            }
+          >
+            <ContactPage />
+          </Suspense>
+        </main>
+        <Footer variant="public" />
+        {!user && (
+          <AuthDialog
+            open={isAuthOpen}
+            intent={publicAuthIntent}
+            onOpenChange={(open) => {
+              setIsAuthOpen(open);
+              if (!open) setPublicAuthIntent({ mode: 'signin' });
+            }}
+          />
+        )}
+        <Toaster />
       </div>
     );
   }

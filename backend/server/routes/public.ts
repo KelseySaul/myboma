@@ -22,6 +22,13 @@ import {normalizeStoredFileUrl} from '../http/fileUrls.ts';
 import {runDailyJobs} from '../services/dailyJobs.ts';
 import {streamStoredObject} from '../services/files.ts';
 import {sendEmail} from '../services/notify.ts';
+import {
+  buildContactEmails,
+  DEFAULT_SUPPORT_EMAIL,
+  generateSupportTicketRef,
+  publicContactSchema,
+  type PublicContactInput,
+} from '../contactPolicy.ts';
 import {handleMpesaB2cResult, handleMpesaCallback, handlePesapalCallback, handlePesapalIpn} from '../services/payments.ts';
 import {listSubscriptionPlans} from '../services/subscriptionPlans.ts';
 
@@ -209,6 +216,37 @@ export function registerPublicRoutes(app: Express) {
       }
 
       res.status(201).json({ok: true});
+    }),
+  );
+
+  /**
+   * Interactive Contact Us submission: sends the structured enquiry to our support email
+   * (with Reply-To set to the visitor) and sends the visitor an automated confirmation email.
+   */
+  app.post(
+    '/api/public/contact',
+    enquiryLimiter,
+    validateBody(publicContactSchema),
+    asyncHandler(async (req, res) => {
+      const input = getValidatedBody<PublicContactInput>(req);
+      const supportEmail = (process.env.SUPPORT_EMAIL || DEFAULT_SUPPORT_EMAIL).trim();
+      const ticketRef = generateSupportTicketRef();
+      const {toSupport, toSender} = buildContactEmails({
+        input,
+        ticketRef,
+        supportEmail,
+        appUrl: appBaseUrl,
+      });
+
+      try {
+        await Promise.all([sendEmail(toSupport), sendEmail(toSender)]);
+      } catch (error) {
+        console.error('[Contact] Email delivery failed:', error);
+        res.status(503).json({error: 'We could not send your message right now. Please try again shortly or email support@myboma.org.'});
+        return;
+      }
+
+      res.status(201).json({ok: true, ticketRef, supportEmail});
     }),
   );
 

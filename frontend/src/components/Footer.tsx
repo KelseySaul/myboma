@@ -21,6 +21,7 @@ export default function Footer({ variant = 'app' }: FooterProps) {
             <span>© {year} All rights reserved.</span>
           </div>
           <nav className="flex items-center gap-4 text-xs" aria-label="Legal">
+            <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/contact">Contact</a>
             <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/terms">Terms</a>
             <a className="transition-colors hover:text-slate-900 dark:hover:text-white font-medium" href="/privacy">Privacy</a>
           </nav>
@@ -38,6 +39,8 @@ export default function Footer({ variant = 'app' }: FooterProps) {
       links: [
         { label: 'Find a house', href: '/#homes' },
         { label: 'For landlords', href: '/#landlords' },
+        { label: 'About MyBoma', href: '/about' },
+        { label: 'Contact us', href: '/contact' },
       ],
     },
     {

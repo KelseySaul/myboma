@@ -739,3 +739,28 @@ export const updateAdminSubscriptionPlan = (id: string, body: Partial<Omit<Subsc
 
 export const deleteAdminSubscriptionPlan = (id: string) =>
   bffRequest<{deleted: true}>(`/admin/plans/${encodeURIComponent(id)}`, {method: 'DELETE'});
+
+export interface PublicContactPayload {
+  role: string;
+  topic: string;
+  detail: string;
+  urgency: string;
+  preferredContact: 'Email' | 'Email & Phone call';
+  name: string;
+  email: string;
+  phone?: string;
+  note?: string;
+}
+
+export const submitPublicContact = async (body: PublicContactPayload) => {
+  const response = await fetch(`${apiBaseUrl()}/api/public/contact`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Could not send your message. Please try again.');
+  }
+  return payload as {ok: true; ticketRef: string; supportEmail: string};
+};

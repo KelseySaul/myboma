@@ -15,6 +15,7 @@ interface PublicNavbarProps {
 const LINKS = [
   { label: 'Home', href: '/' },
   { label: 'About', href: '/about' },
+  { label: 'Contact', href: '/contact' },
 ];
 
 /** Floating glass navigation for logged-out pages. */
