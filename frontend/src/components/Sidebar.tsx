@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  TrendingUp,
   UserCheck,
   Users,
   Wallet,
@@ -153,6 +154,7 @@ function getRoleNavSections(role: UserRole, isSuperAdmin?: boolean, profile?: Us
               {
                 title: 'Platform governance',
                 items: [
+                  { id: 'revenue', label: 'Revenue & accounts', icon: TrendingUp },
                   { id: 'platforms', label: 'Platforms', icon: Globe },
                   { id: 'audit', label: 'Activity log', icon: ClipboardList },
                 ],

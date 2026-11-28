@@ -604,3 +604,104 @@ export const exchangeFirebaseGoogleToken = async (body: {
   if (bearer) setStoredToken(bearer);
   return payload as {ok: true; isNewUser: boolean; token?: string; user: {id: string; email: string; name?: string}};
 };
+
+export interface SuperAdminRevenueUser {
+  uid: string;
+  displayName: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  accountType: 'superadmin' | 'property_manager' | 'landlord' | 'tenant' | 'caretaker' | 'hunter';
+  source: 'self_registered' | 'created_by_me' | 'invited_by_other';
+  createdByName: string | null;
+  status: string;
+  subscriptionPlan: string | null;
+  subscriptionPlanLabel: string;
+  subscriptionStatus: string;
+  subscriptionExpiresAt: string | null;
+  daysUntilExpiry: number | null;
+  totalPaidKes: number;
+  paymentCount: number;
+  createdAt: string;
+}
+
+export interface SuperAdminSubscriptionPayment {
+  id: string;
+  landlordId: string;
+  userName: string;
+  userEmail: string;
+  accountType: 'property_manager' | 'landlord';
+  plan: string;
+  planLabel: string;
+  amount: number;
+  paymentChannel: string;
+  paymentReference: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  receiptNumber: string;
+  receiptText: string | null;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+}
+
+export interface SuperAdminRevenueResponse {
+  summary: {
+    totalRevenueKes: number;
+    landlordRevenueKes: number;
+    propertyManagerRevenueKes: number;
+    thisMonthKes: number;
+    lastMonthKes: number;
+    totalConfirmedPayments: number;
+    activePaidLandlords: number;
+    activePaidPropertyManagers: number;
+    expiringSoonCount: number;
+    expiredCount: number;
+    totalUsers: number;
+    selfRegisteredCount: number;
+    createdByMeCount: number;
+    invitedByOtherCount: number;
+    roleCounts: {
+      landlord: number;
+      property_manager: number;
+      tenant: number;
+      caretaker: number;
+      hunter: number;
+      superadmin: number;
+    };
+  };
+  users: SuperAdminRevenueUser[];
+  payments: SuperAdminSubscriptionPayment[];
+  dueAccounts: SuperAdminRevenueUser[];
+}
+
+export interface MySubscriptionReceipt {
+  id: string;
+  plan: string;
+  planLabel: string;
+  amount: number;
+  paymentChannel: string;
+  paymentReference: string;
+  status: string;
+  receiptNumber: string;
+  receiptText: string | null;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+}
+
+export const getSuperAdminRevenue = () => bffRequest<SuperAdminRevenueResponse>('/admin/superadmin/revenue');
+
+export const sendSubscriptionReminder = (userId: string) =>
+  bffRequest<{ok: true; email: string; message: string}>('/admin/subscriptions/remind', {
+    method: 'POST',
+    body: {userId},
+  });
+
+export const resendSubscriptionReceipt = (paymentId: string) =>
+  bffRequest<{ok: true; email: string; receiptNumber: string; message: string}>(
+    `/admin/subscriptions/${paymentId}/resend-receipt`,
+    {method: 'POST'},
+  );
+
+export const getMySubscriptionReceipts = () =>
+  bffRequest<MySubscriptionReceipt[]>('/landlord/subscription/receipts');

@@ -1,9 +1,10 @@
 import {randomUUID} from 'crypto';
-import {and, eq, ne, sql} from 'drizzle-orm';
+import {and, eq, gte, inArray, isNotNull, ne, sql} from 'drizzle-orm';
 import type {Response} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../db/client.ts';
 import {isSuperAdminEmail, SUPER_ADMIN_EMAILS} from '../config/superAdmin.ts';
+import {billingToday, daysUntilDueDate} from '../../shared/rentInvoices.ts';
 import {appBaseUrl} from './http/config.ts';
 import type {SendEmailInput} from './services/email.ts';
 import type {AuthenticatedRequest} from './types.ts';
@@ -14,11 +15,27 @@ import {
   encodeSubscriptionPlan,
   getBillingMonths,
   getSubscriptionAmount,
+  isFreePlan,
   FREE_PLAN,
   type BillingPeriod,
   type RentPayoutMethod,
   type SubscriptionTier,
 } from '../../shared/landlordSubscription.ts';
+import {
+  buildSubscriptionReminderContent,
+  classifySubscriptionReminderMilestone,
+  formatSubscriptionPlanLabel,
+  subscriberAccountType,
+  type SubscriptionReminderMilestone,
+} from './subscriptionReminderPolicy.ts';
+
+export {
+  buildSubscriptionReminderContent,
+  classifySubscriptionReminderMilestone,
+  formatSubscriptionPlanLabel,
+  subscriberAccountType,
+  type SubscriptionReminderMilestone,
+};
 
 const tierSchema = z.enum(['basic', 'starter', 'pro', 'proplus']);
 const billingSchema = z.enum(['monthly', 'quarterly', 'yearly']);
@@ -396,4 +413,225 @@ export const expireLapsedSubscriptions = async () => {
     .where(and(eq(schema.users.subscriptionStatus, 'active'), sql`${schema.users.subscriptionExpiresAt} < now()`))
     .returning({uid: schema.users.uid});
   return expired.length;
+};
+
+/** Sends a single subscription renewal reminder (in-app + push + email) on demand. */
+export const sendSubscriptionRenewalReminder = async (
+  userId: string,
+  deps: SubscriptionActivationDeps,
+): Promise<{ok: true; email: string; title: string} | {ok: false; status: number; error: string}> => {
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.uid, userId),
+    columns: {
+      uid: true,
+      email: true,
+      displayName: true,
+      role: true,
+      isAdmin: true,
+      isSuperAdmin: true,
+      status: true,
+      platformId: true,
+      subscriptionPlan: true,
+      subscriptionStatus: true,
+      subscriptionExpiresAt: true,
+    },
+  });
+  if (!user) return {ok: false, status: 404, error: 'Account not found.'};
+  if (user.isSuperAdmin) return {ok: false, status: 400, error: 'Super admin accounts do not require subscription reminders.'};
+  if (!user.subscriptionPlan || isFreePlan(user.subscriptionPlan)) {
+    return {ok: false, status: 400, error: 'This account is on the free plan or has no paid plan yet.'};
+  }
+  if (!user.subscriptionExpiresAt) {
+    return {ok: false, status: 400, error: 'This subscription does not have an expiry date set.'};
+  }
+
+  const todayIso = billingToday(new Date());
+  const expiryDate = new Date(user.subscriptionExpiresAt);
+  const expiryIso = billingToday(expiryDate);
+  const daysLeft = daysUntilDueDate(expiryIso, todayIso);
+  const content = buildSubscriptionReminderContent({
+    displayName: user.displayName || user.email,
+    accountType: subscriberAccountType(user),
+    planKey: user.subscriptionPlan,
+    expiryDate,
+    daysLeft,
+    portalUrl: appBaseUrl,
+  });
+
+  await Promise.allSettled([
+    deps.insertNotification({
+      recipientEmail: user.email.toLowerCase(),
+      platformId: user.platformId ?? null,
+      type: 'subscription_reminder',
+      title: content.title,
+      message: content.message,
+      read: false,
+    }),
+    deps.sendEmail({
+      to: user.email,
+      subject: content.subject,
+      template: content.template,
+    }),
+  ]);
+
+  return {ok: true, email: user.email, title: content.title};
+};
+
+/**
+ * Daily job: notifies Landlords and Property Managers via email + in-app + push when their
+ * prepaid subscription is due in 7 days, 2 days, today, or recently expired (1, 3, 7 days).
+ */
+export const processAutomatedSubscriptionReminders = async (deps: SubscriptionActivationDeps) => {
+  const now = new Date();
+  const todayIso = billingToday(now);
+  const candidates = await db
+    .select({
+      uid: schema.users.uid,
+      email: schema.users.email,
+      displayName: schema.users.displayName,
+      role: schema.users.role,
+      isAdmin: schema.users.isAdmin,
+      isSuperAdmin: schema.users.isSuperAdmin,
+      status: schema.users.status,
+      platformId: schema.users.platformId,
+      subscriptionPlan: schema.users.subscriptionPlan,
+      subscriptionStatus: schema.users.subscriptionStatus,
+      subscriptionExpiresAt: schema.users.subscriptionExpiresAt,
+    })
+    .from(schema.users)
+    .where(
+      and(
+        eq(schema.users.status, 'active'),
+        eq(schema.users.isSuperAdmin, false),
+        inArray(schema.users.subscriptionStatus, ['active', 'expired']),
+        isNotNull(schema.users.subscriptionExpiresAt),
+        isNotNull(schema.users.subscriptionPlan),
+      ),
+    );
+
+  let sent = 0;
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  for (const user of candidates) {
+    if (!user.subscriptionPlan || isFreePlan(user.subscriptionPlan) || !user.subscriptionExpiresAt) continue;
+    const expiryDate = new Date(user.subscriptionExpiresAt);
+    const expiryIso = billingToday(expiryDate);
+    const daysLeft = daysUntilDueDate(expiryIso, todayIso);
+    const milestone = classifySubscriptionReminderMilestone(daysLeft);
+    if (!milestone) continue;
+
+    const content = buildSubscriptionReminderContent({
+      displayName: user.displayName || user.email,
+      accountType: subscriberAccountType(user),
+      planKey: user.subscriptionPlan,
+      expiryDate,
+      daysLeft,
+    });
+
+    const recent = await db
+      .select({id: schema.notifications.id})
+      .from(schema.notifications)
+      .where(
+        and(
+          sql`lower(${schema.notifications.recipientEmail}) = ${user.email.toLowerCase()}`,
+          eq(schema.notifications.title, content.title),
+          gte(schema.notifications.createdAt, since),
+        ),
+      )
+      .limit(1);
+    if (recent.length > 0) continue;
+
+    await Promise.allSettled([
+      deps.insertNotification({
+        recipientEmail: user.email.toLowerCase(),
+        platformId: user.platformId ?? null,
+        type: 'subscription_reminder',
+        title: content.title,
+        message: content.message,
+        read: false,
+      }),
+      deps.sendEmail({
+        to: user.email,
+        subject: content.subject,
+        template: content.template,
+      }),
+    ]);
+    sent += 1;
+  }
+
+  return {checked: candidates.length, sent};
+};
+
+/** Re-sends the receipt email + in-app alert for a confirmed landlord/PM subscription payment. */
+export const resendSubscriptionReceipt = async (
+  paymentId: string,
+  deps: SubscriptionActivationDeps,
+): Promise<{ok: true; email: string; receiptNumber: string} | {ok: false; status: number; error: string}> => {
+  const payment = await db.query.landlordSubscriptionPayments.findFirst({
+    where: eq(schema.landlordSubscriptionPayments.id, paymentId),
+  });
+  if (!payment) return {ok: false, status: 404, error: 'Subscription payment not found.'};
+  if (payment.status !== 'confirmed') {
+    return {ok: false, status: 400, error: 'Receipts can only be sent for confirmed payments.'};
+  }
+  const user = await db.query.users.findFirst({
+    where: eq(schema.users.uid, payment.landlordId),
+    columns: {uid: true, email: true, displayName: true, platformId: true},
+  });
+  if (!user) return {ok: false, status: 404, error: 'Subscriber account not found.'};
+
+  const label = formatSubscriptionPlanLabel(payment.plan);
+  const formattedAmount = `KES ${Number(payment.amount).toLocaleString('en-KE')}`;
+  const expiresFormatted = new Date(payment.periodEnd).toLocaleDateString('en-KE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const receiptText =
+    payment.receiptText ||
+    buildSubscriptionReceiptText({
+      receiptNumber: payment.receiptNumber,
+      landlordName: user.displayName || user.email,
+      landlordEmail: user.email,
+      planLabel: label,
+      amount: Number(payment.amount),
+      paymentChannel: payment.paymentChannel,
+      paymentReference: payment.paymentReference,
+      periodStart: new Date(payment.periodStart).toISOString(),
+      periodEnd: new Date(payment.periodEnd).toISOString(),
+      audience: 'landlord',
+    });
+
+  await Promise.allSettled([
+    deps.insertNotification({
+      recipientEmail: user.email.toLowerCase(),
+      platformId: user.platformId ?? null,
+      type: 'receipt',
+      title: `Subscription receipt (${payment.receiptNumber})`,
+      message: `Receipt for ${label} (${formattedAmount}), active until ${expiresFormatted}.`,
+      read: false,
+    }),
+    deps.sendEmail({
+      to: user.email,
+      subject: `MyBoma subscription receipt — ${payment.receiptNumber}`,
+      text: receiptText,
+      template: {
+        preheader: `Receipt ${payment.receiptNumber} for ${label} (${formattedAmount}).`,
+        heading: 'Subscription receipt',
+        paragraphs: [`Here is your receipt for ${label}, active until ${expiresFormatted}.`],
+        details: [
+          ['Receipt', payment.receiptNumber],
+          ['Plan', label],
+          ['Amount', formattedAmount],
+          ['Method', payment.paymentChannel],
+          ['Reference', payment.paymentReference],
+          ['Active until', expiresFormatted],
+        ],
+        button: {label: 'Open MyBoma', url: appBaseUrl},
+        footerNote: 'Sent because you paid for a MyBoma subscription.',
+      },
+    }),
+  ]);
+
+  return {ok: true, email: user.email, receiptNumber: payment.receiptNumber};
 };

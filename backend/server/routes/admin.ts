@@ -15,14 +15,24 @@ import {
   inviteSendLimiter,
   isAgencyAdmin,
   recordAudit,
+  reminderLimiter,
   requireAdmin,
   requireAuth,
   requireSuperAdmin,
   validateBody,
 } from '../http/middleware.ts';
-import {emailSchema, parseAccountIdsParam} from '../http/schemas.ts';
+import {emailSchema, parseAccountIdsParam, uuidSchema} from '../http/schemas.ts';
 import {createAndSendInvite} from '../inviteService.ts';
 import {INVITE_IDENTIFIER_PREFIX, parseInvitePayload, type InvitePayload} from '../invitePolicy.ts';
+import {billingToday, daysUntilDueDate} from '../../../shared/rentInvoices.ts';
+import {isFreePlan, parseSubscriptionPlan} from '../../../shared/landlordSubscription.ts';
+import {
+  formatSubscriptionPlanLabel,
+  resendSubscriptionReceipt,
+  sendSubscriptionRenewalReminder,
+  subscriberAccountType,
+} from '../landlordSubscriptionHandlers.ts';
+import {insertNotification, sendEmail} from '../services/notify.ts';
 
 const resendInviteSchema = z.object({email: emailSchema}).strict();
 
@@ -699,6 +709,296 @@ export function registerAdminRoutes(bffRouter: Router) {
       );
 
       res.json({status: 'created', platformId: platform.id});
+    }),
+  );
+
+  /**
+   * Super Admin platform-wide revenue & accounts ledger (always visible without account filter).
+   * Classifies every user by registration source (self-registered vs created by super admin vs
+   * invited by another account) and role (Landlord, Property Manager, Tenant, Caretaker, Hunter),
+   * summarizes subscription earnings from Landlords vs Property Managers, and lists renewals due.
+   */
+  bffRouter.get(
+    '/admin/superadmin/revenue',
+    requireAuth,
+    requireSuperAdmin,
+    asyncHandler(async (req, res) => {
+      const superUid = req.profile!.uid;
+      const now = new Date();
+      const todayIso = billingToday(now);
+      const currentMonthKey = todayIso.slice(0, 7);
+      const prevMonthDate = new Date(Date.UTC(Number(todayIso.slice(0, 4)), Number(todayIso.slice(5, 7)) - 2, 1));
+      const lastMonthKey = `${prevMonthDate.getUTCFullYear()}-${String(prevMonthDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
+      const [allUsers, allInvitations, provisionAudits, allSubPayments] = await Promise.all([
+        db
+          .select({
+            uid: schema.users.uid,
+            displayName: schema.users.displayName,
+            email: schema.users.email,
+            phone: schema.users.phone,
+            role: schema.users.role,
+            isAdmin: schema.users.isAdmin,
+            isSuperAdmin: schema.users.isSuperAdmin,
+            status: schema.users.status,
+            managedByAdminId: schema.users.managedByAdminId,
+            subscriptionPlan: schema.users.subscriptionPlan,
+            subscriptionStatus: schema.users.subscriptionStatus,
+            subscriptionExpiresAt: schema.users.subscriptionExpiresAt,
+            createdAt: schema.users.createdAt,
+          })
+          .from(schema.users)
+          .orderBy(desc(schema.users.createdAt)),
+        db
+          .select({
+            email: schema.invitations.email,
+            landlordId: schema.invitations.landlordId,
+            role: schema.invitations.role,
+          })
+          .from(schema.invitations),
+        db
+          .select({
+            userId: schema.auditLogs.userId,
+            resourceId: schema.auditLogs.resourceId,
+          })
+          .from(schema.auditLogs)
+          .where(eq(schema.auditLogs.action, 'USER_PROVISION')),
+        db
+          .select()
+          .from(schema.landlordSubscriptionPayments)
+          .orderBy(desc(schema.landlordSubscriptionPayments.createdAt))
+          .limit(500),
+      ]);
+
+      const userByUid = new Map(allUsers.map((u) => [u.uid, u]));
+      const creatorByEmail = new Map<string, string>();
+      for (const inv of allInvitations) {
+        if (inv.landlordId) creatorByEmail.set(inv.email.trim().toLowerCase(), inv.landlordId);
+      }
+      for (const audit of provisionAudits) {
+        if (audit.userId && audit.resourceId) {
+          creatorByEmail.set(audit.resourceId.trim().toLowerCase(), audit.userId);
+        }
+      }
+
+      // Per-user payment totals (confirmed receipts only)
+      const paidByUser = new Map<string, {total: number; count: number}>();
+      let totalRevenueKes = 0;
+      let landlordRevenueKes = 0;
+      let propertyManagerRevenueKes = 0;
+      let thisMonthKes = 0;
+      let lastMonthKes = 0;
+      let totalConfirmedPayments = 0;
+
+      const payments = allSubPayments.map((p) => {
+        const subscriber = userByUid.get(p.landlordId);
+        const parsed = parseSubscriptionPlan(p.plan);
+        const isPm =
+          parsed?.tier === 'proplus' ||
+          Boolean(subscriber && subscriber.role === 'admin' && !subscriber.isSuperAdmin);
+        const accountType = isPm ? ('property_manager' as const) : ('landlord' as const);
+        const amountNum = Number(p.amount) || 0;
+
+        if (p.status === 'confirmed') {
+          totalRevenueKes += amountNum;
+          totalConfirmedPayments += 1;
+          if (isPm) propertyManagerRevenueKes += amountNum;
+          else landlordRevenueKes += amountNum;
+
+          const monthKey = billingToday(new Date(p.createdAt)).slice(0, 7);
+          if (monthKey === currentMonthKey) thisMonthKes += amountNum;
+          else if (monthKey === lastMonthKey) lastMonthKes += amountNum;
+
+          const prev = paidByUser.get(p.landlordId) ?? {total: 0, count: 0};
+          paidByUser.set(p.landlordId, {total: prev.total + amountNum, count: prev.count + 1});
+        }
+
+        return {
+          id: p.id,
+          landlordId: p.landlordId,
+          userName: subscriber?.displayName || subscriber?.email || 'Deleted user',
+          userEmail: subscriber?.email || '',
+          accountType,
+          plan: p.plan,
+          planLabel: formatSubscriptionPlanLabel(p.plan),
+          amount: amountNum,
+          paymentChannel: p.paymentChannel,
+          paymentReference: p.paymentReference,
+          status: p.status,
+          receiptNumber: p.receiptNumber,
+          receiptText: p.receiptText,
+          periodStart: p.periodStart,
+          periodEnd: p.periodEnd,
+          createdAt: p.createdAt,
+        };
+      });
+
+      const roleCounts = {
+        landlord: 0,
+        property_manager: 0,
+        tenant: 0,
+        caretaker: 0,
+        hunter: 0,
+        superadmin: 0,
+      };
+      let selfRegisteredCount = 0;
+      let createdByMeCount = 0;
+      let invitedByOtherCount = 0;
+      let activePaidLandlords = 0;
+      let activePaidPropertyManagers = 0;
+      let expiringSoonCount = 0;
+      let expiredCount = 0;
+
+      const users = allUsers.map((u) => {
+        const emailLower = u.email.trim().toLowerCase();
+        const creatorUid = creatorByEmail.get(emailLower) || u.managedByAdminId || null;
+        const source: 'self_registered' | 'created_by_me' | 'invited_by_other' =
+          u.uid === superUid
+            ? 'self_registered'
+            : creatorUid === superUid
+              ? 'created_by_me'
+              : creatorUid
+                ? 'invited_by_other'
+                : 'self_registered';
+        const creatorUser = creatorUid ? userByUid.get(creatorUid) : null;
+
+        const parsedPlan = parseSubscriptionPlan(u.subscriptionPlan ?? null);
+        const accountType: 'superadmin' | 'property_manager' | 'landlord' | 'tenant' | 'caretaker' | 'hunter' =
+          u.isSuperAdmin
+            ? 'superadmin'
+            : u.role === 'admin' || parsedPlan?.tier === 'proplus'
+              ? 'property_manager'
+              : u.role === 'landlord'
+                ? 'landlord'
+                : u.role === 'tenant'
+                  ? 'tenant'
+                  : u.role === 'caretaker'
+                    ? 'caretaker'
+                    : 'hunter';
+
+        roleCounts[accountType] += 1;
+        if (u.uid !== superUid) {
+          if (source === 'created_by_me') createdByMeCount += 1;
+          else if (source === 'invited_by_other') invitedByOtherCount += 1;
+          else selfRegisteredCount += 1;
+        }
+
+        const isPaid = Boolean(u.subscriptionPlan && !isFreePlan(u.subscriptionPlan));
+        const expiresAt = u.subscriptionExpiresAt ? new Date(u.subscriptionExpiresAt) : null;
+        const daysUntilExpiry = expiresAt ? daysUntilDueDate(billingToday(expiresAt), todayIso) : null;
+        const isActivePaid =
+          isPaid && u.subscriptionStatus === 'active' && (daysUntilExpiry === null || daysUntilExpiry >= 0);
+
+        if (!u.isSuperAdmin && isActivePaid) {
+          if (accountType === 'property_manager') activePaidPropertyManagers += 1;
+          else if (accountType === 'landlord') activePaidLandlords += 1;
+        }
+        if (!u.isSuperAdmin && isPaid && daysUntilExpiry !== null) {
+          if (daysUntilExpiry < 0 || u.subscriptionStatus === 'expired') expiredCount += 1;
+          else if (daysUntilExpiry <= 7) expiringSoonCount += 1;
+        }
+
+        const totals = paidByUser.get(u.uid) ?? {total: 0, count: 0};
+
+        return {
+          uid: u.uid,
+          displayName: u.displayName,
+          email: u.email,
+          phone: u.phone,
+          role: u.role,
+          accountType,
+          source,
+          createdByName: creatorUser?.displayName || creatorUser?.email || null,
+          status: u.status,
+          subscriptionPlan: u.subscriptionPlan,
+          subscriptionPlanLabel: formatSubscriptionPlanLabel(u.subscriptionPlan),
+          subscriptionStatus: u.subscriptionStatus,
+          subscriptionExpiresAt: u.subscriptionExpiresAt,
+          daysUntilExpiry,
+          totalPaidKes: totals.total,
+          paymentCount: totals.count,
+          createdAt: u.createdAt,
+        };
+      });
+
+      const dueAccounts = users
+        .filter(
+          (u) =>
+            !u.accountType.includes('superadmin') &&
+            (u.accountType === 'landlord' || u.accountType === 'property_manager') &&
+            u.subscriptionPlan &&
+            !isFreePlan(u.subscriptionPlan) &&
+            u.daysUntilExpiry !== null &&
+            (u.daysUntilExpiry <= 14 || u.subscriptionStatus === 'expired'),
+        )
+        .sort((a, b) => (a.daysUntilExpiry ?? 999) - (b.daysUntilExpiry ?? 999));
+
+      res.json({
+        summary: {
+          totalRevenueKes,
+          landlordRevenueKes,
+          propertyManagerRevenueKes,
+          thisMonthKes,
+          lastMonthKes,
+          totalConfirmedPayments,
+          activePaidLandlords,
+          activePaidPropertyManagers,
+          expiringSoonCount,
+          expiredCount,
+          totalUsers: users.length,
+          selfRegisteredCount,
+          createdByMeCount,
+          invitedByOtherCount,
+          roleCounts,
+        },
+        users,
+        payments,
+        dueAccounts,
+      });
+    }),
+  );
+
+  /** Super Admin sends an immediate subscription renewal reminder (email + in-app + push). */
+  bffRouter.post(
+    '/admin/subscriptions/remind',
+    requireAuth,
+    requireSuperAdmin,
+    reminderLimiter,
+    validateBody(z.object({userId: uuidSchema}).strict()),
+    asyncHandler(async (req, res) => {
+      const {userId} = getValidatedBody<{userId: string}>(req);
+      const result = await sendSubscriptionRenewalReminder(userId, {sendEmail, insertNotification});
+      if (result.ok === false) {
+        res.status(result.status).json({error: result.error});
+        return;
+      }
+      await recordAudit(req.profile!, 'SUBSCRIPTION_REMINDER_SENT', 'user', userId, {email: result.email, title: result.title});
+      res.json({ok: true, email: result.email, message: `Reminder sent to ${result.email}.`});
+    }),
+  );
+
+  /** Super Admin resends a subscription payment receipt (email + in-app copy). */
+  bffRouter.post(
+    '/admin/subscriptions/:paymentId/resend-receipt',
+    requireAuth,
+    requireSuperAdmin,
+    reminderLimiter,
+    asyncHandler(async (req, res) => {
+      const parsedId = uuidSchema.safeParse(req.params.paymentId);
+      if (!parsedId.success) {
+        res.status(400).json({error: 'Invalid payment id.'});
+        return;
+      }
+      const result = await resendSubscriptionReceipt(parsedId.data, {sendEmail, insertNotification});
+      if (result.ok === false) {
+        res.status(result.status).json({error: result.error});
+        return;
+      }
+      await recordAudit(req.profile!, 'SUBSCRIPTION_RECEIPT_RESENT', 'subscription_payment', parsedId.data, {
+        email: result.email,
+        receiptNumber: result.receiptNumber,
+      });
+      res.json({ok: true, email: result.email, receiptNumber: result.receiptNumber, message: `Receipt ${result.receiptNumber} sent to ${result.email}.`});
     }),
   );
 }

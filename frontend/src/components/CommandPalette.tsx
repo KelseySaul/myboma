@@ -97,6 +97,7 @@ export default function CommandPalette({ profile, currentRole, onNavigate, onHel
       );
       if (profile.isSuperAdmin) {
         nav.push(
+          { id: 'revenue', label: 'Revenue & accounts', section: 'Administration', keywords: 'subscriptions earnings receipts self registered landlords property managers reminders', icon: Wallet, action: go('revenue') },
           { id: 'platforms', label: 'Platforms', section: 'Administration', keywords: 'agencies workspaces tenants white label', icon: Globe, action: go('platforms') },
           { id: 'audit', label: 'Activity log', section: 'Administration', keywords: 'audit history security events', icon: ClipboardList, action: go('audit') },
         );

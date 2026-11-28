@@ -852,7 +852,7 @@ export default function App() {
                 </button>
               );})}
               {(() => {
-                const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'platforms', 'audit', 'settings'].includes(activeTab);
+                const isAdminMenuTabActive = ['maintenance', 'finances', 'tenants', 'automations', 'revenue', 'platforms', 'audit', 'settings'].includes(activeTab);
                 return (
                   <button
                     type="button"
@@ -957,8 +957,9 @@ export default function App() {
                   <p className="px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Platform governance</p>
                   <div className="space-y-0.5">
                     {[
-                      { id: 'platforms', label: 'Platforms',    icon: faGlobe },
-                      { id: 'audit',     label: 'Activity log', icon: faClipboardList },
+                      { id: 'revenue',   label: 'Revenue & accounts', icon: faWallet },
+                      { id: 'platforms', label: 'Platforms',          icon: faGlobe },
+                      { id: 'audit',     label: 'Activity log',       icon: faClipboardList },
                     ].map((item) => {
                       const isActive = activeTab === item.id;
                       return (

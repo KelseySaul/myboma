@@ -1,4 +1,4 @@
-import {eq} from 'drizzle-orm';
+import {and, desc, eq} from 'drizzle-orm';
 import {type Router} from 'express';
 import {z} from 'zod';
 import {db, schema} from '../../db/client.ts';
@@ -6,6 +6,7 @@ import {canManageProperty} from '../../db/authz.ts';
 import {manualRentPaidSchema} from '../adminHandlers.ts';
 import {
   activateFreeLandlordPlan,
+  formatSubscriptionPlanLabel,
   landlordFreePlanSchema,
   landlordSubscriptionCheckoutSchema,
 } from '../landlordSubscriptionHandlers.ts';
@@ -50,6 +51,43 @@ export function registerPaymentRoutes(bffRouter: Router) {
     paymentLimiter,
     validateBody(landlordSubscriptionCheckoutSchema),
     initiateLandlordSubscriptionCheckout,
+  );
+
+  /** Signed-in landlord or property manager views their own confirmed subscription receipts. */
+  bffRouter.get(
+    '/landlord/subscription/receipts',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const actor = req.profile!;
+      const rows = await db
+        .select()
+        .from(schema.landlordSubscriptionPayments)
+        .where(
+          and(
+            eq(schema.landlordSubscriptionPayments.landlordId, actor.uid),
+            eq(schema.landlordSubscriptionPayments.status, 'confirmed'),
+          ),
+        )
+        .orderBy(desc(schema.landlordSubscriptionPayments.createdAt))
+        .limit(100);
+
+      res.json(
+        rows.map((row) => ({
+          id: row.id,
+          plan: row.plan,
+          planLabel: formatSubscriptionPlanLabel(row.plan),
+          amount: Number(row.amount),
+          paymentChannel: row.paymentChannel,
+          paymentReference: row.paymentReference,
+          status: row.status,
+          receiptNumber: row.receiptNumber,
+          receiptText: row.receiptText,
+          periodStart: row.periodStart,
+          periodEnd: row.periodEnd,
+          createdAt: row.createdAt,
+        })),
+      );
+    }),
   );
 
   /** Free plan: no payment, so it activates immediately. Never touches an active paid plan. */

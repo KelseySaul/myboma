@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Bell, Camera, Check, Eye, EyeOff, Loader2, LogOut } from 'lucide-react';
+import { Bell, Camera, Check, Download, Eye, EyeOff, Loader2, LogOut, Receipt } from 'lucide-react';
 import { authClient } from '../lib/auth-client';
-import { getPlatformBranding, initPlatform, updateMyProfile, updatePlatformBranding, uploadFile } from '../lib/api';
+import {
+  getMySubscriptionReceipts,
+  getPlatformBranding,
+  initPlatform,
+  updateMyProfile,
+  updatePlatformBranding,
+  uploadFile,
+  type MySubscriptionReceipt,
+} from '../lib/api';
 import { resolveMediaUrl } from '../lib/fileUrl';
 import { clearQueryCache } from '../lib/queryClient';
 import { promptForPush, type UserProfile } from '../App';
@@ -100,6 +108,8 @@ function PasswordInput({ id, value, onChange, autoComplete }: { id: string; valu
 export default function SettingsPage({ profile: baseProfile }: { profile: UserProfile }) {
   const profile = baseProfile as SettingsProfile;
   const isLandlord = profile.role === 'landlord';
+  const isPropertyManager = profile.role === 'admin' && !profile.isSuperAdmin && !profile.isAdmin;
+  const hasSubscriptionPlan = isLandlord || isPropertyManager;
   const isPlatformAdmin = profile.role === 'admin';
   const [signingOut, setSigningOut] = useState(false);
 
@@ -125,8 +135,8 @@ export default function SettingsPage({ profile: baseProfile }: { profile: UserPr
       <div className="mx-auto grid w-full max-w-5xl gap-4 px-4 pt-5 sm:px-6 md:px-8 lg:grid-cols-2 lg:items-start">
         <ProfileSection profile={profile} />
         <PasswordSection />
-        {isLandlord && <PayoutSection profile={profile} />}
-        {isLandlord && <PlanSection profile={profile} />}
+        {hasSubscriptionPlan && <PayoutSection profile={profile} />}
+        {hasSubscriptionPlan && <PlanSection profile={profile} />}
         <PreferencesSection profile={profile} />
         {isPlatformAdmin && <BrandingSection profile={profile} />}
 
@@ -414,7 +424,44 @@ function PlanSection({ profile }: { profile: SettingsProfile }) {
   const active = profile.subscriptionStatus === 'active';
   const expires = profile.subscriptionExpiresAt ? new Date(profile.subscriptionExpiresAt) : null;
   const [open, setOpen] = useState(false);
-  const [choice, setChoice] = useState<{ tier: PaidSubscriptionTier; billing: BillingPeriod }>({ tier: 'starter', billing: 'monthly' });
+  const [choice, setChoice] = useState<{ tier: PaidSubscriptionTier; billing: BillingPeriod }>({
+    tier: plan && plan.tier !== 'free' ? plan.tier : profile.role === 'admin' ? 'proplus' : 'starter',
+    billing: 'monthly',
+  });
+  const [receipts, setReceipts] = useState<MySubscriptionReceipt[]>([]);
+
+  useEffect(() => {
+    let activeFetch = true;
+    getMySubscriptionReceipts()
+      .then((rows) => {
+        if (activeFetch) setReceipts(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      activeFetch = false;
+    };
+  }, [profile.uid]);
+
+  const downloadReceipt = (r: MySubscriptionReceipt) => {
+    const content =
+      r.receiptText ||
+      [
+        'MYBOMA SUBSCRIPTION RECEIPT',
+        `Receipt: ${r.receiptNumber}`,
+        `Plan: ${r.planLabel}`,
+        `Amount: KES ${Math.round(r.amount).toLocaleString('en-KE')}`,
+        `Channel: ${r.paymentChannel}`,
+        `Reference: ${r.paymentReference}`,
+        `Period: ${new Date(r.periodStart).toLocaleDateString('en-KE')} to ${new Date(r.periodEnd).toLocaleDateString('en-KE')}`,
+      ].join('\n');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${r.receiptNumber}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const statusText = !tier
     ? 'No plan yet'
@@ -440,6 +487,32 @@ function PlanSection({ profile }: { profile: SettingsProfile }) {
       <Button onClick={() => setOpen(true)} className="h-10">
         {plan?.tier === 'free' || !tier ? 'Upgrade plan' : active ? 'Change or renew plan' : 'Renew plan'}
       </Button>
+
+      {receipts.length > 0 && (
+        <div className="space-y-2 border-t border-zinc-200/80 pt-4 dark:border-zinc-800">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+            <Receipt className="h-3.5 w-3.5 text-zinc-500" />
+            Payment receipts ({receipts.length})
+          </div>
+          <div className="divide-y divide-zinc-200/70 rounded-xl border border-zinc-200/80 dark:divide-zinc-800 dark:border-zinc-800">
+            {receipts.slice(0, 6).map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-zinc-950 dark:text-white">
+                    {r.planLabel} · KES {Math.round(r.amount).toLocaleString('en-KE')}
+                  </p>
+                  <p className="truncate text-[11px] text-zinc-500">
+                    {r.receiptNumber} · {new Date(r.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={() => downloadReceipt(r)} className="h-7 shrink-0 gap-1 px-2.5 text-[11px]">
+                  <Download className="h-3 w-3" /> Receipt
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">

@@ -87,6 +87,7 @@ import {
 } from 'lucide-react';
 import { useAdminDashboard, useAdminPendingInvites, useAuditLogs, useSuperAdminAccounts } from '../lib/queries';
 import AdminOverview from './admin/AdminOverview';
+import SuperAdminRevenueView from './admin/SuperAdminRevenueView';
 import { SuperAdminAccountFilterBar, SuperAdminAccountGate } from './admin/SuperAdminAccountFilter';
 import PhotoCaptureControl from './PhotoCaptureControl';
 import PropertyDescriptionPresets from './PropertyDescriptionPresets';
@@ -163,6 +164,7 @@ const TAB_TITLES: Record<string, { title: string; description: string }> = {
   registered: { title: 'Users', description: 'Everyone with an account. Search, change roles or suspend access.' },
   pending: { title: 'Pending invites', description: "People you've invited who haven't set up their account yet." },
   properties: { title: 'Properties', description: 'Every unit and building, with its landlord and status.' },
+  revenue: { title: 'Revenue & accounts', description: 'Self-registered vs created users, subscription earnings, receipts, and renewal reminders.' },
   platforms: { title: 'Platforms', description: 'Separate workspaces for agencies and their landlords.' },
   audit: { title: 'Activity log', description: 'A record of important actions, newest first.' },
 };
@@ -2368,6 +2370,11 @@ export default function AdminDashboard({
             </CardContent>
           </Card>
           </div>
+        )}
+
+        {/* ── SUPER ADMIN REVENUE & ACCOUNTS TAB ── */}
+        {activeTab === 'revenue' && profile.isSuperAdmin && (
+          <SuperAdminRevenueView />
         )}
 
         {/* ── NETWORK TAB ── */}
