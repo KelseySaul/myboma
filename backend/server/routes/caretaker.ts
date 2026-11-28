@@ -313,30 +313,19 @@ export function registerCaretakerRoutes(bffRouter: Router) {
           subject: alertTitle,
           template: {
             preheader: alertMsg,
-            eyebrow: 'Caretaker report',
-            tone: body.priority === 'urgent' || body.priority === 'high' ? 'danger' : 'info',
             heading: body.title,
             paragraphs: [
-              `${caretakerName} submitted a new field report${scopeNote}.`,
+              `${caretakerName} filed a report${scopeNote}.`,
               body.description,
             ],
-            callout: {
-              label: 'Report priority',
-              value: body.priority.toUpperCase(),
-              sublabel: `${body.category.replace('_', ' ')}${propertyLabel ? ` · ${propertyLabel}` : ''}`,
-            },
             details: [
               ['Caretaker', caretakerName],
               ['Category', body.category.replace('_', ' ')],
               ['Priority', body.priority.toUpperCase()],
               ...(propertyLabel ? [['Unit / Building', propertyLabel] as [string, string]] : []),
             ],
-            button: {
-              label: 'Review report in MyBoma',
-              url: appBaseUrl,
-              hint: 'Open Caretakers & reports to inspect photos and reply:',
-            },
-            footerNote: 'You received this because a caretaker filed a report under your MyBoma account.',
+            button: {label: 'View report', url: appBaseUrl},
+            footerNote: 'Sent because a caretaker filed a report under your account.',
           },
         }),
       ]);

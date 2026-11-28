@@ -28,13 +28,13 @@ describe('invitation email', () => {
       heading: 'Rent due in 2 days',
       paragraphs: ['Your rent for Kilimani Heights A1 is due on 1 Dec.'],
       details: [['Amount', 'KES 48,000']],
-      button: {label: 'Pay rent', url: 'https://myboma.kelseysaul.dev'},
+      button: {label: 'Pay rent', url: 'https://myboma.org'},
     });
 
     assert.match(rendered.html, /<img[^>]+bomalog\.png/);
     assert.match(rendered.html, /Pay rent/);
     assert.doesNotMatch(rendered.html, /gradient/i);
     assert.doesNotMatch(rendered.html, /What to do next/);
-    assert.match(rendered.text, /Pay rent: https:\/\/myboma\.kelseysaul\.dev/);
+    assert.match(rendered.text, /Pay rent: https:\/\/myboma\.org/);
   });
 });

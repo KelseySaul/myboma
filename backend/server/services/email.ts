@@ -65,15 +65,11 @@ export type EmailContent = {
   callout?: {label: string; value: string; sublabel?: string};
   /** Label/value pairs, shown as a simple list. */
   details?: Array<[label: string, value: string]>;
-  button?: {label: string; url: string; /** ignored by the plain layout */ hint?: string};
+  button?: {label: string; url: string};
   /** Short lines after the button. */
   closing?: string[];
   /** Why the recipient got this email. */
   footerNote?: string;
-  /** Accepted for backwards compatibility; the plain layout does not use these. */
-  eyebrow?: string;
-  tone?: 'brand' | 'success' | 'warning' | 'danger' | 'info';
-  steps?: string[];
 };
 
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";

@@ -239,33 +239,24 @@ export const activateLandlordSubscription = async (
     });
     await deps.sendEmail({
       to: adminEmail,
-      subject: `MyBoma landlord subscription — ${receiptNumber}`,
+      subject: `Landlord subscription: ${receiptNumber}`,
       text: adminReceipt,
       template: {
-        preheader: `${input.landlordName} activated ${label} (${formattedAmount}).`,
-        eyebrow: 'New subscription',
-        tone: 'success',
-        heading: 'Landlord subscription activated',
-        paragraphs: [`${input.landlordName} (${input.landlordEmail}) completed payment for ${label}.`],
-        callout: {
-          label: 'Subscription paid',
-          value: formattedAmount,
-          sublabel: `${label} · Receipt ${receiptNumber}`,
-        },
+        preheader: `${input.landlordName} paid ${formattedAmount} for ${label}.`,
+        heading: 'New landlord subscription',
+        paragraphs: [`${input.landlordName} (${input.landlordEmail}) paid for ${label}.`],
         details: [
+          ['Receipt', receiptNumber],
           ['Landlord', input.landlordName],
           ['Email', input.landlordEmail],
           ['Plan', label],
-          ['Channel', input.paymentChannel],
+          ['Amount', formattedAmount],
+          ['Method', input.paymentChannel],
           ['Reference', input.paymentReference],
           ['Active until', expiresFormatted],
         ],
-        button: {
-          label: 'Open Super Admin dashboard',
-          url: appBaseUrl,
-          hint: 'View this account and subscription details in MyBoma:',
-        },
-        footerNote: 'You received this because you are a MyBoma super administrator.',
+        button: {label: 'Open dashboard', url: appBaseUrl},
+        footerNote: 'Sent to MyBoma administrators.',
       },
     });
   }
@@ -276,35 +267,19 @@ export const activateLandlordSubscription = async (
       subject: `MyBoma subscription receipt — ${receiptNumber}`,
       text: landlordReceipt,
       template: {
-        preheader: `Your ${label} plan is now active until ${expiresFormatted}.`,
-        eyebrow: 'Subscription active',
-        tone: 'success',
-        heading: 'Welcome to your active MyBoma plan',
-        paragraphs: [
-          `Thank you, ${input.landlordName}! Your payment for ${label} has been confirmed and your landlord workspace is active.`,
-        ],
-        callout: {
-          label: 'Amount paid',
-          value: formattedAmount,
-          sublabel: `${label} · Active until ${expiresFormatted}`,
-        },
+        preheader: `Your ${label} plan is active until ${expiresFormatted}.`,
+        heading: 'Subscription receipt',
+        paragraphs: [`Your ${label} plan is now active until ${expiresFormatted}. Keep this email as your receipt.`],
         details: [
-          ['Receipt number', receiptNumber],
+          ['Receipt', receiptNumber],
           ['Plan', label],
-          ['Payment method', input.paymentChannel],
+          ['Amount', formattedAmount],
+          ['Method', input.paymentChannel],
           ['Reference', input.paymentReference],
           ['Active until', expiresFormatted],
         ],
-        steps: [
-          'Click the "Open your MyBoma dashboard" button below.',
-          'Add properties, invite tenants or caretakers, and track rent status in real time.',
-        ],
-        button: {
-          label: 'Open your MyBoma dashboard',
-          url: appBaseUrl,
-          hint: 'Click below to start managing your properties:',
-        },
-        footerNote: 'Keep this email as your official MyBoma subscription receipt.',
+        button: {label: 'Open MyBoma', url: appBaseUrl},
+        footerNote: 'Sent because you paid for a MyBoma subscription.',
       },
     });
   }
