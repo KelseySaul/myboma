@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { LEGAL_DOCUMENTS } from '../../../shared/legalDocuments';
+import { tenantConfig } from '../config/tenant';
 
 interface PublicLegalPageProps {
   type: keyof typeof LEGAL_DOCUMENTS;
@@ -48,7 +49,7 @@ export default function PublicLegalPage({ type }: PublicLegalPageProps) {
               ))}
             </div>
             <p className="mt-12 border-t border-zinc-200 pt-6 text-sm text-zinc-500">
-              Questions? Email <a href="mailto:support@myboma.org" className="font-medium text-zinc-950 underline underline-offset-4">support@myboma.org</a>. Also read our{' '}
+              Questions? Email <a href={`mailto:${tenantConfig.supportEmail}`} className="font-medium text-zinc-950 underline underline-offset-4">{tenantConfig.supportEmail}</a> or <a href={`mailto:${tenantConfig.infoEmail}`} className="font-medium text-zinc-950 underline underline-offset-4">{tenantConfig.infoEmail}</a>. Also read our{' '}
               <a href={other.href} className="font-medium text-zinc-950 underline underline-offset-4">{other.label}</a>.
             </p>
           </article>

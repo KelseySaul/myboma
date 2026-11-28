@@ -336,10 +336,14 @@ export default function AboutPage({ onSignUp }: { onSignUp: () => void }) {
             <h2 className="text-2xl font-extrabold tracking-tight sm:text-4xl">Have questions or managing 20+ units?</h2>
             <p className="mt-2 text-sm text-zinc-300 sm:text-base">
               Email{' '}
+              <a href={`mailto:${tenantConfig.infoEmail}`} className="font-semibold text-white underline decoration-violet-400 underline-offset-4">
+                {tenantConfig.infoEmail}
+              </a>{' '}
+              for general enquiries or{' '}
               <a href={`mailto:${tenantConfig.supportEmail}`} className="font-semibold text-white underline decoration-violet-400 underline-offset-4">
                 {tenantConfig.supportEmail}
-              </a>
-              , or create your free landlord account in under a minute.
+              </a>{' '}
+              for help with your account, or create your free landlord account in under a minute.
             </p>
           </div>
           <button

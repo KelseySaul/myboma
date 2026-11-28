@@ -87,13 +87,22 @@ export default function Footer({ variant = 'app' }: FooterProps) {
 
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Contact</h2>
-            <a
-              href={`mailto:${tenantConfig.supportEmail}`}
-              className="mt-4 inline-flex items-center gap-2 text-sm text-zinc-300 transition hover:text-white"
-            >
-              <Mail className="h-4 w-4" />
-              {tenantConfig.supportEmail}
-            </a>
+            <ul className="mt-4 space-y-3">
+              {[
+                {label: 'Support', email: tenantConfig.supportEmail},
+                {label: 'General enquiries', email: tenantConfig.infoEmail},
+              ].map(({label, email}) => (
+                <li key={email}>
+                  <a href={`mailto:${email}`} className="inline-flex items-start gap-2 text-sm text-zinc-300 transition hover:text-white">
+                    <Mail className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <span className="block text-xs text-zinc-500">{label}</span>
+                      {email}
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
