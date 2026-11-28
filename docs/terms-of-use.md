@@ -5,7 +5,7 @@ Version: 2026-11-24
 
 ## 1. About these terms
 
-These terms govern your use of MyBoma, a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev and in the MyBoma mobile apps. By creating an account, sending an enquiry or otherwise using MyBoma, you agree to these terms and to our Privacy Policy. If you use MyBoma for a company, agency or property owner, you confirm you are authorised to accept these terms on their behalf.
+These terms govern your use of MyBoma, a property management and rental listing platform operated from Kenya and available at https://myboma.org and in the MyBoma mobile apps. By creating an account, sending an enquiry or otherwise using MyBoma, you agree to these terms and to our Privacy Policy. If you use MyBoma for a company, agency or property owner, you confirm you are authorised to accept these terms on their behalf.
 
 ## 2. What MyBoma does and does not do
 
@@ -13,7 +13,7 @@ MyBoma is a software platform. It lets landlords, property managers and agencies
 
 ## 3. Accounts
 
-You must be at least 18 years old to open an account. Give accurate information, keep your password private and tell us at support@myboma.com if you think someone has accessed your account. You are responsible for activity on your account. We may suspend or close accounts used for fraud, harassment, unlawful activity or anything that puts other users or the platform at risk.
+You must be at least 18 years old to open an account. Give accurate information, keep your password private and tell us at support@myboma.org if you think someone has accessed your account. You are responsible for activity on your account. We may suspend or close accounts used for fraud, harassment, unlawful activity or anything that puts other users or the platform at risk.
 
 ## 4. Landlords, property managers and agencies
 
@@ -25,7 +25,7 @@ Tenants use MyBoma to view their lease details, invoices and balances, pay rent 
 
 ## 6. House hunters and enquiries
 
-You can browse listings and send an enquiry without an account. When you send an enquiry, the name, email address, phone number and message you provide are shared with the landlord or agent of that listing so they can contact you about availability. An enquiry is not a booking or a reservation, and the landlord is not obliged to respond. Never pay a deposit or viewing fee before you have seen the property and confirmed the landlord is genuine. Report suspicious listings to support@myboma.com.
+You can browse listings and send an enquiry without an account. When you send an enquiry, the name, email address, phone number and message you provide are shared with the landlord or agent of that listing so they can contact you about availability. An enquiry is not a booking or a reservation, and the landlord is not obliged to respond. Never pay a deposit or viewing fee before you have seen the property and confirmed the landlord is genuine. Report suspicious listings to support@myboma.org.
 
 ## 7. Payments
 
@@ -37,7 +37,7 @@ Landlords can use the Free plan, which covers one house unit, or a paid plan (Ba
 
 ## 9. Refunds
 
-Because plans are prepaid and do not renew, we do not charge for periods you have not chosen. If you were charged in error, charged twice, or could not use a paid feature because of a fault on our side, email support@myboma.com within 30 days and we will review it and refund where appropriate. This does not limit any right you have under the Consumer Protection Act 2012.
+Because plans are prepaid and do not renew, we do not charge for periods you have not chosen. If you were charged in error, charged twice, or could not use a paid feature because of a fault on our side, email support@myboma.org within 30 days and we will review it and refund where appropriate. This does not limit any right you have under the Consumer Protection Act 2012.
 
 ## 10. Acceptable use
 
@@ -61,11 +61,11 @@ MyBoma is provided as is. To the extent Kenyan law allows, we are not liable for
 
 ## 15. Closing your account
 
-You can stop using MyBoma at any time and ask us to close your account by emailing support@myboma.com. We may keep some records after closure where the law requires it, for example payment and tax records, as explained in the Privacy Policy.
+You can stop using MyBoma at any time and ask us to close your account by emailing support@myboma.org. We may keep some records after closure where the law requires it, for example payment and tax records, as explained in the Privacy Policy.
 
 ## 16. Governing law and disputes
 
-These terms are governed by the laws of Kenya. If you have a complaint, contact support@myboma.com first and we will try to resolve it within 14 days. If we cannot agree, either side may take the dispute to the courts of Kenya. Data protection complaints can also be made to the Office of the Data Protection Commissioner.
+These terms are governed by the laws of Kenya. If you have a complaint, contact support@myboma.org first and we will try to resolve it within 14 days. If we cannot agree, either side may take the dispute to the courts of Kenya. Data protection complaints can also be made to the Office of the Data Protection Commissioner.
 
 ## 17. Changes to these terms
 
@@ -73,4 +73,4 @@ We may update these terms. The version date at the top shows when they last chan
 
 ## 18. Contact
 
-Questions about these terms: support@myboma.com.
+Questions about these terms: support@myboma.org.

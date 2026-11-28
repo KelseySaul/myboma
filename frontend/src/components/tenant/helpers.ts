@@ -162,4 +162,4 @@ export function receiptDownload(payment: RentPayment, tenantName: string, tenant
 
 /** Payment providers redirect back here; native apps use the public site. */
 export const returnUrl = (query: string, isNative: boolean) =>
-  `${isNative ? 'https://myboma.kelseysaul.dev' : window.location.origin}/?${query}`;
+  `${isNative ? 'https://myboma.org' : window.location.origin}/?${query}`;

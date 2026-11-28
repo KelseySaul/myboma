@@ -23,7 +23,7 @@ test('normalizeStoredFileUrl fixes stale localhost:4173 and Render origins on we
     protocol: 'https',
     baseUrl: '/api/mobile',
     clientKind: 'mobile',
-    get: (h: string) => (h.toLowerCase() === 'host' ? 'myboma.kelseysaul.dev' : undefined),
+    get: (h: string) => (h.toLowerCase() === 'host' ? 'myboma.org' : undefined),
   };
 
   assert.equal(
@@ -40,7 +40,7 @@ test('normalizeStoredFileUrl fixes stale localhost:4173 and Render origins on we
   );
   assert.equal(
     normalizeStoredFileUrl(mobileReq, '/api/files/uid-1/photo.webp'),
-    'https://myboma.kelseysaul.dev/api/files/uid-1/photo.webp',
+    'https://myboma.org/api/files/uid-1/photo.webp',
   );
   assert.equal(
     normalizeStoredFileUrl(webReq, 'https://images.unsplash.com/photo-123?auto=format'),

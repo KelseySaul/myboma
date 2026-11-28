@@ -40,7 +40,7 @@ describe('invitation email', () => {
       steps: ['Click the button below.', 'Pay via M-Pesa or card.'],
       button: {
         label: 'Pay rent on MyBoma',
-        url: 'https://myboma.kelseysaul.dev',
+        url: 'https://myboma.org',
         hint: 'Tap below to pay securely:',
       },
     });
@@ -49,6 +49,6 @@ describe('invitation email', () => {
     assert.match(rendered.html, /KES 48,000/);
     assert.match(rendered.html, /Pay rent on MyBoma/);
     assert.match(rendered.html, /#D97706/i);
-    assert.match(rendered.text, /Pay rent on MyBoma: https:\/\/myboma\.kelseysaul\.dev/);
+    assert.match(rendered.text, /Pay rent on MyBoma: https:\/\/myboma\.org/);
   });
 });

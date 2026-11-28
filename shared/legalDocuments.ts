@@ -8,7 +8,7 @@ export const TERMS_OF_USE = {
   sections: [
     {
       title: '1. About these terms',
-      body: 'These terms govern your use of MyBoma, a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev and in the MyBoma mobile apps. By creating an account, sending an enquiry or otherwise using MyBoma, you agree to these terms and to our Privacy Policy. If you use MyBoma for a company, agency or property owner, you confirm you are authorised to accept these terms on their behalf.',
+      body: 'These terms govern your use of MyBoma, a property management and rental listing platform operated from Kenya and available at https://myboma.org and in the MyBoma mobile apps. By creating an account, sending an enquiry or otherwise using MyBoma, you agree to these terms and to our Privacy Policy. If you use MyBoma for a company, agency or property owner, you confirm you are authorised to accept these terms on their behalf.',
     },
     {
       title: '2. What MyBoma does and does not do',
@@ -16,7 +16,7 @@ export const TERMS_OF_USE = {
     },
     {
       title: '3. Accounts',
-      body: 'You must be at least 18 years old to open an account. Give accurate information, keep your password private and tell us at support@myboma.com if you think someone has accessed your account. You are responsible for activity on your account. We may suspend or close accounts used for fraud, harassment, unlawful activity or anything that puts other users or the platform at risk.',
+      body: 'You must be at least 18 years old to open an account. Give accurate information, keep your password private and tell us at support@myboma.org if you think someone has accessed your account. You are responsible for activity on your account. We may suspend or close accounts used for fraud, harassment, unlawful activity or anything that puts other users or the platform at risk.',
     },
     {
       title: '4. Landlords, property managers and agencies',
@@ -28,7 +28,7 @@ export const TERMS_OF_USE = {
     },
     {
       title: '6. House hunters and enquiries',
-      body: 'You can browse listings and send an enquiry without an account. When you send an enquiry, the name, email address, phone number and message you provide are shared with the landlord or agent of that listing so they can contact you about availability. An enquiry is not a booking or a reservation, and the landlord is not obliged to respond. Never pay a deposit or viewing fee before you have seen the property and confirmed the landlord is genuine. Report suspicious listings to support@myboma.com.',
+      body: 'You can browse listings and send an enquiry without an account. When you send an enquiry, the name, email address, phone number and message you provide are shared with the landlord or agent of that listing so they can contact you about availability. An enquiry is not a booking or a reservation, and the landlord is not obliged to respond. Never pay a deposit or viewing fee before you have seen the property and confirmed the landlord is genuine. Report suspicious listings to support@myboma.org.',
     },
     {
       title: '7. Payments',
@@ -40,7 +40,7 @@ export const TERMS_OF_USE = {
     },
     {
       title: '9. Refunds',
-      body: 'Because plans are prepaid and do not renew, we do not charge for periods you have not chosen. If you were charged in error, charged twice, or could not use a paid feature because of a fault on our side, email support@myboma.com within 30 days and we will review it and refund where appropriate. This does not limit any right you have under the Consumer Protection Act 2012.',
+      body: 'Because plans are prepaid and do not renew, we do not charge for periods you have not chosen. If you were charged in error, charged twice, or could not use a paid feature because of a fault on our side, email support@myboma.org within 30 days and we will review it and refund where appropriate. This does not limit any right you have under the Consumer Protection Act 2012.',
     },
     {
       title: '10. Acceptable use',
@@ -64,11 +64,11 @@ export const TERMS_OF_USE = {
     },
     {
       title: '15. Closing your account',
-      body: 'You can stop using MyBoma at any time and ask us to close your account by emailing support@myboma.com. We may keep some records after closure where the law requires it, for example payment and tax records, as explained in the Privacy Policy.',
+      body: 'You can stop using MyBoma at any time and ask us to close your account by emailing support@myboma.org. We may keep some records after closure where the law requires it, for example payment and tax records, as explained in the Privacy Policy.',
     },
     {
       title: '16. Governing law and disputes',
-      body: 'These terms are governed by the laws of Kenya. If you have a complaint, contact support@myboma.com first and we will try to resolve it within 14 days. If we cannot agree, either side may take the dispute to the courts of Kenya. Data protection complaints can also be made to the Office of the Data Protection Commissioner.',
+      body: 'These terms are governed by the laws of Kenya. If you have a complaint, contact support@myboma.org first and we will try to resolve it within 14 days. If we cannot agree, either side may take the dispute to the courts of Kenya. Data protection complaints can also be made to the Office of the Data Protection Commissioner.',
     },
     {
       title: '17. Changes to these terms',
@@ -76,7 +76,7 @@ export const TERMS_OF_USE = {
     },
     {
       title: '18. Contact',
-      body: 'Questions about these terms: support@myboma.com.',
+      body: 'Questions about these terms: support@myboma.org.',
     },
   ],
 };
@@ -88,7 +88,7 @@ export const PRIVACY_POLICY = {
   sections: [
     {
       title: '1. Who we are',
-      body: 'MyBoma is a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev. For the personal data described in this policy, MyBoma is the data controller under the Data Protection Act 2019. Where a landlord or agency uses MyBoma to manage their own tenants, that landlord or agency independently decides why and how it uses that tenant data and is responsible for that use. Contact us about privacy at support@myboma.com.',
+      body: 'MyBoma is a property management and rental listing platform operated from Kenya and available at https://myboma.org. For the personal data described in this policy, MyBoma is the data controller under the Data Protection Act 2019. Where a landlord or agency uses MyBoma to manage their own tenants, that landlord or agency independently decides why and how it uses that tenant data and is responsible for that use. Contact us about privacy at support@myboma.org.',
     },
     {
       title: '2. What we collect',
@@ -116,7 +116,7 @@ export const PRIVACY_POLICY = {
     },
     {
       title: '8. Your rights',
-      body: 'Under the Data Protection Act 2019 you have the right to be told how your data is used; to access your data; to correct inaccurate data; to have false, misleading or unnecessary data deleted; to restrict or object to processing; to withdraw consent; and to receive your data in a portable format. To use any of these rights, email support@myboma.com. We may need to verify your identity. Under the Data Protection (General) Regulations 2021, access requests are handled within 7 days; rectification, erasure, restriction and objections within 14 days; and portability within 30 days, subject to the applicable rules and any lawful exception. Some requests may be limited where we must keep records by law, for example payment records.',
+      body: 'Under the Data Protection Act 2019 you have the right to be told how your data is used; to access your data; to correct inaccurate data; to have false, misleading or unnecessary data deleted; to restrict or object to processing; to withdraw consent; and to receive your data in a portable format. To use any of these rights, email support@myboma.org. We may need to verify your identity. Under the Data Protection (General) Regulations 2021, access requests are handled within 7 days; rectification, erasure, restriction and objections within 14 days; and portability within 30 days, subject to the applicable rules and any lawful exception. Some requests may be limited where we must keep records by law, for example payment records.',
     },
     {
       title: '9. Children',
@@ -132,7 +132,7 @@ export const PRIVACY_POLICY = {
     },
     {
       title: '12. Complaints',
-      body: 'If you have a concern about how we handle your data, contact support@myboma.com first. You also have the right to lodge a complaint with the Office of the Data Protection Commissioner (ODPC), Kenya, at https://www.odpc.go.ke.',
+      body: 'If you have a concern about how we handle your data, contact support@myboma.org first. You also have the right to lodge a complaint with the Office of the Data Protection Commissioner (ODPC), Kenya, at https://www.odpc.go.ke.',
     },
     {
       title: '13. Changes to this policy',

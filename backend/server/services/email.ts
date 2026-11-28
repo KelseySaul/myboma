@@ -8,22 +8,21 @@ import {Resend} from 'resend';
  * unmistakable primary action button) plus a clean plain-text alternative.
  */
 
-const OFFICIAL_SITE_URL = 'https://myboma.kelseysaul.dev';
+const OFFICIAL_SITE_URL = 'https://myboma.org';
 const configuredSiteUrl = process.env.APP_BASE_URL?.trim();
-// Stored links created while Render was the public host must point users back to the
-// official site. Local development URLs remain untouched.
-const SITE_URL = (configuredSiteUrl && !/(^|\/\/)myboma\.onrender\.com\/?$/i.test(configuredSiteUrl)
+// Links must point users at the official site even if APP_BASE_URL still names a previous
+// public host (Render's hostname or the old kelseysaul.dev subdomain). Local URLs are untouched.
+const SITE_URL = (configuredSiteUrl && !/(^|\/\/)(myboma\.onrender\.com|myboma\.kelseysaul\.dev)\/?$/i.test(configuredSiteUrl)
   ? configuredSiteUrl
   : OFFICIAL_SITE_URL
 ).replace(/\/$/, '');
 // Always load the brand logo from the public HTTPS origin so email clients can render it
 // even when a message is generated from localhost during development.
 const EMAIL_LOGO_URL = `${OFFICIAL_SITE_URL}/bomalog-white.png`;
-export const SUPPORT_EMAIL = 'support@myboma.com';
-// Resend verifies myboma.kelseysaul.dev. It cannot send from support@myboma.com
-// until that separate root domain is also verified, so support@myboma.com remains
-// the reply-to/contact address while the authenticated sender uses the subdomain.
-export const SUPPORT_FROM = 'MyBoma Support <support@myboma.kelseysaul.dev>';
+export const SUPPORT_EMAIL = 'support@myboma.org';
+// myboma.org is the verified Resend sending domain, so support@myboma.org is both the
+// authenticated sender and the reply-to/contact address.
+export const SUPPORT_FROM = 'MyBoma Support <support@myboma.org>';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 

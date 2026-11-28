@@ -29,8 +29,8 @@ export default function LandlordSubscriptionPay({ payload, onSuccess }: Landlord
         ...payload,
         tier,
         paymentMethod: 'pesapal',
-        successUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?subscription_payment=success` : `${window.location.origin}/?subscription_payment=success`,
-        cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.kelseysaul.dev/?subscription_payment=cancelled` : `${window.location.origin}/?subscription_payment=cancelled`,
+        successUrl: Capacitor.isNativePlatform() ? `https://myboma.org/?subscription_payment=success` : `${window.location.origin}/?subscription_payment=success`,
+        cancelUrl: Capacitor.isNativePlatform() ? `https://myboma.org/?subscription_payment=cancelled` : `${window.location.origin}/?subscription_payment=cancelled`,
       });
 
       if (result.checkoutUrl) {

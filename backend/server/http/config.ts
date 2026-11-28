@@ -4,12 +4,13 @@ import {isEmailConfigured} from '../services/email.ts';
 export const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3002);
 export const isProduction = process.env.NODE_ENV === 'production';
 export const defaultCorsOrigins = 'http://localhost:5173,http://localhost:4173';
-export const officialAppUrl = 'https://myboma.kelseysaul.dev';
+export const officialAppUrl = 'https://myboma.org';
 
-// The previous public Render hostname is still safe for API transport, but must not
-// be used in user-facing links or stored file URLs: it is a different browser origin
-// from the official site and causes its image resources to be blocked.
-const isLegacyRenderUrl = (value?: string) => Boolean(value && /(^|\/\/)myboma\.onrender\.com\/?$/i.test(value.trim()));
+// Previous public hostnames (Render's own hostname and the old kelseysaul.dev subdomain)
+// are still safe for API transport, but must not be used in user-facing links or stored
+// file URLs: they are different browser origins from the official site.
+const isLegacyRenderUrl = (value?: string) =>
+  Boolean(value && /(^|\/\/)(myboma\.onrender\.com|myboma\.kelseysaul\.dev)\/?$/i.test(value.trim()));
 export const appBaseUrl =
   isProduction && (!process.env.APP_BASE_URL || isLegacyRenderUrl(process.env.APP_BASE_URL))
     ? officialAppUrl

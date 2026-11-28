@@ -5,7 +5,7 @@ Version: 2026-11-24
 
 ## 1. Who we are
 
-MyBoma is a property management and rental listing platform operated from Kenya and available at https://myboma.kelseysaul.dev. For the personal data described in this policy, MyBoma is the data controller under the Data Protection Act 2019. Where a landlord or agency uses MyBoma to manage their own tenants, that landlord or agency independently decides why and how it uses that tenant data and is responsible for that use. Contact us about privacy at support@myboma.com.
+MyBoma is a property management and rental listing platform operated from Kenya and available at https://myboma.org. For the personal data described in this policy, MyBoma is the data controller under the Data Protection Act 2019. Where a landlord or agency uses MyBoma to manage their own tenants, that landlord or agency independently decides why and how it uses that tenant data and is responsible for that use. Contact us about privacy at support@myboma.org.
 
 ## 2. What we collect
 
@@ -33,7 +33,7 @@ Data is encrypted in transit. Passwords are hashed. Access to each landlord's da
 
 ## 8. Your rights
 
-Under the Data Protection Act 2019 you have the right to be told how your data is used; to access your data; to correct inaccurate data; to have false, misleading or unnecessary data deleted; to restrict or object to processing; to withdraw consent; and to receive your data in a portable format. To use any of these rights, email support@myboma.com. We may need to verify your identity. Under the Data Protection (General) Regulations 2021, access requests are handled within 7 days; rectification, erasure, restriction and objections within 14 days; and portability within 30 days, subject to the applicable rules and any lawful exception. Some requests may be limited where we must keep records by law, for example payment records.
+Under the Data Protection Act 2019 you have the right to be told how your data is used; to access your data; to correct inaccurate data; to have false, misleading or unnecessary data deleted; to restrict or object to processing; to withdraw consent; and to receive your data in a portable format. To use any of these rights, email support@myboma.org. We may need to verify your identity. Under the Data Protection (General) Regulations 2021, access requests are handled within 7 days; rectification, erasure, restriction and objections within 14 days; and portability within 30 days, subject to the applicable rules and any lawful exception. Some requests may be limited where we must keep records by law, for example payment records.
 
 ## 9. Children
 
@@ -49,7 +49,7 @@ Service emails, such as invoices, payment receipts, rent reminders and enquiry c
 
 ## 12. Complaints
 
-If you have a concern about how we handle your data, contact support@myboma.com first. You also have the right to lodge a complaint with the Office of the Data Protection Commissioner (ODPC), Kenya, at https://www.odpc.go.ke.
+If you have a concern about how we handle your data, contact support@myboma.org first. You also have the right to lodge a complaint with the Office of the Data Protection Commissioner (ODPC), Kenya, at https://www.odpc.go.ke.
 
 ## 13. Changes to this policy
 
