@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { authClient } from './lib/auth-client';
-import { getSession, completePasswordReset, bffRequest, setImpersonatedUser, activateFreeLandlordPlan } from './lib/api';
+import { getSession, completePasswordReset, bffRequest, setImpersonatedUser } from './lib/api';
 import LandingPage from './components/LandingPage';
 import AccountMenu from './components/AccountMenu';
 import { getPlatformBranding } from './lib/api';
@@ -75,11 +75,7 @@ const shouldShowOnboarding = (role: UserRole): boolean => {
     return false;
   }
 };
-import {
-  isLandlordSubscriptionActive,
-  PENDING_LANDLORD_SUBSCRIPTION_KEY,
-  type PendingLandlordSubscription,
-} from '../../shared/landlordSubscription';
+import { isLandlordSubscriptionActive } from '../../shared/landlordSubscription';
 import { queryClient, clearQueryCache } from './lib/queryClient';
 import { queryKeys, useSessionProfile, useUnreadCount } from './lib/queries';
 export type UserRole = 'landlord' | 'tenant' | 'hunter' | 'admin' | 'caretaker';
@@ -304,7 +300,7 @@ export default function App() {
       initializeOneSignal().then(async () => {
         await syncOneSignalIdentity(user.id);
         await promptForPush();
-      }).catch((error) => console.error('OneSignal setup failed:', error));
+      }).catch(() => undefined);
       loadProfile().finally(() => {
         if (isMounted) {
           setLoading(false);
@@ -317,7 +313,7 @@ export default function App() {
       setError(null);
       // Signed out (by any path): drop every cached query so nothing leaks to the next user.
       clearQueryCache();
-      syncOneSignalIdentity(null).catch((error) => console.error('OneSignal identity sync failed:', error));
+      syncOneSignalIdentity(null).catch(() => undefined);
       setLoading(false);
       clearTimeout(safetyTimeout);
     }
@@ -340,7 +336,16 @@ export default function App() {
 
   // Live push bridge: whenever unread notifications increase while signed in, fire a
   // native browser push notification (when permitted) and an in-app toast alert.
-  const { data: liveUnreadCount } = useUnreadCount(profile?.email);
+  const isPaywallPending = Boolean(
+    user &&
+      profile &&
+      !impersonatedProfile &&
+      !profile.isSuperAdmin &&
+      !profile.isAdmin &&
+      (profile.role === 'landlord' || profile.role === 'admin') &&
+      !isLandlordSubscriptionActive(profile),
+  );
+  const { data: liveUnreadCount } = useUnreadCount(user && profile && !isPaywallPending ? profile.email : undefined);
   const prevUnreadRef = useRef<number | null>(null);
   useEffect(() => {
     prevUnreadRef.current = null;
@@ -362,47 +367,6 @@ export default function App() {
     const { profile: profileData } = await getSession();
     setProfile(normalizeProfile(profileData));
   }, [user?.id]);
-
-  // A landlord who picked the free plan at signup (email or Google) has nothing to pay, so
-  // the plan is activated as soon as their profile exists. Paid choices go through the gate.
-  const freePlanActivationStarted = useRef(false);
-  useEffect(() => {
-    if (!user?.id || !profile || impersonatedProfile || freePlanActivationStarted.current) return;
-    let pending: PendingLandlordSubscription | null = null;
-    try {
-      pending = JSON.parse(localStorage.getItem(PENDING_LANDLORD_SUBSCRIPTION_KEY) || 'null');
-    } catch {
-      pending = null;
-    }
-    if (pending?.tier !== 'free') return;
-    if (profile.role !== 'hunter' && isLandlordSubscriptionActive(profile)) {
-      localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
-      return;
-    }
-
-    freePlanActivationStarted.current = true;
-    const payout = pending;
-    void (async () => {
-      try {
-        const result = await activateFreeLandlordPlan({
-          rentPayoutMethod: payout.rentPayoutMethod,
-          mpesaSettlementPhone: payout.mpesaSettlementPhone,
-          bankName: payout.bankName,
-          bankAccountNumber: payout.bankAccountNumber,
-          bankAccountName: payout.bankAccountName,
-          cashPayoutNotes: payout.cashPayoutNotes,
-        });
-        localStorage.removeItem(PENDING_LANDLORD_SUBSCRIPTION_KEY);
-        await refreshProfile();
-        if (result.activated && !profile.isAdmin) setActiveView('landlord');
-        if (result.activated) toast.success('Your free landlord plan is active. Add your house to get started.');
-      } catch (err: any) {
-        console.error('App: free plan activation failed', err);
-        // Not retried automatically (the profile poll would repeat the toast); the gate offers a button.
-        toast.error(err.message || 'Could not activate your free plan.');
-      }
-    })();
-  }, [user?.id, profile, impersonatedProfile, refreshProfile]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -665,11 +629,60 @@ export default function App() {
       : (activeView || profile?.role || 'hunter')
   );
 
+  // Never flash any part of the workspace shell (sidebar, bottom nav, footer) before the
+  // user's profile and subscription status have been resolved from the server.
+  if (!profile && !error) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-[#F4F3F8] dark:bg-[#0F1016] text-center gap-4">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 rounded-2xl bg-slate-200/60 blur-lg animate-pulse scale-125" />
+          <img
+            src={tenantConfig.logoUrl}
+            alt={tenantConfig.appName}
+            className="relative h-12 w-12 object-contain rounded-xl bg-white p-1 shadow-xs border border-slate-200/80"
+          />
+        </div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Authenticating Session...</p>
+        <Toaster />
+      </div>
+    );
+  }
+
+  const isAgencyManagerProfile = Boolean(
+    activeProfile && activeProfile.role === 'admin' && !activeProfile.isAdmin && !activeProfile.isSuperAdmin,
+  );
   const landlordNeedsSubscription = Boolean(
     activeProfile &&
-      currentRole === 'landlord' &&
+      !impersonatedProfile &&
+      !activeProfile.isSuperAdmin &&
+      !activeProfile.isAdmin &&
+      (currentRole === 'landlord' || isAgencyManagerProfile) &&
       !isLandlordSubscriptionActive(activeProfile),
   );
+
+  // Strict pre-app paywall: self-registered landlords & property managers (both Free and
+  // Paid tiers) must confirm their plan or complete payment BEFORE seeing any part of the
+  // app shell (no sidebar, settings bypass, mobile nav, or dashboard preview).
+  if (landlordNeedsSubscription && activeProfile) {
+    return (
+      <div className="db app-shell min-h-screen w-full bg-[#F4F3F8] dark:bg-[#0F1016]">
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-violet-200 border-t-violet-700" />
+            </div>
+          }
+        >
+          <LandlordSubscriptionGate
+            email={activeProfile.email}
+            phone={activeProfile.phone}
+            onActivated={refreshProfile}
+          />
+        </Suspense>
+        <Toaster />
+      </div>
+    );
+  }
 
   return (
     <div 

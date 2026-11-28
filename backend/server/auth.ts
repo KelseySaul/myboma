@@ -8,7 +8,7 @@ import { rootDb as db } from '../db/client.js';
 import * as schema from '../db/schema/index.js';
 import {sendEmail} from './services/email.ts';
 import {deploymentOrigins} from './http/config.ts';
-import {resolveSignupProfile} from './invitePolicy.ts';
+import {resolveSignupProfile, shouldSkipVerificationEmail} from './invitePolicy.ts';
 
 // Roles a person may pick for themselves at signup. 'admin' is deliberately absent:
 // admin rights are only ever granted by a super admin (provisioning / role endpoint)
@@ -178,6 +178,7 @@ export const auth = betterAuth({
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
+      if (shouldSkipVerificationEmail(user.email, user.emailVerified)) return;
       await sendEmail({
         to: user.email,
         subject: 'Verify your MyBoma email',
@@ -209,6 +210,9 @@ export const auth = betterAuth({
     },
   },
   session: {
+    // Keep remembered sessions signed in for 30 days and refresh daily on active use.
+    expiresIn: 60 * 60 * 24 * 30,
+    updateAge: 60 * 60 * 24,
     // Avoids a session-table round trip on every API request; revocation takes effect
     // within maxAge.
     cookieCache: { enabled: true, maxAge: 5 * 60 },

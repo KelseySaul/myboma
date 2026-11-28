@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import {describe, it} from 'node:test';
 import {
   INVITE_TTL_MS,
+  beginInviteVerifiedSignup,
   buildInviteSignupBody,
+  endInviteVerifiedSignup,
   generateInviteToken,
   hashInviteToken,
   inviteExpiry,
@@ -13,6 +15,7 @@ import {
   parseInvitePayload,
   resolveSignupProfile,
   serializeInvitePayload,
+  shouldSkipVerificationEmail,
   type InvitePayload,
 } from '../server/invitePolicy';
 
@@ -132,5 +135,19 @@ describe('signup and pending invitations', () => {
   it('keeps a self-chosen landlord role when there is no invitation', () => {
     const result = resolveSignupProfile({invitation: null, emailVerified: false, requestedRole: 'landlord'});
     assert.equal(result.role, 'landlord');
+  });
+});
+
+describe('suppressing duplicate verification email on invite signup', () => {
+  it('skips verification email while an invite signup is in flight and cleans up afterwards', () => {
+    assert.equal(shouldSkipVerificationEmail('Invitee@Example.com', false), false);
+    assert.equal(shouldSkipVerificationEmail('invitee@example.com', true), true);
+
+    beginInviteVerifiedSignup('Invitee@Example.com');
+    assert.equal(shouldSkipVerificationEmail('invitee@example.com', false), true);
+    assert.equal(shouldSkipVerificationEmail('other@example.com', false), false);
+
+    endInviteVerifiedSignup('INVITEE@example.com');
+    assert.equal(shouldSkipVerificationEmail('invitee@example.com', false), false);
   });
 });

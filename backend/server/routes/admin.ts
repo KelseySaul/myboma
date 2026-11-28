@@ -42,12 +42,59 @@ const createPlatformSchema = z
   .object({name: z.string().min(1).max(160), slug: z.string().min(1).max(80), ownerEmail: emailSchema})
   .strict();
 
+type AdminScope =
+  | {mode: 'superadmin'}
+  | {mode: 'staff_admin'}
+  | {mode: 'white_label_platform'; platformId: string}
+  | {mode: 'agency_manager'};
+
+/**
+ * Distinguishes the three non-superadmin admin tiers cleanly:
+ * - Super Admin (`isSuperAdmin`): full platform access, optional platformId filter.
+ * - White-label Platform Admin (`isAdmin` attached to a dedicated platform with `ownerEmail`):
+ *   full access to all users and assets in that platform.
+ * - MyBoma Staff Admin (`isAdmin` without a dedicated white-label platform — e.g. created
+ *   by the Super Admin on the root MyBoma deployment): sees all users and operational rows.
+ * - Pro Plus Property Manager / Agency (`role === 'admin'`, `isAdmin === false`):
+ *   strictly scoped to themselves, landlords/caretakers they manage, and people they invited.
+ */
+async function resolveAdminScope(actor: ReturnType<typeof toActor>): Promise<AdminScope> {
+  if (isSuperAdmin(actor)) return {mode: 'superadmin'};
+  if (actor.isAdmin) {
+    if (actor.platformId) {
+      const platform = await withSystemAccess(() =>
+        db.query.platforms.findFirst({
+          where: eq(schema.platforms.id, actor.platformId!),
+          columns: {id: true, ownerEmail: true},
+        }),
+      );
+      if (platform?.ownerEmail) {
+        return {mode: 'white_label_platform', platformId: platform.id};
+      }
+    }
+    return {mode: 'staff_admin'};
+  }
+  return {mode: 'agency_manager'};
+}
+
+/**
+ * Fetches all lowercased emails invited by any of the given landlord/manager owner IDs.
+ * Kept as an explicit `db.select` query (never embedded inside `db.query.*.findMany`)
+ * because Drizzle's relational query builder rewrites column table aliases in `where`.
+ */
+async function getInvitedEmailsForOwners(ownerIds: string[]): Promise<string[]> {
+  if (ownerIds.length === 0) return [];
+  const rows = await db
+    .select({email: schema.invitations.email})
+    .from(schema.invitations)
+    .where(inArray(schema.invitations.landlordId, ownerIds));
+  return [...new Set(rows.map((r) => r.email.trim().toLowerCase()).filter(Boolean))];
+}
+
 export function registerAdminRoutes(bffRouter: Router) {
   /**
-   * Consolidates the admin dashboard's old users + properties + invitations + rentPayments
-   * + buildings (+ platforms, for super admins) fetches and their five-table Realtime
-   * channel into one polled endpoint. Filtering mirrors the old client exactly, including
-   * its narrower-than-RLS choice for plain admins (see comments below).
+   * Consolidates the admin dashboard's users + properties + invitations + rentPayments
+   * + buildings (+ platforms, for super admins) fetches into one polled endpoint.
    */
   bffRouter.get(
     '/admin/dashboard',
@@ -55,89 +102,115 @@ export function registerAdminRoutes(bffRouter: Router) {
     requireAdmin,
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
+      const scope = await resolveAdminScope(actor);
       const listLimit = 200;
       const platformIdParam = typeof req.query.platformId === 'string' ? req.query.platformId : undefined;
 
-      // Super admins may pick any platform (or 'all'); plain admins are always pinned to
-      // their own platform ('none' meaning "no platform assigned").
-      const filterId = isSuperAdmin(actor) ? (platformIdParam && platformIdParam !== 'all' ? platformIdParam : null) : actor.platformId || 'none';
+      const runScopedRead = <T>(fn: () => Promise<T>) =>
+        scope.mode === 'staff_admin' ? withSystemAccess(fn) : fn();
 
-      // Loosely typed on purpose: this closes over columns from five different tables
-      // (users/properties/invitations/rentPayments/buildings) that all happen to share
-      // the same platformId/landlordId column shape.
-      const managedLandlordRows = isSuperAdmin(actor)
-        ? []
-        : await db
+      const data = await runScopedRead(async () => {
+        const filterId =
+          scope.mode === 'superadmin'
+            ? platformIdParam && platformIdParam !== 'all'
+              ? platformIdParam
+              : null
+            : scope.mode === 'white_label_platform'
+              ? scope.platformId
+              : scope.mode === 'staff_admin'
+                ? null
+                : actor.platformId || 'none';
+
+        const platformWhere = (col: any) =>
+          filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId);
+
+        let managedOwnerIds: string[] = [];
+        let agencyInvitedEmails: string[] = [];
+        if (scope.mode === 'agency_manager') {
+          const managedLandlordRows = await db
             .select({uid: schema.users.uid})
             .from(schema.users)
             .where(eq(schema.users.managedByAdminId, actor.id));
-      const managedOwnerIds = [actor.id, ...managedLandlordRows.map((row) => row.uid)];
+          managedOwnerIds = [actor.id, ...managedLandlordRows.map((row) => row.uid)];
+          agencyInvitedEmails = await getInvitedEmailsForOwners(managedOwnerIds);
+        }
 
-      const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
-      const withLandlordScope = (col: any, base: any) =>
-        isSuperAdmin(actor) ? base : and(base, inArray(col, managedOwnerIds));
+        const withLandlordScope = (col: any, base: any) =>
+          scope.mode === 'agency_manager' ? and(base, inArray(col, managedOwnerIds)) : base;
 
-      // Plain/agency admins see themselves, landlords/caretakers they manage, and users
-      // they've invited (as "landlordId" on the invitation).
-      const invitedByMe = isSuperAdmin(actor)
-        ? undefined
-        : or(
-            eq(schema.users.uid, actor.id),
-            eq(schema.users.managedByAdminId, actor.id),
-            sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${inArray(schema.invitations.landlordId, managedOwnerIds)})`,
-          );
-      const users = await db.query.users.findMany({
-        where: invitedByMe ? and(platformWhere(schema.users.platformId), invitedByMe) : platformWhere(schema.users.platformId),
-        orderBy: desc(schema.users.createdAt),
-        limit: isSuperAdmin(actor) ? listLimit : 2000,
+        const agencyUsersFilter =
+          scope.mode === 'agency_manager'
+            ? or(
+                eq(schema.users.uid, actor.id),
+                eq(schema.users.managedByAdminId, actor.id),
+                ...(agencyInvitedEmails.length > 0
+                  ? [inArray(sql`lower(${schema.users.email})`, agencyInvitedEmails)]
+                  : []),
+              )
+            : undefined;
+
+        const usersWhere = agencyUsersFilter
+          ? and(platformWhere(schema.users.platformId), agencyUsersFilter)
+          : platformWhere(schema.users.platformId);
+
+        const [users, properties, invitationRows, paymentRows, buildings, platforms] = await Promise.all([
+          db
+            .select()
+            .from(schema.users)
+            .where(usersWhere)
+            .orderBy(desc(schema.users.createdAt))
+            .limit(scope.mode === 'superadmin' || scope.mode === 'staff_admin' ? 1000 : 2000),
+          db
+            .select()
+            .from(schema.properties)
+            .where(withLandlordScope(schema.properties.landlordId, platformWhere(schema.properties.platformId)))
+            .orderBy(desc(schema.properties.createdAt))
+            .limit(listLimit),
+          db
+            .select()
+            .from(schema.invitations)
+            .where(withLandlordScope(schema.invitations.landlordId, platformWhere(schema.invitations.platformId)))
+            .orderBy(desc(schema.invitations.createdAt))
+            .limit(listLimit),
+          db
+            .select()
+            .from(schema.rentPayments)
+            .where(withLandlordScope(schema.rentPayments.landlordId, platformWhere(schema.rentPayments.platformId)))
+            .orderBy(desc(schema.rentPayments.dueDate))
+            .limit(listLimit),
+          db
+            .select()
+            .from(schema.buildings)
+            .where(withLandlordScope(schema.buildings.landlordId, platformWhere(schema.buildings.platformId)))
+            .orderBy(desc(schema.buildings.createdAt))
+            .limit(listLimit),
+          scope.mode === 'superadmin' ? db.select().from(schema.platforms) : Promise.resolve([]),
+        ]);
+
+        const registeredEmails = new Set(users.map((u) => u.email.toLowerCase()));
+        const invitations = invitationRows.filter((inv) => !registeredEmails.has(inv.email.toLowerCase()));
+        const payments = paymentRows.map((p) => ({...p, amount: Number(p.amount)}));
+
+        return {users, properties, invitations, payments, buildings, platforms};
       });
-
-      const properties = await db.query.properties.findMany({
-        where: withLandlordScope(schema.properties.landlordId, platformWhere(schema.properties.platformId)),
-        orderBy: desc(schema.properties.createdAt),
-        limit: listLimit,
-      });
-
-      const invitationRows = await db.query.invitations.findMany({
-        where: withLandlordScope(schema.invitations.landlordId, platformWhere(schema.invitations.platformId)),
-        orderBy: desc(schema.invitations.createdAt),
-        limit: listLimit,
-      });
-      const registeredEmails = new Set(users.map((u) => u.email.toLowerCase()));
-      const invitations = invitationRows.filter((inv) => !registeredEmails.has(inv.email.toLowerCase()));
-
-      const paymentRows = await db.query.rentPayments.findMany({
-        where: withLandlordScope(schema.rentPayments.landlordId, platformWhere(schema.rentPayments.platformId)),
-        orderBy: desc(schema.rentPayments.dueDate),
-        limit: listLimit,
-      });
-      const payments = paymentRows.map((p) => ({...p, amount: Number(p.amount)}));
-
-      const buildings = await db.query.buildings.findMany({
-        where: withLandlordScope(schema.buildings.landlordId, platformWhere(schema.buildings.platformId)),
-        orderBy: desc(schema.buildings.createdAt),
-        limit: listLimit,
-      });
-
-      const platforms = isSuperAdmin(actor) ? await db.query.platforms.findMany() : [];
 
       res.json({
-        users: users.map((u) => ({
+        users: data.users.map((u) => ({
           ...u,
           avatarUrl: u.avatarUrl ? normalizeStoredFileUrl(req, u.avatarUrl) : u.avatarUrl,
         })),
-        properties: properties.map((p) => ({
+        properties: data.properties.map((p) => ({
           ...p,
           price: Number(p.price),
           images: normalizeMediaArray(req, p.images),
         })),
-        invitations,
-        payments: payments.map((p) => ({
+        invitations: data.invitations,
+        payments: data.payments.map((p) => ({
           ...p,
           receiptUrl: p.receiptUrl ? normalizeStoredFileUrl(req, p.receiptUrl) : p.receiptUrl,
         })),
-        buildings,
-        platforms: platforms.map((pl) => ({
+        buildings: data.buildings,
+        platforms: data.platforms.map((pl) => ({
           ...pl,
           brandLogoUrl:
             typeof pl.brandLogoUrl === 'string' && pl.brandLogoUrl
@@ -161,14 +234,21 @@ export function registerAdminRoutes(bffRouter: Router) {
     validateBody(resendInviteSchema),
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
+      const scope = await resolveAdminScope(actor);
       const {email} = getValidatedBody<z.infer<typeof resendInviteSchema>>(req);
       const target = email.trim().toLowerCase();
-      const invitation = await db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`});
+      const invitation = await (scope.mode === 'staff_admin'
+        ? withSystemAccess(() => db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`}))
+        : db.query.invitations.findFirst({where: sql`lower(${schema.invitations.email}) = ${target}`}));
       if (!invitation) {
         res.status(404).json({error: 'No pending invitation for that email.'});
         return;
       }
-      const allowed = isSuperAdmin(actor) || invitation.landlordId === actor.id || (actor.platformId && invitation.platformId === actor.platformId);
+      const allowed =
+        scope.mode === 'superadmin' ||
+        scope.mode === 'staff_admin' ||
+        invitation.landlordId === actor.id ||
+        (scope.mode === 'white_label_platform' && invitation.platformId === scope.platformId);
       if (!allowed) {
         res.status(403).json({error: 'You can only resend invitations you manage.'});
         return;
@@ -251,36 +331,50 @@ export function registerAdminRoutes(bffRouter: Router) {
     requireAdmin,
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
-      const superAdmin = isSuperAdmin(actor);
+      const scope = await resolveAdminScope(actor);
+      const superAdmin = scope.mode === 'superadmin';
       const platformIdParam = typeof req.query.platformId === 'string' ? req.query.platformId : undefined;
-      const filterId = superAdmin ? (platformIdParam && platformIdParam !== 'all' ? platformIdParam : null) : actor.platformId || 'none';
+      const filterId = superAdmin
+        ? platformIdParam && platformIdParam !== 'all'
+          ? platformIdParam
+          : null
+        : scope.mode === 'white_label_platform'
+          ? scope.platformId
+          : scope.mode === 'staff_admin'
+            ? null
+            : actor.platformId || 'none';
       const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
 
-      let ownerFilter;
-      if (superAdmin) {
-        const accountIds = parseAccountIdsParam(req.query.accountIds);
-        if (accountIds.length === 0) {
-          res.json([]);
-          return;
-        }
-        ownerFilter = inArray(schema.invitations.landlordId, accountIds);
-      } else {
-        const managedRows = await db
-          .select({uid: schema.users.uid})
-          .from(schema.users)
-          .where(eq(schema.users.managedByAdminId, actor.id));
-        const ownerIds = [actor.id, ...managedRows.map((r) => r.uid)];
-        ownerFilter = inArray(schema.invitations.landlordId, ownerIds);
-      }
+      const runScopedRead = <T>(fn: () => Promise<T>) =>
+        scope.mode === 'staff_admin' ? withSystemAccess(fn) : fn();
 
-      const rows = await db.query.invitations.findMany({
-        where: and(
-          ownerFilter,
-          platformWhere(schema.invitations.platformId),
-          sql`lower(${schema.invitations.email}) NOT IN (SELECT lower(${schema.users.email}) FROM ${schema.users})`,
-        ),
-        orderBy: desc(schema.invitations.createdAt),
-        limit: 500,
+      const rows = await runScopedRead(async () => {
+        let ownerFilter;
+        if (superAdmin) {
+          const accountIds = parseAccountIdsParam(req.query.accountIds);
+          if (accountIds.length === 0) return [];
+          ownerFilter = inArray(schema.invitations.landlordId, accountIds);
+        } else if (scope.mode === 'agency_manager') {
+          const managedRows = await db
+            .select({uid: schema.users.uid})
+            .from(schema.users)
+            .where(eq(schema.users.managedByAdminId, actor.id));
+          const ownerIds = [actor.id, ...managedRows.map((r) => r.uid)];
+          ownerFilter = inArray(schema.invitations.landlordId, ownerIds);
+        }
+
+        return db
+          .select()
+          .from(schema.invitations)
+          .where(
+            and(
+              ownerFilter,
+              platformWhere(schema.invitations.platformId),
+              sql`lower(${schema.invitations.email}) NOT IN (SELECT lower(u.email) FROM users u)`,
+            ),
+          )
+          .orderBy(desc(schema.invitations.createdAt))
+          .limit(500);
       });
 
       res.json(rows);
@@ -290,7 +384,8 @@ export function registerAdminRoutes(bffRouter: Router) {
   /**
    * Real numbers for the admin overview: counts, money this month vs last month, 6-month
    * trends and recent activity. For super admins, strictly requires selecting one or more
-   * accounts (`?accountIds=...`) before returning data; plain admins stay scoped to themselves.
+   * accounts (`?accountIds=...`) before returning data; staff admins see platform-wide stats;
+   * Pro Plus agency managers stay scoped to their managed landlords and invitees.
    */
   bffRouter.get(
     '/admin/overview',
@@ -298,9 +393,18 @@ export function registerAdminRoutes(bffRouter: Router) {
     requireAdmin,
     asyncHandler(async (req, res) => {
       const actor = toActor(req.profile!);
-      const superAdmin = isSuperAdmin(actor);
+      const scope = await resolveAdminScope(actor);
+      const superAdmin = scope.mode === 'superadmin';
       const platformIdParam = typeof req.query.platformId === 'string' ? req.query.platformId : undefined;
-      const filterId = superAdmin ? (platformIdParam && platformIdParam !== 'all' ? platformIdParam : null) : actor.platformId || 'none';
+      const filterId = superAdmin
+        ? platformIdParam && platformIdParam !== 'all'
+          ? platformIdParam
+          : null
+        : scope.mode === 'white_label_platform'
+          ? scope.platformId
+          : scope.mode === 'staff_admin'
+            ? null
+            : actor.platformId || 'none';
       const platformWhere = (col: any) => (filterId === null ? undefined : filterId === 'none' ? isNull(col) : eq(col, filterId));
 
       // Last 6 calendar months, oldest first, with zero-filled gaps.
@@ -311,172 +415,185 @@ export function registerAdminRoutes(bffRouter: Router) {
         months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
       }
 
-      let selectedAccountIds: string[] = [];
-      let selectedAccountEmails: string[] = [];
-      let managedPropertyIds: string[] = [];
+      const emptyOverview = () => ({
+        users: {},
+        pendingInvites: 0,
+        properties: [],
+        rent: {collectedThisMonth: 0, collectedLastMonth: 0, overdueCount: 0, overdueAmount: 0, dueSoonAmount: 0},
+        maintenance: {},
+        trend: months.map((month) => ({month, collected: 0, signups: 0})),
+        activity: [],
+      });
 
-      if (superAdmin) {
-        selectedAccountIds = parseAccountIdsParam(req.query.accountIds);
-        if (selectedAccountIds.length === 0) {
-          res.json({
-            users: {},
-            pendingInvites: 0,
-            properties: [],
-            rent: {collectedThisMonth: 0, collectedLastMonth: 0, overdueCount: 0, overdueAmount: 0, dueSoonAmount: 0},
-            maintenance: {},
-            trend: months.map((month) => ({month, collected: 0, signups: 0})),
-            activity: [],
-          });
-          return;
+      const runScopedRead = <T>(fn: () => Promise<T>) =>
+        scope.mode === 'staff_admin' ? withSystemAccess(fn) : fn();
+
+      const payload = await runScopedRead(async () => {
+        let selectedAccountIds: string[] = [];
+        let selectedAccountEmails: string[] = [];
+        let managedPropertyIds: string[] = [];
+
+        if (superAdmin) {
+          selectedAccountIds = parseAccountIdsParam(req.query.accountIds);
+          if (selectedAccountIds.length === 0) return emptyOverview();
+
+          const [selectedUsers, managedRows] = await Promise.all([
+            db
+              .select({uid: schema.users.uid, email: schema.users.email})
+              .from(schema.users)
+              .where(inArray(schema.users.uid, selectedAccountIds)),
+            db
+              .select({propertyId: schema.propertyManagers.propertyId})
+              .from(schema.propertyManagers)
+              .where(inArray(schema.propertyManagers.userId, selectedAccountIds)),
+          ]);
+          selectedAccountIds = selectedUsers.map((u) => u.uid);
+          selectedAccountEmails = selectedUsers.map((u) => u.email.toLowerCase());
+          managedPropertyIds = [...new Set(managedRows.map((m) => m.propertyId))];
+
+          if (selectedAccountIds.length === 0) return emptyOverview();
         }
-        const [selectedUsers, managedRows] = await Promise.all([
-          db.query.users.findMany({
-            where: inArray(schema.users.uid, selectedAccountIds),
-            columns: {uid: true, email: true},
-          }),
-          db
-            .select({propertyId: schema.propertyManagers.propertyId})
-            .from(schema.propertyManagers)
-            .where(inArray(schema.propertyManagers.userId, selectedAccountIds)),
-        ]);
-        selectedAccountIds = selectedUsers.map((u) => u.uid);
-        selectedAccountEmails = selectedUsers.map((u) => u.email.toLowerCase());
-        managedPropertyIds = [...new Set(managedRows.map((m) => m.propertyId))];
 
-        if (selectedAccountIds.length === 0) {
-          res.json({
-            users: {},
-            pendingInvites: 0,
-            properties: [],
-            rent: {collectedThisMonth: 0, collectedLastMonth: 0, overdueCount: 0, overdueAmount: 0, dueSoonAmount: 0},
-            maintenance: {},
-            trend: months.map((month) => ({month, collected: 0, signups: 0})),
-            activity: [],
-          });
-          return;
+        const isOwnerScoped = scope.mode === 'superadmin' || scope.mode === 'agency_manager';
+        let targetIds: string[] = [];
+        let invitedEmails: string[] = [];
+
+        if (scope.mode === 'superadmin') {
+          targetIds = selectedAccountIds;
+          invitedEmails = await getInvitedEmailsForOwners(targetIds);
+        } else if (scope.mode === 'agency_manager') {
+          const managedRows = await db
+            .select({uid: schema.users.uid})
+            .from(schema.users)
+            .where(eq(schema.users.managedByAdminId, actor.id));
+          targetIds = [actor.id, ...managedRows.map((r) => r.uid)];
+          invitedEmails = await getInvitedEmailsForOwners(targetIds);
         }
-      }
 
-      let targetIds: string[];
-      if (superAdmin) {
-        targetIds = selectedAccountIds;
-      } else {
-        const managedRows = await db
-          .select({uid: schema.users.uid})
-          .from(schema.users)
-          .where(eq(schema.users.managedByAdminId, actor.id));
-        targetIds = [actor.id, ...managedRows.map((r) => r.uid)];
-      }
-      const scoped = (landlordCol: any, platformCol: any, propertyIdCol?: any) => {
-        const ownerCond =
-          propertyIdCol && managedPropertyIds.length > 0
-            ? or(inArray(landlordCol, targetIds), inArray(propertyIdCol, managedPropertyIds))
-            : inArray(landlordCol, targetIds);
-        return and(platformWhere(platformCol), ownerCond);
-      };
+        const scoped = (landlordCol: any, platformCol: any, propertyIdCol?: any) => {
+          if (!isOwnerScoped) return platformWhere(platformCol);
+          const ownerCond =
+            propertyIdCol && managedPropertyIds.length > 0
+              ? or(inArray(landlordCol, targetIds), inArray(propertyIdCol, managedPropertyIds))
+              : inArray(landlordCol, targetIds);
+          return and(platformWhere(platformCol), ownerCond);
+        };
 
-      const invitedBySelected = or(
-        inArray(schema.users.uid, targetIds),
-        inArray(schema.users.managedByAdminId, targetIds),
-        sql`lower(${schema.users.email}) IN (SELECT lower(${schema.invitations.email}) FROM ${schema.invitations} WHERE ${inArray(schema.invitations.landlordId, targetIds)})`,
-      );
-      const userWhere = and(platformWhere(schema.users.platformId), invitedBySelected);
-      const count = sql<number>`count(*)::int`;
-
-      const activityWhere = superAdmin
-        ? and(
-            platformWhere(schema.auditLogs.platformId),
-            selectedAccountEmails.length > 0
-              ? or(
-                  inArray(schema.auditLogs.userId, targetIds),
-                  inArray(sql`lower(${schema.auditLogs.userEmail})`, selectedAccountEmails),
-                )
-              : inArray(schema.auditLogs.userId, targetIds),
-          )
-        : actor.platformId
-          ? eq(schema.auditLogs.platformId, actor.platformId)
-          : undefined;
-
-      const [usersByRole, invitesPending, propertyRows, moneyRows, collectionsByMonth, signupsByMonth, maintenanceRows, activity] =
-        await Promise.all([
-          db.select({role: schema.users.role, n: count}).from(schema.users).where(userWhere).groupBy(schema.users.role),
-          db
-            .select({n: count})
-            .from(schema.invitations)
-            .where(
-              and(
-                scoped(schema.invitations.landlordId, schema.invitations.platformId),
-                sql`lower(${schema.invitations.email}) NOT IN (SELECT lower(${schema.users.email}) FROM ${schema.users})`,
-              ),
-            ),
-          db
-            .select({type: schema.properties.type, status: schema.properties.status, n: count})
-            .from(schema.properties)
-            .where(scoped(schema.properties.landlordId, schema.properties.platformId, schema.properties.id))
-            .groupBy(schema.properties.type, schema.properties.status),
-          db
-            .select({
-              collectedThisMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now())), 0)`,
-              collectedLastMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '1 month' and ${schema.rentPayments.paidAt} < date_trunc('month', now())), 0)`,
-              overdueCount: sql<number>`(count(*) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)))::int`,
-              overdueAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)), 0)`,
-              dueSoonAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} >= current_date), 0)`,
-            })
-            .from(schema.rentPayments)
-            .where(scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId, schema.rentPayments.propertyId)),
-          db
-            .select({
-              month: sql<string>`to_char(date_trunc('month', ${schema.rentPayments.paidAt}), 'YYYY-MM')`,
-              amount: sql<string>`sum(${schema.rentPayments.amount})`,
-            })
-            .from(schema.rentPayments)
-            .where(
-              and(
-                scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId, schema.rentPayments.propertyId),
-                eq(schema.rentPayments.status, 'paid'),
-                sql`${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '5 months'`,
+        const userWhere = isOwnerScoped
+          ? and(
+              platformWhere(schema.users.platformId),
+              or(
+                inArray(schema.users.uid, targetIds),
+                inArray(schema.users.managedByAdminId, targetIds),
+                ...(invitedEmails.length > 0 ? [inArray(sql`lower(${schema.users.email})`, invitedEmails)] : []),
               ),
             )
-            .groupBy(sql`1`),
-          db
-            .select({month: sql<string>`to_char(date_trunc('month', ${schema.users.createdAt}), 'YYYY-MM')`, n: count})
-            .from(schema.users)
-            .where(and(userWhere, sql`${schema.users.createdAt} >= date_trunc('month', now()) - interval '5 months'`))
-            .groupBy(sql`1`),
-          db
-            .select({status: schema.maintenanceRequests.status, n: count})
-            .from(schema.maintenanceRequests)
-            .where(scoped(schema.maintenanceRequests.landlordId, schema.maintenanceRequests.platformId, schema.maintenanceRequests.propertyId))
-            .groupBy(schema.maintenanceRequests.status),
-          superAdmin || actor.platformId
-            ? db.query.auditLogs.findMany({
-                where: activityWhere,
-                orderBy: desc(schema.auditLogs.createdAt),
-                limit: 8,
-                columns: {id: true, action: true, userEmail: true, resource: true, createdAt: true},
+          : platformWhere(schema.users.platformId);
+        const count = sql<number>`count(*)::int`;
+
+        const activityWhere = superAdmin
+          ? and(
+              platformWhere(schema.auditLogs.platformId),
+              selectedAccountEmails.length > 0
+                ? or(
+                    inArray(schema.auditLogs.userId, targetIds),
+                    inArray(sql`lower(${schema.auditLogs.userEmail})`, selectedAccountEmails),
+                  )
+                : inArray(schema.auditLogs.userId, targetIds),
+            )
+          : scope.mode === 'white_label_platform'
+            ? eq(schema.auditLogs.platformId, scope.platformId)
+            : undefined;
+
+        const [usersByRole, invitesPending, propertyRows, moneyRows, collectionsByMonth, signupsByMonth, maintenanceRows, activity] =
+          await Promise.all([
+            db.select({role: schema.users.role, n: count}).from(schema.users).where(userWhere).groupBy(schema.users.role),
+            db
+              .select({n: count})
+              .from(schema.invitations)
+              .where(
+                and(
+                  scoped(schema.invitations.landlordId, schema.invitations.platformId),
+                  sql`lower(${schema.invitations.email}) NOT IN (SELECT lower(u.email) FROM users u)`,
+                ),
+              ),
+            db
+              .select({type: schema.properties.type, status: schema.properties.status, n: count})
+              .from(schema.properties)
+              .where(scoped(schema.properties.landlordId, schema.properties.platformId, schema.properties.id))
+              .groupBy(schema.properties.type, schema.properties.status),
+            db
+              .select({
+                collectedThisMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now())), 0)`,
+                collectedLastMonth: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'paid' and ${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '1 month' and ${schema.rentPayments.paidAt} < date_trunc('month', now())), 0)`,
+                overdueCount: sql<number>`(count(*) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)))::int`,
+                overdueAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'overdue' or (${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} < current_date)), 0)`,
+                dueSoonAmount: sql<string>`coalesce(sum(${schema.rentPayments.amount}) filter (where ${schema.rentPayments.status} = 'pending' and ${schema.rentPayments.dueDate} >= current_date), 0)`,
               })
-            : Promise.resolve([]),
-        ]);
+              .from(schema.rentPayments)
+              .where(scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId, schema.rentPayments.propertyId)),
+            db
+              .select({
+                month: sql<string>`to_char(date_trunc('month', ${schema.rentPayments.paidAt}), 'YYYY-MM')`,
+                amount: sql<string>`sum(${schema.rentPayments.amount})`,
+              })
+              .from(schema.rentPayments)
+              .where(
+                and(
+                  scoped(schema.rentPayments.landlordId, schema.rentPayments.platformId, schema.rentPayments.propertyId),
+                  eq(schema.rentPayments.status, 'paid'),
+                  sql`${schema.rentPayments.paidAt} >= date_trunc('month', now()) - interval '5 months'`,
+                ),
+              )
+              .groupBy(sql`1`),
+            db
+              .select({month: sql<string>`to_char(date_trunc('month', ${schema.users.createdAt}), 'YYYY-MM')`, n: count})
+              .from(schema.users)
+              .where(and(userWhere, sql`${schema.users.createdAt} >= date_trunc('month', now()) - interval '5 months'`))
+              .groupBy(sql`1`),
+            db
+              .select({status: schema.maintenanceRequests.status, n: count})
+              .from(schema.maintenanceRequests)
+              .where(scoped(schema.maintenanceRequests.landlordId, schema.maintenanceRequests.platformId, schema.maintenanceRequests.propertyId))
+              .groupBy(schema.maintenanceRequests.status),
+            scope.mode === 'superadmin' || scope.mode === 'white_label_platform' || scope.mode === 'staff_admin'
+              ? db
+                  .select({
+                    id: schema.auditLogs.id,
+                    action: schema.auditLogs.action,
+                    userEmail: schema.auditLogs.userEmail,
+                    resource: schema.auditLogs.resource,
+                    createdAt: schema.auditLogs.createdAt,
+                  })
+                  .from(schema.auditLogs)
+                  .where(activityWhere)
+                  .orderBy(desc(schema.auditLogs.createdAt))
+                  .limit(8)
+              : Promise.resolve([]),
+          ]);
 
-      const collected = new Map(collectionsByMonth.map((r) => [r.month, Number(r.amount)]));
-      const signups = new Map(signupsByMonth.map((r) => [r.month, r.n]));
-      const money = moneyRows[0];
+        const collected = new Map(collectionsByMonth.map((r) => [r.month, Number(r.amount)]));
+        const signups = new Map(signupsByMonth.map((r) => [r.month, r.n]));
+        const money = moneyRows[0];
 
-      res.json({
-        users: Object.fromEntries(usersByRole.map((r) => [r.role, r.n])),
-        pendingInvites: invitesPending[0]?.n ?? 0,
-        properties: propertyRows.map((r) => ({type: r.type, status: r.status, count: r.n})),
-        rent: {
-          collectedThisMonth: Number(money?.collectedThisMonth ?? 0),
-          collectedLastMonth: Number(money?.collectedLastMonth ?? 0),
-          overdueCount: money?.overdueCount ?? 0,
-          overdueAmount: Number(money?.overdueAmount ?? 0),
-          dueSoonAmount: Number(money?.dueSoonAmount ?? 0),
-        },
-        maintenance: Object.fromEntries(maintenanceRows.map((r) => [r.status, r.n])),
-        trend: months.map((month) => ({month, collected: collected.get(month) ?? 0, signups: signups.get(month) ?? 0})),
-        activity,
+        return {
+          users: Object.fromEntries(usersByRole.map((r) => [r.role, r.n])),
+          pendingInvites: invitesPending[0]?.n ?? 0,
+          properties: propertyRows.map((r) => ({type: r.type, status: r.status, count: r.n})),
+          rent: {
+            collectedThisMonth: Number(money?.collectedThisMonth ?? 0),
+            collectedLastMonth: Number(money?.collectedLastMonth ?? 0),
+            overdueCount: money?.overdueCount ?? 0,
+            overdueAmount: Number(money?.overdueAmount ?? 0),
+            dueSoonAmount: Number(money?.dueSoonAmount ?? 0),
+          },
+          maintenance: Object.fromEntries(maintenanceRows.map((r) => [r.status, r.n])),
+          trend: months.map((month) => ({month, collected: collected.get(month) ?? 0, signups: signups.get(month) ?? 0})),
+          activity,
+        };
       });
+
+      res.json(payload);
     }),
   );
 

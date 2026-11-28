@@ -6,6 +6,8 @@ const APP_ID = '16fe44a9-e285-4d7d-85f0-8b82014b9a71';
 
 let nativeInitialized = false;
 let webInitialized = false;
+let webInitFailed = false;
+let webInitPromise: Promise<void> | null = null;
 let readySubscriptionId: string | null = null;
 let hasIdentityToSync = false;
 let desiredExternalId: string | null = null;
@@ -23,19 +25,28 @@ const setInAppMessageTrigger = () => {
   if (Capacitor.isNativePlatform()) {
     return OneSignalNative.InAppMessages.addTrigger('ai_implementation_campaign_email_journey', 'true');
   }
+  if (!webInitialized || webInitFailed) return Promise.resolve();
   return Promise.resolve((OneSignalWeb as any).InAppMessages?.addTrigger('ai_implementation_campaign_email_journey', 'true'));
 };
 
 const applyIdentity = async () => {
   if (Capacitor.isNativePlatform()) {
     if (!nativeInitialized) return;
-    if (desiredExternalId) await OneSignalNative.login(desiredExternalId);
-    else await OneSignalNative.logout();
+    try {
+      if (desiredExternalId) await OneSignalNative.login(desiredExternalId);
+      else await OneSignalNative.logout();
+    } catch {
+      /* never block auth flows on push SDK sync */
+    }
     return;
   }
-  if (!webInitialized) return;
-  if (desiredExternalId) await OneSignalWeb.login(desiredExternalId);
-  else await OneSignalWeb.logout();
+  if (!webInitialized || webInitFailed) return;
+  try {
+    if (desiredExternalId) await OneSignalWeb.login(desiredExternalId);
+    else await OneSignalWeb.logout();
+  } catch {
+    /* OneSignal Web SDK can throw if origin is not yet configured; fail silently */
+  }
 };
 
 /** Initialise exactly once and retain a push-subscription observer for the app lifetime. */
@@ -54,22 +65,46 @@ export async function initializeOneSignal() {
     return;
   }
 
-  if (webInitialized) return;
-  try {
-    await OneSignalWeb.init({appId: APP_ID, allowLocalhostAsSecureOrigin: true});
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes('already initialized')) throw error;
-  }
-  webInitialized = true;
-  if (hasIdentityToSync) await applyIdentity();
+  if (webInitialized || webInitFailed) return;
+  if (webInitPromise) return webInitPromise;
 
-  const subscription = OneSignalWeb.User.PushSubscription;
-  subscription.addEventListener('change', (event) => {
-    if (event.current.optedIn) void setInAppMessageTrigger();
-    notifySubscriptionReady(event.current.id);
+  webInitPromise = (async () => {
+    try {
+      await OneSignalWeb.init({appId: APP_ID, allowLocalhostAsSecureOrigin: true});
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error ?? '');
+      // Domain mismatch (e.g. OneSignal dashboard still configured for an older URL) or
+      // blocked service worker: disable OneSignal Web cleanly for this session so login/logout
+      // never cascade into SDK TypeErrors.
+      webInitFailed = true;
+      webInitialized = false;
+      if (msg.includes('Can only be used on:')) {
+        console.info(`[OneSignal] Web push inactive on ${window.location.origin} (${msg}). Using browser notifications instead.`);
+      }
+      return;
+    }
+
+    webInitialized = true;
+    if (hasIdentityToSync) await applyIdentity();
+
+    try {
+      const subscription = OneSignalWeb.User?.PushSubscription;
+      if (subscription) {
+        subscription.addEventListener('change', (event) => {
+          if (event.current.optedIn) void setInAppMessageTrigger();
+          notifySubscriptionReady(event.current.id);
+        });
+        if (subscription.optedIn) void setInAppMessageTrigger();
+        notifySubscriptionReady(subscription.id);
+      }
+    } catch {
+      /* ignore push subscription observer errors */
+    }
+  })().finally(() => {
+    webInitPromise = null;
   });
-  if (subscription.optedIn) void setInAppMessageTrigger();
-  notifySubscriptionReady(subscription.id);
+
+  return webInitPromise;
 }
 
 /** Subscribe to a real OneSignal device ID. A local placeholder is deliberately ignored. */
@@ -87,8 +122,8 @@ export async function promptForPush() {
   if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
     await Notification.requestPermission().catch(() => undefined);
   }
-  if (!webInitialized) return false;
-  await OneSignalWeb.Slidedown.promptPush().catch(() => undefined);
+  if (!webInitialized || webInitFailed) return false;
+  await OneSignalWeb.Slidedown?.promptPush().catch(() => undefined);
   return true;
 }
 

@@ -3,7 +3,15 @@ import type { ConfirmationResult } from 'firebase/auth';
 import { ArrowLeft, Building2, Home, KeyRound, Mail, MailCheck, Phone, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { authClient, getAuthPersistence, setAuthPersistence } from '../../lib/auth-client';
+import {
+  authClient,
+  getAuthPersistence,
+  getLastAuthHints,
+  getLastAuthMethod,
+  setAuthPersistence,
+  setLastAuthMethod,
+  type LastAuthMethod,
+} from '../../lib/auth-client';
 import { exchangeFirebaseGoogleToken, exchangeFirebasePhoneToken } from '../../lib/api';
 import {
   clearPhoneRecaptcha,
@@ -74,7 +82,8 @@ const recordTermsAcceptance = () => {
 
 export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogProps) {
   const [view, setView] = useState<View>(intent.mode);
-  const [method, setMethod] = useState<AuthMethod>('email');
+  const [lastAuthMethod, setLastAuthMethodState] = useState<LastAuthMethod | null>(() => getLastAuthMethod());
+  const [method, setMethod] = useState<AuthMethod>(() => (getLastAuthMethod() === 'phone' ? 'phone' : 'email'));
   const [role, setRole] = useState<SignupRole>(intent.role ?? 'hunter');
   const [accountTrack, setAccountTrack] = useState<'landlord' | 'agency' | 'hunter'>(intent.role === 'landlord' ? 'landlord' : 'hunter');
   const [landlord, setLandlord] = useState<PendingLandlordSubscription>(defaultLandlordSignupState);
@@ -113,6 +122,14 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
       return;
     }
     setView(intent.mode);
+    const savedMethod = getLastAuthMethod();
+    const hints = getLastAuthHints();
+    setLastAuthMethodState(savedMethod);
+    if (intent.mode === 'signin') {
+      setMethod(savedMethod === 'phone' ? 'phone' : 'email');
+      if (savedMethod === 'email' && hints.email && !email) setEmail(hints.email);
+      if (savedMethod === 'phone' && hints.phone && !phone) setPhone(hints.phone);
+    }
     if (intent.role) {
       setRole(intent.role);
       setAccountTrack(intent.role === 'landlord' ? 'landlord' : 'hunter');
@@ -173,19 +190,23 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     setAuthPersistence(isSignup ? true : rememberMe);
     try {
       if (!isSignup) {
-        const { error } = await authClient.signIn.email({ email: clean(email).toLowerCase(), password, rememberMe });
+        const normalizedEmail = clean(email).toLowerCase();
+        const { error } = await authClient.signIn.email({ email: normalizedEmail, password, rememberMe });
         if (error) {
           setErrors({ form: friendlyAuthError(error, 'Could not sign you in. Try again.') });
           return;
         }
+        setLastAuthMethod('email', { email: normalizedEmail });
+        setLastAuthMethodState('email');
         onOpenChange(false);
         return;
       }
 
       if (role === 'landlord') localStorage.setItem(PENDING_LANDLORD_SUBSCRIPTION_KEY, JSON.stringify(landlord));
       const terms = recordTermsAcceptance();
+      const normalizedEmail = clean(email).toLowerCase();
       const { error } = await authClient.signUp.email({
-        email: clean(email).toLowerCase(),
+        email: normalizedEmail,
         password,
         name: clean(name),
         rememberMe: true,
@@ -199,11 +220,13 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
         setErrors({ form: friendlyAuthError(error, 'Could not create your account. Try again.') });
         return;
       }
+      setLastAuthMethod('email', { email: normalizedEmail });
+      setLastAuthMethodState('email');
       toast.success(
         role === 'landlord'
           ? landlord.tier === 'free'
-            ? 'Account created. Setting up your free plan.'
-            : 'Account created. Next, pay for your plan by card or M-Pesa.'
+            ? 'Account created. Confirm your free plan on the next screen to enter your workspace.'
+            : 'Account created. Complete payment on the next screen to unlock your workspace.'
           : 'Account created.',
       );
       onOpenChange(false);
@@ -288,6 +311,8 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
         rememberMe: isSignup ? true : rememberMe,
       });
 
+      setLastAuthMethod('phone', { phone: otpTargetPhone || cleanPhone(phone) });
+      setLastAuthMethodState('phone');
       toast.success(result.isNewUser ? 'Phone verified! Account created.' : 'Phone verified! Welcome back.');
       onOpenChange(false);
       // Reload cleanly so Better-Auth's useSession picks up the fresh session cookie immediately.
@@ -313,13 +338,16 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
     if (isSignup) recordTermsAcceptance();
     setAuthPersistence(isSignup ? true : rememberMe);
     try {
-      const { idToken } = await signInWithFirebaseGoogle();
+      const loginHint = !isSignup && lastAuthMethod === 'google' ? getLastAuthHints().email : undefined;
+      const { idToken, email: googleEmail } = await signInWithFirebaseGoogle(loginHint);
       const result = await exchangeFirebaseGoogleToken({
         idToken,
         mode: isSignup ? 'signup' : 'signin',
         intendedRole: isSignup ? role : undefined,
         rememberMe: isSignup ? true : rememberMe,
       });
+      setLastAuthMethod('google', { email: googleEmail || result.user?.email });
+      setLastAuthMethodState('google');
       toast.success(result.isNewUser ? 'Account created with Google.' : 'Signed in with Google.');
       onOpenChange(false);
       window.location.reload();
@@ -531,26 +559,28 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
                 <button
                   type="button"
                   onClick={() => switchMethod('email')}
-                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
+                  className={`relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
                     method === 'email'
                       ? 'border-violet-600 bg-violet-50 text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-200'
                       : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
                   }`}
                 >
                   <Mail className="h-3.5 w-3.5" />
-                  Email &amp; password
+                  <span>Email &amp; password</span>
+                  {!isSignup && lastAuthMethod === 'email' && <LastUsedTag />}
                 </button>
                 <button
                   type="button"
                   onClick={() => switchMethod('phone')}
-                  className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
+                  className={`relative inline-flex h-10 items-center justify-center gap-2 rounded-xl border text-xs font-semibold transition ${
                     method === 'phone'
                       ? 'border-violet-600 bg-violet-50 text-violet-800 dark:border-violet-400 dark:bg-violet-500/15 dark:text-violet-200'
                       : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
                   }`}
                 >
                   <Phone className="h-3.5 w-3.5" />
-                  Phone SMS OTP
+                  <span>Phone SMS OTP</span>
+                  {!isSignup && lastAuthMethod === 'phone' && <LastUsedTag />}
                 </button>
               </div>
 
@@ -706,10 +736,19 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
                     type="button"
                     onClick={continueWithGoogle}
                     disabled={busy !== null}
-                    className="mt-5 inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white text-[15px] font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                    className={`relative mt-5 inline-flex h-12 w-full items-center justify-center gap-3 rounded-xl border text-[15px] font-medium transition disabled:opacity-60 ${
+                      !isSignup && lastAuthMethod === 'google'
+                        ? 'border-violet-500 bg-violet-50/40 text-zinc-950 hover:bg-violet-50 dark:border-violet-400 dark:bg-violet-500/10 dark:text-white'
+                        : 'border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white'
+                    }`}
                   >
                     <GoogleLogo />
-                    Continue with Google
+                    <span>Continue with Google</span>
+                    {!isSignup && lastAuthMethod === 'google' && (
+                      <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[10px] font-semibold leading-4 text-white">
+                        Last used
+                      </span>
+                    )}
                   </button>
 
                   <div className="my-5 flex items-center gap-3 text-xs text-zinc-400">
@@ -829,6 +868,14 @@ export default function AuthDialog({ open, onOpenChange, intent }: AuthDialogPro
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LastUsedTag() {
+  return (
+    <span className="absolute -top-2 right-2 rounded-full bg-violet-600 px-1.5 py-0.5 text-[9px] font-semibold leading-none tracking-tight text-white shadow-xs">
+      Last used
+    </span>
   );
 }
 

@@ -10,6 +10,11 @@ const IS_NATIVE = Capacitor.isNativePlatform();
 
 const TOKEN_KEY = 'myboma-auth-token';
 const REMEMBER_KEY = 'myboma-remember-auth';
+const LAST_AUTH_METHOD_KEY = 'myboma-last-auth-method';
+const LAST_AUTH_EMAIL_KEY = 'myboma-last-auth-email';
+const LAST_AUTH_PHONE_KEY = 'myboma-last-auth-phone';
+
+export type LastAuthMethod = 'google' | 'email' | 'phone';
 
 const canUseBrowserStorage = () => typeof window !== 'undefined' && !!window.localStorage && !!window.sessionStorage;
 
@@ -21,9 +26,39 @@ const canUseBrowserStorage = () => typeof window !== 'undefined' && !!window.loc
  */
 let cachedToken: string | null = null;
 
+/** Defaults to true so Google, email, and phone logins stay remembered unless explicitly unchecked. */
 export const getAuthPersistence = () => {
-  if (!canUseBrowserStorage()) return false;
-  return window.localStorage.getItem(REMEMBER_KEY) === 'true';
+  if (!canUseBrowserStorage()) return true;
+  return window.localStorage.getItem(REMEMBER_KEY) !== 'false';
+};
+
+export const getLastAuthMethod = (): LastAuthMethod | null => {
+  if (!canUseBrowserStorage()) return null;
+  const raw = window.localStorage.getItem(LAST_AUTH_METHOD_KEY);
+  return raw === 'google' || raw === 'email' || raw === 'phone' ? raw : null;
+};
+
+export const setLastAuthMethod = (method: LastAuthMethod, hint?: { email?: string | null; phone?: string | null }) => {
+  if (!canUseBrowserStorage()) return;
+  try {
+    window.localStorage.setItem(LAST_AUTH_METHOD_KEY, method);
+    if (hint?.email?.trim()) window.localStorage.setItem(LAST_AUTH_EMAIL_KEY, hint.email.trim().toLowerCase());
+    if (hint?.phone?.trim()) window.localStorage.setItem(LAST_AUTH_PHONE_KEY, hint.phone.trim());
+  } catch {
+    /* storage unavailable */
+  }
+};
+
+export const getLastAuthHints = (): { email?: string; phone?: string } => {
+  if (!canUseBrowserStorage()) return {};
+  try {
+    return {
+      email: window.localStorage.getItem(LAST_AUTH_EMAIL_KEY) || undefined,
+      phone: window.localStorage.getItem(LAST_AUTH_PHONE_KEY) || undefined,
+    };
+  } catch {
+    return {};
+  }
 };
 
 const loadSecureStorage = () => import('@aparajita/capacitor-secure-storage').then((m) => m.SecureStorage);
@@ -63,11 +98,10 @@ export const authStorageReady: Promise<void> = (async () => {
   }
 })();
 
-/** Only meaningful on native (bearer storage); on web this maps to signIn's own `rememberMe` flag. */
+/** Persists the "Keep me signed in" preference across web and native clients. */
 export const setAuthPersistence = (remember: boolean) => {
   if (!canUseBrowserStorage()) return;
-  if (remember) window.localStorage.setItem(REMEMBER_KEY, 'true');
-  else window.localStorage.removeItem(REMEMBER_KEY);
+  window.localStorage.setItem(REMEMBER_KEY, remember ? 'true' : 'false');
   void persistToken(cachedToken).catch(() => undefined);
 };
 

@@ -212,17 +212,21 @@ export type PendingLandlordSubscription = {
 
 export const isLandlordSubscriptionActive = (profile: {
   role?: string;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
   subscriptionPlan?: string | null;
   subscriptionStatus?: string | null;
   subscriptionExpiresAt?: string | null;
 }) => {
-  // Admins always have full access
-  if (profile.role === 'admin') return true;
+  // Platform staff admins and super admins always have full access
+  if (profile.isSuperAdmin || profile.isAdmin) return true;
   // Tenants and caretakers don't need a landlord subscription
   if (profile.role === 'tenant' || profile.role === 'caretaker') return true;
   // Hunters are not active landlords
   if (profile.role === 'hunter') return false;
 
+  // Landlords and self-service Property Managers (role === 'admin', isAdmin === false)
+  // must have an active free or unexpired paid plan before entering the app.
   if (profile.subscriptionStatus !== 'active') return false;
   // The free plan has no expiry date.
   if (isFreePlan(profile.subscriptionPlan)) return true;

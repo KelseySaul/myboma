@@ -60,8 +60,7 @@ export const assertCanProvision = (
   if (body.role === 'admin') throw forbidden('Only a super admin can create admin accounts.');
 
   if (actor.isAdmin) {
-    if (!actor.platformId) throw forbidden('Your admin account is not attached to a platform.');
-    if (body.platformId && body.platformId !== actor.platformId) {
+    if (actor.platformId && body.platformId && body.platformId !== actor.platformId) {
       throw forbidden('Cannot provision users outside your platform.');
     }
     return;

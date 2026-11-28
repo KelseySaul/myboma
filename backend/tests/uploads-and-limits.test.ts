@@ -91,7 +91,9 @@ describe('rate limiter', () => {
     assert.equal((await fetch(baseUrl, {headers})).status, 200);
     const blocked = await fetch(baseUrl, {headers});
     assert.equal(blocked.status, 429);
-    assert.deepEqual(await blocked.json(), {error: 'Slow down'});
+    const body = (await blocked.json()) as {error?: string; retryAfterSeconds?: number};
+    assert.equal(body.error, 'Slow down');
+    assert.ok(typeof body.retryAfterSeconds === 'number' && body.retryAfterSeconds > 0);
     assert.ok(blocked.headers.get('retry-after'));
     // A different signed-in user on the same IP is unaffected.
     assert.equal((await fetch(baseUrl, {headers: {cookie: 'better-auth.session_token=user-b'}})).status, 200);

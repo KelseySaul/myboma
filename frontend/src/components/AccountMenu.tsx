@@ -30,6 +30,7 @@ export const roleLabel = (profile: UserProfile | null, activeView?: UserRole | n
 };
 
 export const signOut = async () => {
+  clearQueryCache();
   await authClient.signOut({});
   clearQueryCache();
   toast.success('Signed out');

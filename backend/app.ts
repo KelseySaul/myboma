@@ -207,6 +207,11 @@ if (process.env.VERCEL !== '1') {
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({error: 'API route not found'});
     }
+    // Missing static assets (e.g. a stale JS/CSS hash from an older deploy) must return
+    // 404 instead of index.html, otherwise browsers reject the response as text/html MIME.
+    if (req.path.startsWith('/assets/') || /\.[a-z0-9]{1,8}$/i.test(req.path)) {
+      return res.status(404).type('text/plain').send('Asset not found');
+    }
     // The SPA shell must always revalidate so a new deploy's asset hashes are picked up.
     res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(distPath, 'index.html'));

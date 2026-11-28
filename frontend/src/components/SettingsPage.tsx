@@ -686,31 +686,37 @@ function BrandingSection({ profile }: { profile: SettingsProfile }) {
   const [saved, flash] = useSavedFlash();
 
   useEffect(() => {
-    if (profile.platformId) {
-      getPlatformBranding(profile.platformId)
-        .then((data) => {
-          setName(data.name || '');
-          setForm({
-            brandLogoUrl: data.brandLogoUrl || '',
-            brandPrimaryColor: data.brandPrimaryColor || '',
-            brandSecondaryColor: data.brandSecondaryColor || '',
-          });
-        })
-        .catch(() => toast.error('Could not load your branding.'))
-        .finally(() => setLoading(false));
-    } else {
-      // Admins without a platform get one created the first time they open settings.
-      initPlatform()
-        .then((data) => {
-          if (data.status === 'created') {
-            toast.success('Your platform has been set up.');
-            window.location.reload();
-          }
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+    if (!profile.platformId) {
+      setLoading(false);
+      return;
     }
+    getPlatformBranding(profile.platformId)
+      .then((data) => {
+        setName(data.name || '');
+        setForm({
+          brandLogoUrl: data.brandLogoUrl || '',
+          brandPrimaryColor: data.brandPrimaryColor || '',
+          brandSecondaryColor: data.brandSecondaryColor || '',
+        });
+      })
+      .catch(() => toast.error('Could not load your branding.'))
+      .finally(() => setLoading(false));
   }, [profile.platformId]);
+
+  const handleInitPlatform = async () => {
+    setSaving(true);
+    try {
+      const data = await initPlatform();
+      if (data.status === 'created') {
+        toast.success('Your branding workspace has been set up.');
+        window.location.reload();
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Could not initialize branding.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const hexError = (value: string) => (value && !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value) ? 'Use a colour code like #111111.' : '');
 
@@ -743,7 +749,24 @@ function BrandingSection({ profile }: { profile: SettingsProfile }) {
     }
   };
 
-  if (!profile.platformId) return null;
+  if (!profile.platformId) {
+    // Staff admins created by the Super Admin stay on the main MyBoma deployment; only
+    // Pro Plus property managers can opt in to an isolated white-label branding workspace.
+    if (profile.isAdmin || profile.isSuperAdmin) return null;
+    return (
+      <Section title="White-label branding" description="Customize your agency name, logo, and colours." className="lg:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            Activate your agency branding workspace to upload a custom logo and colours for your landlords and tenants.
+          </p>
+          <Button variant="outline" onClick={handleInitPlatform} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Set up branding
+          </Button>
+        </div>
+      </Section>
+    );
+  }
 
   return (
     <Section title="Branding" description="Your platform name, logo and colours." className="lg:col-span-2">

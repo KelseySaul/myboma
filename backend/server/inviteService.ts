@@ -12,7 +12,9 @@ import {addPlatformMembership, membershipRoleFor} from './memberships.ts';
 import {buildInviteEmail, sendEmail} from './services/email.ts';
 import {
   INVITE_IDENTIFIER_PREFIX,
+  beginInviteVerifiedSignup,
   buildInviteSignupBody,
+  endInviteVerifiedSignup,
   generateInviteToken,
   inviteExpiry,
   inviteIdentifier,
@@ -164,9 +166,17 @@ export const acceptInvite = async (input: {token: string; name: string; phone?: 
   });
   if (existing) throw new InviteError(409, 'This email already has an account. Sign in instead.');
 
-  const created = await auth.api.signUpEmail({
-    body: buildInviteSignupBody(payload, input) as Parameters<typeof auth.api.signUpEmail>[0]['body'],
-  });
+  // Opening the single-use invite link from their inbox already proved email ownership,
+  // so suppress Better-Auth's redundant sign-up verification email during creation.
+  let created;
+  beginInviteVerifiedSignup(payload.email);
+  try {
+    created = await auth.api.signUpEmail({
+      body: buildInviteSignupBody(payload, input) as Parameters<typeof auth.api.signUpEmail>[0]['body'],
+    });
+  } finally {
+    endInviteVerifiedSignup(payload.email);
+  }
   const uid = created.user.id;
 
   await db.update(schema.authUser).set({emailVerified: true}).where(eq(schema.authUser.id, uid));

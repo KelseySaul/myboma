@@ -167,6 +167,17 @@ export const handleProvisionUser = async (req: AuthenticatedRequest, res: Respon
   res.status(201).json({uid: null, email, invitation, invited: true});
 };
 
+const isDedicatedWhiteLabelAdmin = async (actor: {isAdmin?: boolean; isSuperAdmin?: boolean; platformId?: string | null}) => {
+  if (!actor.isAdmin || actor.isSuperAdmin || !actor.platformId) return false;
+  const platform = await withSystemAccess(() =>
+    db.query.platforms.findFirst({
+      where: eq(schema.platforms.id, actor.platformId!),
+      columns: {ownerEmail: true},
+    }),
+  );
+  return Boolean(platform?.ownerEmail);
+};
+
 export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response) => {
   const {status} = req.validatedBody as z.infer<typeof suspendUserSchema>;
   const targetUid = req.params.uid;
@@ -183,18 +194,18 @@ export const handleSuspendUser = async (req: AuthenticatedRequest, res: Response
 
   const target = await db.query.users.findFirst({
     where: eq(schema.users.uid, targetUid),
-    columns: {uid: true, platformId: true, isSuperAdmin: true},
+    columns: {uid: true, platformId: true, isAdmin: true, isSuperAdmin: true},
   });
 
   if (!target) {
     res.status(404).json({error: 'User not found'});
     return;
   }
-  if (target.isSuperAdmin && !actor.isSuperAdmin) {
-    res.status(403).json({error: 'Cannot modify a super admin'});
+  if ((target.isSuperAdmin || target.isAdmin) && !actor.isSuperAdmin) {
+    res.status(403).json({error: 'Cannot modify another admin account'});
     return;
   }
-  if (!actor.isSuperAdmin && (!actor.platformId || target.platformId !== actor.platformId)) {
+  if (!actor.isSuperAdmin && (await isDedicatedWhiteLabelAdmin(actor)) && target.platformId !== actor.platformId) {
     res.status(403).json({error: 'User is outside your platform'});
     return;
   }
@@ -254,8 +265,11 @@ export const handleDeleteUser = async (req: AuthenticatedRequest, res: Response)
           );
       }
 
+      const isWhiteLabelAdmin = await isDedicatedWhiteLabelAdmin(actor);
       const isPlatformAdminOfTarget =
-        Boolean(actor.isAdmin) && Boolean(actor.platformId) && targetUser.platformId === actor.platformId && !targetUser.isAdmin;
+        Boolean(actor.isAdmin) &&
+        !targetUser.isAdmin &&
+        (!isWhiteLabelAdmin || targetUser.platformId === actor.platformId);
       if (!isCreator && !isPlatformAdminOfTarget) {
         res.status(403).json({error: 'You do not have permission to delete this user.'});
         return;

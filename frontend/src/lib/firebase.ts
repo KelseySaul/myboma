@@ -157,7 +157,7 @@ export async function verifyFirebasePhoneOtp(confirmation: ConfirmationResult, c
 }
 
 /** Signs in with Google via Firebase signInWithPopup and returns a fresh verified Firebase ID token. */
-export async function signInWithFirebaseGoogle(): Promise<{
+export async function signInWithFirebaseGoogle(loginHint?: string): Promise<{
   idToken: string;
   email: string | null;
   displayName: string | null;
@@ -165,7 +165,11 @@ export async function signInWithFirebaseGoogle(): Promise<{
   const auth = await getFirebaseAuth();
   const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
   const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
+  provider.setCustomParameters(
+    loginHint
+      ? { prompt: 'select_account', login_hint: loginHint }
+      : { prompt: 'select_account' },
+  );
 
   try {
     const result = await signInWithPopup(auth, provider);

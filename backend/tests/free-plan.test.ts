@@ -94,6 +94,29 @@ describe('free plan activity', () => {
     );
   });
 
+  it('enforces active subscription for property managers while keeping staff admins active', () => {
+    assert.equal(
+      isLandlordSubscriptionActive({
+        role: 'admin',
+        isAdmin: false,
+        isSuperAdmin: false,
+        subscriptionPlan: encodeSubscriptionPlan('proplus', 'monthly'),
+        subscriptionStatus: 'none',
+        subscriptionExpiresAt: null,
+      }),
+      false,
+    );
+    assert.equal(
+      isLandlordSubscriptionActive({
+        role: 'admin',
+        isAdmin: true,
+        isSuperAdmin: false,
+        subscriptionStatus: 'none',
+      }),
+      true,
+    );
+  });
+
   it('is active on the server and limited to 2 units and 1 building', () => {
     assert.equal(middleware.hasActiveSubscription(landlord()), true);
     assert.equal(middleware.unitLimitFor(landlord()), 2);

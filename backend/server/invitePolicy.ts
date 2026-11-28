@@ -8,6 +8,33 @@ import {createHash, randomBytes} from 'node:crypto';
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const INVITE_IDENTIFIER_PREFIX = 'invite:';
 
+/**
+ * Tracks emails currently being created through a verified single-use invite link so
+ * Better-Auth's `sendOnSignUp` hook does not dispatch a redundant "Verify your email"
+ * message right after the invitee already proved mailbox ownership by opening the invite.
+ */
+const activeInviteSignupEmails = new Map<string, number>();
+
+export const beginInviteVerifiedSignup = (email: string) => {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  activeInviteSignupEmails.set(key, (activeInviteSignupEmails.get(key) ?? 0) + 1);
+};
+
+export const endInviteVerifiedSignup = (email: string) => {
+  const key = email.trim().toLowerCase();
+  if (!key) return;
+  const remaining = (activeInviteSignupEmails.get(key) ?? 0) - 1;
+  if (remaining > 0) activeInviteSignupEmails.set(key, remaining);
+  else activeInviteSignupEmails.delete(key);
+};
+
+export const shouldSkipVerificationEmail = (email: string | null | undefined, emailVerified?: boolean | null) => {
+  if (emailVerified) return true;
+  if (!email) return false;
+  return (activeInviteSignupEmails.get(email.trim().toLowerCase()) ?? 0) > 0;
+};
+
 export type InviteRole = 'tenant' | 'landlord' | 'hunter' | 'admin' | 'caretaker';
 
 /** Profile fields the inviter chose that are applied when the invitee accepts. */

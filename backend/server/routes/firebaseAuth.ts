@@ -61,24 +61,33 @@ async function createBetterAuthSessionForUser(
   );
 
   const sessionCookie = ctx.authCookies.sessionToken;
-  const maxAge = rememberMe ? ctx.sessionConfig.expiresIn : undefined;
+  const cookieAttrs = {...sessionCookie.attributes};
+  if (rememberMe) {
+    cookieAttrs.maxAge = ctx.sessionConfig.expiresIn;
+  } else {
+    delete cookieAttrs.maxAge;
+  }
   const signedCookie = await serializeSignedCookie(
     sessionCookie.name,
     createdSession.token,
     ctx.secret,
-    {
-      ...sessionCookie.attributes,
-      ...(maxAge !== undefined ? {maxAge} : {}),
-    },
+    cookieAttrs,
   );
 
-  // Clear any cached session-data cookie from an earlier account so cookieCache reloads cleanly.
+  // Clear any cached session-data cookie AND any leftover dont_remember flag so remembered
+  // Google/Phone logins persist across browser restarts instead of getting downgraded.
   const secureFlag = sessionCookie.attributes?.secure ? '; Secure' : '';
   const clearCacheCookie = `${ctx.authCookies.sessionData.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureFlag}`;
+  const setCookies = [signedCookie, clearCacheCookie];
+  if (rememberMe && ctx.authCookies.dontRememberToken?.name) {
+    setCookies.push(
+      `${ctx.authCookies.dontRememberToken.name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureFlag}`,
+    );
+  }
 
   return {
     token: createdSession.token,
-    setCookies: [signedCookie, clearCacheCookie],
+    setCookies,
   };
 }
 
